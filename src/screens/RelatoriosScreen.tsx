@@ -1,11 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getMonthlyStats } from '../lib/db';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  FileText, Download, Share2, Mail, Settings, ChevronLeft, ChevronDown, X
+  FileText, Download, Share2, Mail, Settings, ChevronLeft, ChevronDown, X, Loader2
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
@@ -116,6 +118,64 @@ export default function RelatoriosScreen() {
     resumido: 'Resumido',
     pendentes: 'Cobrança',
   };
+
+  const docRef = useRef<HTMLDivElement>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (!docRef.current || pdfLoading) return;
+    setPdfLoading(true);
+    try {
+      const canvas = await html2canvas(docRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const imgW = canvas.width;
+      const imgH = canvas.height;
+      const pdfW = 210;
+      const pdfH = (imgH * pdfW) / imgW;
+      const pdf = new jsPDF({ orientation: pdfH > 297 ? 'p' : 'p', unit: 'mm', format: [pdfW, Math.max(pdfH, 297)] });
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+      const filename = `relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.pdf`;
+      pdf.save(filename);
+    } catch {
+      alert('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [pdfLoading, selectedMonth]);
+
+  const handleExportCSV = useCallback(() => {
+    const header = ['Data', 'Local', 'Tipo', 'Horário', 'Horas', 'Valor Esperado (R$)', 'Valor Recebido (R$)', 'Status'];
+    const rows = shiftsToShow.map(s => {
+      const wp = workplaces.find(w => w.id === s.workplace_id);
+      return [
+        format(new Date(s.date), 'dd/MM/yyyy'),
+        wp?.name || '',
+        s.type || '',
+        `${s.start_time || ''} - ${s.end_time || ''}`,
+        String(s.hours || ''),
+        s.expected_value.toFixed(2).replace('.', ','),
+        (s.received_value ?? '').toString().replace('.', ','),
+        s.status,
+      ];
+    });
+    const totalExpected = shiftsToShow.reduce((a, b) => a + b.expected_value, 0);
+    const totalReceived = shiftsToShow.reduce((a, b) => a + (b.received_value || 0), 0);
+    rows.push(['', '', '', '', 'TOTAL', totalExpected.toFixed(2).replace('.', ','), totalReceived.toFixed(2).replace('.', ','), '']);
+    const bom = '﻿';
+    const csv = bom + [header, ...rows].map(r => r.map(c => `"${c}"`).join(';')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [shiftsToShow, workplaces, selectedMonth]);
 
   return (
     <div className="page-content bg-white relative overflow-hidden h-full min-h-screen">
@@ -347,7 +407,7 @@ export default function RelatoriosScreen() {
         {/* Área de Rolagem do Documento */}
         <main className="flex-1 overflow-y-auto bg-slate-100 hide-scrollbar pb-32">
           {/* Documento (Folha "A4") */}
-          <div className="bg-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] m-4 p-5 rounded-md text-[0.75rem] leading-[1.4] text-slate-700 md:max-w-[800px] md:mx-auto md:my-8 md:p-12 md:text-sm">
+          <div ref={docRef} className="bg-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] m-4 p-5 rounded-md text-[0.75rem] leading-[1.4] text-slate-700 md:max-w-[800px] md:mx-auto md:my-8 md:p-12 md:text-sm">
             
             <div className="text-center mb-6">
               <h2 className="font-bold text-sm uppercase tracking-wider text-slate-900">{docTitle}</h2>
@@ -476,14 +536,18 @@ export default function RelatoriosScreen() {
         {/* Ações Fixas no Rodapé da Preview */}
         <div className="absolute bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
           <div className="flex gap-3">
-            <button 
-              onClick={() => alert('PDF gerado! (Integração na versão Pro)')}
-              className="flex-1 bg-blue-600 text-white font-semibold py-3.5 rounded-xl shadow-sm hover:bg-blue-700 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
+            <button
+              onClick={handleDownloadPDF}
+              disabled={pdfLoading}
+              className="flex-1 bg-blue-600 text-white font-semibold py-3.5 rounded-xl shadow-sm hover:bg-blue-700 transition active:scale-95 flex justify-center items-center gap-2 text-sm disabled:opacity-60"
             >
-              <Download size={18} />
-              Baixar PDF
+              {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+              {pdfLoading ? 'Gerando...' : 'Baixar PDF'}
             </button>
-            <button className="flex-1 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm">
+            <button
+              onClick={handleExportCSV}
+              className="flex-1 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
+            >
               <FileText size={18} className="text-emerald-500" />
               Exportar CSV
             </button>
