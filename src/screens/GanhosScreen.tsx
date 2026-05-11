@@ -99,31 +99,29 @@ export default function GanhosScreen() {
   return (
     <div className="page-content relative min-h-screen bg-white">
       {/* HEADER */}
-      <header className="bg-white px-5 pt-7 pb-2.5 shadow-sm z-10 shrink-0 flex justify-between items-center sticky top-0">
-        <div>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-0">Visão Financeira</p>
-          <button onClick={() => { setModalYear(selectedMonth.getFullYear()); setShowMonthModal(true); }}
-            className="flex items-center gap-1.5 active:opacity-70 transition text-left group">
-            <h1 className="text-[18px] font-bold text-slate-900 group-hover:text-blue-700 transition capitalize">
-              {format(selectedMonth, 'MMMM, yyyy', { locale: ptBR })}
-            </h1>
-            <div className="bg-slate-50 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 rounded-full p-0.5 transition">
-              <ChevronDown size={14} strokeWidth={2.5} />
-            </div>
-          </button>
+      <header className="bg-white px-5 pt-7 pb-2 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Visão Financeira</p>
+            <button onClick={() => { setModalYear(selectedMonth.getFullYear()); setShowMonthModal(true); }}
+              className="flex items-center gap-1.5 active:opacity-70 transition text-left group">
+              <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight capitalize">
+                {format(selectedMonth, 'MMMM, yyyy', { locale: ptBR })}
+              </h1>
+              <ChevronDown size={14} strokeWidth={2.5} className="text-slate-400 group-hover:text-blue-600 transition" />
+            </button>
+            <p className="text-[12px] text-slate-500 mt-0.5">{isCurrentMonth ? 'Mês atual em curso.' : 'Período histórico selecionado.'}</p>
+          </div>
+          {!isCurrentMonth && (
+            <button
+              onClick={() => setSelectedMonth(new Date())}
+              className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shrink-0 ml-3"
+              title="Voltar para hoje"
+            >
+              <CalendarIcon size={15} strokeWidth={2.5} />
+            </button>
+          )}
         </div>
-
-        <button
-          onClick={() => setSelectedMonth(new Date())}
-          className={`text-[11px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1 transition-all duration-300 ${
-            !isCurrentMonth
-              ? 'text-blue-600 bg-blue-100 shadow-sm'
-              : 'text-slate-400 bg-slate-50'
-          }`}
-        >
-          <CalendarIcon size={12} strokeWidth={2.5} />
-          Hoje
-        </button>
       </header>
 
       {/* TABS (Visão Geral vs Por Plantão) */}

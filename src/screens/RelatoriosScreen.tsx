@@ -118,17 +118,22 @@ export default function RelatoriosScreen() {
   };
 
   return (
-    <div className="page-content bg-slate-50 relative overflow-hidden h-full min-h-screen">
-      
+    <div className="page-content bg-white relative overflow-hidden h-full min-h-screen">
+
       {/* HEADER */}
-      <header className="bg-white px-5 pt-12 pb-4 shadow-sm z-10 shrink-0 flex justify-between items-center md:pt-6">
-        <div>
-          <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-0.5">Contabilidade</p>
-          <h1 className="text-xl font-bold text-slate-900">Relatórios</h1>
+      <header className="bg-white px-5 pt-7 pb-2 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Contabilidade</p>
+            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">Relatórios</h1>
+            <p className="text-[12px] text-slate-500 mt-0.5">Exporte para o contador em segundos.</p>
+          </div>
+          <button onClick={() => setShowSettingsModal(true)}
+            className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-95 shrink-0 ml-3"
+            title="Configurações">
+            <Settings size={16} />
+          </button>
         </div>
-        <button onClick={() => setShowSettingsModal(true)} className="icon-btn gear-btn w-10 h-10 flex items-center justify-center text-slate-600 bg-slate-50 shrink-0">
-          <Settings size={20} />
-        </button>
       </header>
 
       <main className="flex-1 overflow-y-auto overflow-x-hidden pb-24 hide-scrollbar px-5">

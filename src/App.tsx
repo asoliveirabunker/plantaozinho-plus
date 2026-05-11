@@ -64,7 +64,7 @@ function AppContent() {
   return (
     <div className="app-container">
       {/* Tab content with directional animation */}
-      <div className={animClass} key={activeTab} style={{ minHeight: '100%', willChange: 'transform, opacity' }}>
+      <div className={animClass} key={activeTab} style={{ minHeight: '100%' }}>
         {activeTab === 'hoje' && (
           <TodayScreen onAddShift={() => handleAddShift()} onNavigate={handleNavigate} />
         )}

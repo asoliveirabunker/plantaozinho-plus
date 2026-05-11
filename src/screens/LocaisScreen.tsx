@@ -480,17 +480,18 @@ export default function LocaisScreen() {
 
   // LIST
   return (
-    <div className="page-content">
-      <div className="px-5 pt-7 pb-3">
+    <div className="page-content bg-white min-h-screen">
+      <div className="px-5 pt-7 pb-2 bg-white">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Cadastro</p>
             <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">Locais de Plantão</h1>
-            <p className="text-[12px] text-slate-500">{workplaces.length} {workplaces.length !== 1 ? 'locais cadastrados' : 'local cadastrado'}</p>
+            <p className="text-[12px] text-slate-500 mt-0.5">{workplaces.length} {workplaces.length !== 1 ? 'locais cadastrados' : 'local cadastrado'}.</p>
           </div>
           <button onClick={() => setView('new')}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-white text-[12px] font-semibold shadow-sm"
-            style={{ background: '#1877F2' }}>
-            <Plus size={14} /> Novo
+            className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shrink-0 ml-3"
+            title="Novo local">
+            <Plus size={16} strokeWidth={2.5} />
           </button>
         </div>
       </div>

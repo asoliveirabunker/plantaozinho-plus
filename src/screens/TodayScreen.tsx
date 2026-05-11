@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, Trash2, LogOut } from 'lucide-react';
+import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, LogOut } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { getMonthlyStats, getWorkplace, markShiftReceived, createShift, deleteShift } from '../lib/db';
+import { getMonthlyStats, getWorkplace, markShiftReceived, createShift } from '../lib/db';
 import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Shift } from '../types';
-import { STATUS_LABELS } from '../types';
 
 interface TodayScreenProps {
   onAddShift: () => void;
@@ -87,7 +86,6 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
   const [shiftDetails, setShiftDetails] = useState<Shift | null>(null);
   const [showRepetirModal, setShowRepetirModal] = useState(false);
   const [showMarcarPagoModal, setShowMarcarPagoModal] = useState(false);
-  const [showTodosPlantoes, setShowTodosPlantoes] = useState(false);
   const [repDateOpt, setRepDateOpt] = useState<'hoje' | 'amanha'>('hoje');
   const [selectedPending, setSelectedPending] = useState<string[]>([]);
   
@@ -124,13 +122,6 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
     refreshShifts();
     setShiftDetails(null);
     showToast('Plantão cancelado com sucesso.');
-  }
-
-  function handleDeleteShift(shift: Shift) {
-    if (!confirm('Excluir este plantão? Esta ação não pode ser desfeita.')) return;
-    deleteShift(shift.id);
-    refreshShifts();
-    showToast('Plantão excluído.');
   }
 
   function handleConfirmRepeat() {
@@ -182,24 +173,26 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
 
       {/* Header */}
       <header className="px-5 pt-7 pb-2 shrink-0 bg-white">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
-            {format(now, "EEEE, d 'de' MMMM", { locale: ptBR })}
-          </p>
           <div className="flex items-center justify-between">
-            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">
-              {getGreeting()}, Dr. {getFirstName(user?.name || 'Médico')}
-            </h1>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                {format(now, "EEEE, d 'de' MMMM", { locale: ptBR })}
+              </p>
+              <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">
+                {getGreeting()}, Dr. {getFirstName(user?.name || 'Médico')}
+              </h1>
+              <p className="text-[12px] text-slate-500 mt-0.5">
+                Você tem <strong className="text-slate-700">{todayShifts.length} {todayShifts.length !== 1 ? 'plantões' : 'plantão'}</strong> hoje.
+              </p>
+            </div>
             <button
               onClick={() => { if (confirm('Deseja sair da sua conta?')) logout(); }}
-              className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95 shrink-0 ml-2"
+              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95 shrink-0 ml-3"
               title="Sair"
             >
               <LogOut size={15} strokeWidth={2} />
             </button>
           </div>
-          <p className="text-[13px] text-slate-500 mt-0.5">
-            Você tem <strong className="text-slate-700">{todayShifts.length} {todayShifts.length !== 1 ? 'plantões' : 'plantão'}</strong> hoje.
-          </p>
       </header>
 
       {/* Main Content */}
@@ -320,11 +313,11 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                       <span className="text-sm font-semibold text-slate-700">Marcar pago</span>
                   </button>
                   
-                  <button onClick={() => setShowTodosPlantoes(true)} className="quick-action-btn">
+                  <button onClick={() => onNavigate('calendario')} className="quick-action-btn">
                       <div className="w-7 h-7 rounded-full bg-violet-50 text-violet-500 flex items-center justify-center shrink-0">
                           <List size={16} strokeWidth={2} />
                       </div>
-                      <span className="text-sm font-semibold text-slate-700">Meus plantões</span>
+                      <span className="text-sm font-semibold text-slate-700">Ver agenda</span>
                   </button>
               </div>
           </div>
@@ -514,74 +507,6 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                   >
                       {selectedPending.length > 0 ? `Confirmar (${formatCurrency(totalSelected)})` : 'Confirmar Recebimento'}
                   </button>
-              </div>
-          </div>
-      </div>
-
-      {/* MODAL: MEUS PLANTÕES */}
-      <div className={`fixed inset-0 z-50 flex items-end justify-center transition-all duration-300 ${showTodosPlantoes ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowTodosPlantoes(false)} />
-          <div className={`relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl transition-transform duration-300 flex flex-col max-h-[85vh] mb-[61px] ${showTodosPlantoes ? 'translate-y-0' : 'translate-y-full'}`}>
-              <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
-                  <div>
-                      <h2 className="text-xl font-bold text-slate-900">Meus plantões</h2>
-                      <p className="text-xs text-slate-500 mt-0.5">{allShifts.length} {allShifts.length !== 1 ? 'plantões' : 'plantão'} no total</p>
-                  </div>
-                  <button onClick={() => setShowTodosPlantoes(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
-                      <X size={16} />
-                  </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-5 space-y-6">
-                  {allShifts.length === 0 ? (
-                      <p className="text-center text-sm text-slate-500 py-8">Nenhum plantão cadastrado ainda.</p>
-                  ) : (() => {
-                      const sorted = [...allShifts].sort((a, b) => b.date.localeCompare(a.date));
-                      const groups: Record<string, typeof allShifts> = {};
-                      sorted.forEach(s => {
-                          const key = format(parseISO(s.date), 'MMMM yyyy', { locale: ptBR });
-                          if (!groups[key]) groups[key] = [];
-                          groups[key].push(s);
-                      });
-                      return Object.entries(groups).map(([month, monthShifts]) => (
-                          <div key={month}>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 capitalize">{month}</p>
-                              <div className="space-y-1.5">
-                                  {monthShifts.map(s => {
-                                      const wpp = getWorkplace(s.workplace_id);
-                                      return (
-                                          <div key={s.id} className="bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100">
-                                              <button
-                                                onClick={() => { setShowTodosPlantoes(false); setShiftDetails(s); }}
-                                                className="w-full flex items-center justify-between gap-2 text-left">
-                                                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: wpp?.color || '#94a3b8' }} />
-                                                      <div className="min-w-0">
-                                                          <p className="text-[13px] font-semibold text-slate-800 leading-tight truncate">{wpp?.name || 'Local removido'}</p>
-                                                          <p className="text-[10px] text-slate-400">{format(parseISO(s.date), "dd 'de' MMM", { locale: ptBR })} · {format(parseISO(s.start_datetime), 'HH:mm')}–{format(parseISO(s.end_datetime), 'HH:mm')}</p>
-                                                      </div>
-                                                  </div>
-                                                  <span className="text-[12px] font-bold text-slate-900 shrink-0">{formatCurrency(s.expected_value)}</span>
-                                              </button>
-                                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
-                                                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider status-${s.status}`}>{STATUS_LABELS[s.status]}</span>
-                                                  <div className="flex items-center gap-1">
-                                                      {s.status !== 'recebido' && s.status !== 'cancelado' && (
-                                                          <button onClick={() => handleMarkDone(s)} className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition active:scale-95">
-                                                              <Check size={11} className="inline mr-0.5" /> Concluir
-                                                          </button>
-                                                      )}
-                                                      <button onClick={() => handleDeleteShift(s)} className="w-7 h-7 rounded-md bg-white hover:bg-red-50 flex items-center justify-center transition border border-slate-200 hover:border-red-200">
-                                                          <Trash2 size={11} className="text-slate-400 hover:text-red-500 transition" />
-                                                      </button>
-                                                  </div>
-                                              </div>
-                                          </div>
-                                      );
-                                  })}
-                              </div>
-                          </div>
-                      ));
-                  })()}
               </div>
           </div>
       </div>

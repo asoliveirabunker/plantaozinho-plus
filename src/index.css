@@ -80,6 +80,7 @@
 
 @layer components {
   .app-container {
+    width: 100%;
     max-width: 430px;
     margin: 0 auto;
     min-height: 100vh;
@@ -277,6 +278,7 @@
     animation: tab-slide-in-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+
   /* ===========================
      INTERACTIVE BUTTON STATES
   =========================== */
@@ -409,7 +411,7 @@
     width: 100%;
     max-width: 430px;
     margin: 0 auto;
-    padding: 12px 20px 32px;
+    padding: 12px 20px calc(32px + env(safe-area-inset-bottom, 0px));
     animation: slideUp 0.38s cubic-bezier(0.32, 0.72, 0, 1);
     max-height: 92vh;
     overflow-y: auto;
@@ -417,7 +419,10 @@
 
   .bottom-sheet-overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 61px;
     background: rgba(0,0,0,0.4);
     z-index: 200;
     display: flex;
