@@ -416,56 +416,90 @@ export default function GanhosScreen() {
       </main>
 
       {/* MODAL: SELETOR DE MÊS */}
-      {showMonthModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-end justify-center transition-opacity" onClick={() => setShowMonthModal(false)}>
-          <div className="bg-white w-full max-w-md rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] transform transition-transform pb-8 mt-20 mb-[61px] animate-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-slate-900 text-lg">Selecionar Período</h3>
-                <p className="text-xs text-slate-500">Filtrar ganhos por competência</p>
-              </div>
-              <button onClick={() => setShowMonthModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-500 hover:bg-slate-100 transition">
-                <X size={18} />
-              </button>
-            </div>
-            
-            <div className="p-6">
-              {/* Year Selector */}
-              <div className="flex justify-between items-center mb-6 bg-slate-50 rounded-2xl p-2 border border-slate-100">
-                <button onClick={() => setModalYear(y => y - 1)} className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-600 active:scale-95 transition">
-                  <ChevronLeft size={20} />
+      {showMonthModal && (() => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const canGoNextYear = modalYear < currentYear;
+        return (
+          <div className="bottom-sheet-overlay" onClick={() => setShowMonthModal(false)}>
+            <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+              <div className="sheet-handle" />
+
+              {/* Header */}
+              <div className="flex items-start justify-between mb-5">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Período</p>
+                  <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Selecionar mês</h3>
+                  <p className="text-[12px] text-slate-500 mt-0.5 capitalize">Atual: {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}</p>
+                </div>
+                <button onClick={() => setShowMonthModal(false)}
+                  className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3"
+                  title="Fechar">
+                  <X size={16} />
                 </button>
-                <span className="font-bold text-xl text-slate-800">{modalYear}</span>
-                <button onClick={() => setModalYear(y => y + 1)} className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-600 active:scale-95 transition">
-                  <ChevronRight size={20} />
+              </div>
+
+              {/* Year Selector */}
+              <div className="flex items-center justify-between mb-4">
+                <button onClick={() => setModalYear(y => y - 1)}
+                  className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center active:scale-95 transition-all">
+                  <ChevronLeft size={16} strokeWidth={2.5} />
+                </button>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[22px] font-black text-slate-900 tracking-tight tabular-nums">{modalYear}</span>
+                  {modalYear === currentYear && (
+                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider">atual</span>
+                  )}
+                </div>
+                <button onClick={() => canGoNextYear && setModalYear(y => y + 1)}
+                  disabled={!canGoNextYear}
+                  className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                  <ChevronRight size={16} strokeWidth={2.5} />
                 </button>
               </div>
 
               {/* Month Grid */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-2 mb-3">
                 {Array.from({ length: 12 }, (_, i) => {
                   const mName = format(new Date(2000, i, 1), 'MMM', { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
                   const isSelected = selectedMonth.getMonth() === i && selectedMonth.getFullYear() === modalYear;
-                  
+                  const isCurrent = i === currentMonth && modalYear === currentYear;
+                  const isFuture = modalYear > currentYear || (modalYear === currentYear && i > currentMonth);
+
                   return (
-                    <button key={i} onClick={() => { setSelectedMonth(new Date(modalYear, i, 1)); setShowMonthModal(false); }}
-                      className={`py-3 rounded-xl border text-sm transition relative ${
-                        isSelected 
-                          ? 'border-blue-600 bg-blue-50 font-bold text-blue-700 shadow-sm' 
-                          : 'border-slate-100 font-semibold text-slate-600 hover:bg-slate-50 active:bg-slate-100'
-                      }`}>
+                    <button key={i}
+                      onClick={() => { if (!isFuture) { setSelectedMonth(new Date(modalYear, i, 1)); setShowMonthModal(false); } }}
+                      disabled={isFuture}
+                      className={`relative py-2.5 rounded-xl text-[13px] font-semibold transition-all active:scale-95
+                        ${isSelected
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                          : isFuture
+                            ? 'text-slate-300 bg-slate-50/50 cursor-not-allowed'
+                            : isCurrent
+                              ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100'
+                              : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                        }`}>
                       {mName}
-                      {isSelected && (
-                        <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-600 rounded-full border-2 border-white"></div>
+                      {isCurrent && !isSelected && (
+                        <span className="absolute top-1 right-1.5 w-1 h-1 rounded-full bg-blue-500" />
                       )}
                     </button>
                   );
                 })}
               </div>
+
+              {/* Footer: quick action */}
+              {!(selectedMonth.getMonth() === currentMonth && selectedMonth.getFullYear() === currentYear) && (
+                <button onClick={() => { setSelectedMonth(new Date()); setShowMonthModal(false); }}
+                  className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+                  Voltar para o mês atual
+                </button>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL: META MENSAL */}
       {editGoal && (
