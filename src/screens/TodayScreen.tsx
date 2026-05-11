@@ -1,0 +1,597 @@
+import { useState, useMemo, useEffect } from 'react';
+import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, Trash2, LogOut } from 'lucide-react';
+import { useApp } from '../contexts/AppContext';
+import { getMonthlyStats, getWorkplace, markShiftReceived, createShift, deleteShift } from '../lib/db';
+import { format, parseISO, addDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import type { Shift } from '../types';
+import { STATUS_LABELS } from '../types';
+
+interface TodayScreenProps {
+  onAddShift: () => void;
+  onNavigate: (tab: string) => void;
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
+function formatCurrency(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps) {
+  const { user, shifts, refreshShifts, logout } = useApp();
+  const now = new Date();
+  const todayStr = format(now, 'yyyy-MM-dd');
+
+  const allShifts = shifts;
+
+  const todayShifts = useMemo(() =>
+    allShifts.filter(s => s.date === todayStr && s.status !== 'cancelado'),
+    [allShifts, todayStr]
+  );
+
+  const upcomingAll = useMemo(() => {
+    return allShifts
+      .filter(s => s.date >= todayStr && s.status !== 'cancelado' && s.status !== 'recebido')
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [allShifts, todayStr]);
+
+  const nextShift = upcomingAll[0] || null;
+  const upcomingShifts = upcomingAll.slice(1, 3);
+
+  const latestShift = useMemo(() => {
+    return [...allShifts].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  }, [allShifts]);
+
+  const stats = useMemo(() =>
+    user ? getMonthlyStats(user.id, now.getFullYear(), now.getMonth() + 1) : null,
+    [user, shifts]
+  );
+
+  const alerts = useMemo(() => {
+    const list: {type: string; title: string; desc: string}[] = [];
+    const pendingCount = allShifts.filter(s => ['previsto', 'realizado', 'faturado'].includes(s.status)).length;
+    const overdueShifts = allShifts.filter(s => s.status === 'atrasado');
+    const overdueValue = overdueShifts.reduce((sum, s) => sum + s.expected_value, 0);
+    const next7 = new Date(now.getTime() + 7 * 86400000);
+    const upcoming7Shifts = allShifts.filter(s => {
+        if (!s.payment_due_date) return false;
+        const due = parseISO(s.payment_due_date);
+        return due >= now && due <= next7 && !['recebido', 'cancelado'].includes(s.status);
+    });
+    const upcoming7Value = upcoming7Shifts.reduce((sum, s) => sum + s.expected_value, 0);
+
+    if (overdueShifts.length > 0) {
+      list.push({ type: 'overdue', title: `${overdueShifts.length} pagamento${overdueShifts.length > 1 ? 's' : ''} atrasado${overdueShifts.length > 1 ? 's' : ''}`, desc: `Total de ${formatCurrency(overdueValue)} aguardando regularização.` });
+    }
+    if (upcoming7Value > 0) {
+      list.push({ type: 'pending', title: `${formatCurrency(upcoming7Value)} a receber`, desc: 'Plantões previstos para os próximos 7 dias.' });
+    } else if (pendingCount > 0 && overdueShifts.length === 0) {
+      list.push({ type: 'pending', title: `${pendingCount} ${pendingCount > 1 ? 'plantões' : 'plantão'} a receber`, desc: 'Plantões realizados aguardando pagamento.' });
+    }
+    return list;
+  }, [allShifts, now]);
+
+  const wp = nextShift ? getWorkplace(nextShift.workplace_id) : null;
+
+  function getFirstName(name: string) {
+    return name.split(' ')[0];
+  }
+
+  // Modals & States
+  const [shiftDetails, setShiftDetails] = useState<Shift | null>(null);
+  const [showRepetirModal, setShowRepetirModal] = useState(false);
+  const [showMarcarPagoModal, setShowMarcarPagoModal] = useState(false);
+  const [showTodosPlantoes, setShowTodosPlantoes] = useState(false);
+  const [repDateOpt, setRepDateOpt] = useState<'hoje' | 'amanha'>('hoje');
+  const [selectedPending, setSelectedPending] = useState<string[]>([]);
+  
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  useEffect(() => {
+    if (toastMsg) {
+      const timer = setTimeout(() => setToastMsg(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMsg]);
+  function showToast(msg: string) {
+    setToastMsg(msg);
+  }
+
+  const pendingShifts = useMemo(() => {
+    return allShifts.filter(s => ['realizado', 'faturado', 'atrasado', 'divergente'].includes(s.status)).sort((a,b) => a.date.localeCompare(b.date));
+  }, [allShifts]);
+
+  const totalSelected = useMemo(() => {
+    return pendingShifts.filter(s => selectedPending.includes(s.id)).reduce((sum, s) => sum + s.expected_value, 0);
+  }, [pendingShifts, selectedPending]);
+
+  async function handleMarkDone(shift: Shift) {
+    const { updateShift } = await import('../lib/db');
+    updateShift(shift.id, { status: 'realizado' });
+    refreshShifts();
+    setShiftDetails(null);
+    showToast(`Plantão concluído! ${formatCurrency(shift.expected_value)} adicionados aos ganhos.`);
+  }
+
+  async function handleCancelShift(shift: Shift) {
+    const { updateShift } = await import('../lib/db');
+    updateShift(shift.id, { status: 'cancelado' });
+    refreshShifts();
+    setShiftDetails(null);
+    showToast('Plantão cancelado com sucesso.');
+  }
+
+  function handleDeleteShift(shift: Shift) {
+    if (!confirm('Excluir este plantão? Esta ação não pode ser desfeita.')) return;
+    deleteShift(shift.id);
+    refreshShifts();
+    showToast('Plantão excluído.');
+  }
+
+  function handleConfirmRepeat() {
+    if (!latestShift || !user) return;
+    const targetDateStr = repDateOpt === 'hoje' ? todayStr : format(addDays(now, 1), 'yyyy-MM-dd');
+    
+    const startDt = new Date(parseISO(latestShift.start_datetime));
+    const endDt = new Date(parseISO(latestShift.end_datetime));
+    
+    const [y, m, d] = targetDateStr.split('-').map(Number);
+    startDt.setFullYear(y, m - 1, d);
+    endDt.setFullYear(y, m - 1, d + (endDt.getDate() - new Date(parseISO(latestShift.start_datetime)).getDate()));
+    
+    createShift({
+      user_id: user.id,
+      workplace_id: latestShift.workplace_id,
+      template_id: latestShift.template_id,
+      title: latestShift.title,
+      date: targetDateStr,
+      start_datetime: startDt.toISOString(),
+      end_datetime: endDt.toISOString(),
+      duration_hours: latestShift.duration_hours,
+      expected_value: latestShift.expected_value,
+      status: 'previsto',
+      payment_due_date: latestShift.payment_due_date,
+      notes: latestShift.notes
+    });
+    
+    refreshShifts();
+    setShowRepetirModal(false);
+    showToast('Plantão duplicado com sucesso!');
+  }
+
+  function handleConfirmPaid() {
+    selectedPending.forEach(id => {
+        const s = pendingShifts.find(x => x.id === id);
+        if (s) markShiftReceived(id, s.expected_value);
+    });
+    refreshShifts();
+    setSelectedPending([]);
+    setShowMarcarPagoModal(false);
+    showToast('Plantões marcados como recebidos!');
+  }
+
+  const anyModalOpen = shiftDetails || showRepetirModal || showMarcarPagoModal;
+
+  return (
+    <div className="flex flex-col min-h-screen relative overflow-hidden bg-white">
+
+      {/* Header */}
+      <header className="px-5 pt-7 pb-2 shrink-0 bg-white">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+            {format(now, "EEEE, d 'de' MMMM", { locale: ptBR })}
+          </p>
+          <div className="flex items-center justify-between">
+            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">
+              {getGreeting()}, Dr. {getFirstName(user?.name || 'Médico')}
+            </h1>
+            <button
+              onClick={() => { if (confirm('Deseja sair da sua conta?')) logout(); }}
+              className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95 shrink-0 ml-2"
+              title="Sair"
+            >
+              <LogOut size={15} strokeWidth={2} />
+            </button>
+          </div>
+          <p className="text-[13px] text-slate-500 mt-0.5">
+            Você tem <strong className="text-slate-700">{todayShifts.length} {todayShifts.length !== 1 ? 'plantões' : 'plantão'}</strong> hoje.
+          </p>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto px-5 pb-24 hide-scrollbar bg-white">
+
+          {/* Próximo Plantão */}
+          <div className="mt-3 mb-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                {nextShift?.date === todayStr ? 'Próximo Plantão (Hoje)' : 'Próximo Plantão'}
+              </p>
+
+              {nextShift && wp ? (
+                <button onClick={() => setShiftDetails(nextShift)} className="hero-shift-card w-full text-left bg-[#4b80e5] rounded-[20px] p-4 text-white shadow-lg shadow-blue-500/20 relative overflow-hidden flex flex-col justify-between min-h-[120px] cursor-pointer">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
+
+                    <div className="relative z-10 flex justify-between items-start">
+                        <div>
+                            <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider inline-block mb-1.5">
+                              {nextShift.date === todayStr ? 'Hoje' : format(parseISO(nextShift.date), 'dd/MM')}
+                            </span>
+                            <h2 className="text-[19px] font-bold mb-0.5 leading-tight tracking-tight">{wp.name}</h2>
+                            <p className="text-blue-100 text-[12px]">{nextShift.title}</p>
+                        </div>
+                    </div>
+
+                    <div className="relative z-10 flex justify-between items-end mt-3">
+                        <div>
+                            <p className="text-[9px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">Horário</p>
+                            <p className="font-bold text-[14px] tracking-tight">{format(parseISO(nextShift.start_datetime), 'HH:mm')}–{format(parseISO(nextShift.end_datetime), 'HH:mm')}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[9px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">Valor</p>
+                            <p className="font-bold text-[20px] tracking-tight leading-none">{formatCurrency(nextShift.expected_value)}</p>
+                        </div>
+                    </div>
+                </button>
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 text-center shadow-sm">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-2">
+                    <Clock size={18} className="text-blue-500" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 text-sm mb-0.5">Nenhum plantão hoje</h3>
+                  <p className="text-gray-500 text-xs mb-3">Aproveite o dia de folga! 🎉</p>
+                  <button onClick={onAddShift} className="bg-[#4b80e5] text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-blue-600 transition active:scale-95 flex items-center gap-2 mx-auto">
+                    <Plus size={14} /> Adicionar plantão
+                  </button>
+                </div>
+              )}
+          </div>
+
+          {/* Resumo do Mês */}
+          <div className="mb-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{format(now, "MMMM 'de' yyyy", { locale: ptBR })}</p>
+              <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                      <p className="text-[11px] text-slate-500 font-medium">Previsto</p>
+                      <p className="text-[15px] font-bold text-slate-900 tracking-tight">{formatCurrency(stats?.expected || 0)}</p>
+                  </div>
+                  <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                      <p className="text-[11px] text-slate-500 font-medium">Recebido</p>
+                      <p className="text-[15px] font-bold text-emerald-500 tracking-tight">{formatCurrency(stats?.received || 0)}</p>
+                  </div>
+                  <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                      <p className="text-[11px] text-slate-500 font-medium">A receber</p>
+                      <p className="text-[15px] font-bold text-blue-500 tracking-tight">{formatCurrency(stats?.pending || 0)}</p>
+                  </div>
+                  <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                      <p className="text-[11px] text-slate-500 font-medium">Atrasado</p>
+                      <p className="text-[15px] font-bold text-red-500 tracking-tight">{formatCurrency(stats?.overdue || 0)}</p>
+                  </div>
+              </div>
+          </div>
+
+          {/* Alertas */}
+          {alerts.length > 0 && (
+              <div className="space-y-2 mb-4">
+                  {alerts.map((alert, i) => (
+                      <div key={i} className={`border p-2.5 rounded-xl flex items-start gap-2.5 ${alert.type === 'overdue' ? 'bg-red-50/50 border-red-100' : 'bg-blue-50/50 border-blue-100'}`}>
+                          <div className={`mt-0.5 ${alert.type === 'overdue' ? 'text-red-500' : 'text-blue-500'}`}>
+                              {alert.type === 'overdue' ? <AlertCircle size={18} /> : <Bell size={18} />}
+                          </div>
+                          <div>
+                              <p className={`text-[13px] font-bold ${alert.type === 'overdue' ? 'text-red-800' : 'text-blue-800'}`}>{alert.title}</p>
+                              <p className={`text-[11px] mt-0.5 ${alert.type === 'overdue' ? 'text-red-600/80' : 'text-blue-600/80'}`}>{alert.desc}</p>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          )}
+
+          {/* Atalhos */}
+          <div className="mb-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Atalhos</p>
+              <div className="grid grid-cols-2 gap-2">
+                  <button onClick={onAddShift} className="quick-action-btn">
+                      <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
+                          <Plus size={16} strokeWidth={2.5} />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-700">Novo plantão</span>
+                  </button>
+                  
+                  <button onClick={() => setShowRepetirModal(true)} className="quick-action-btn">
+                      <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center shrink-0">
+                          <RefreshCw size={16} strokeWidth={2} />
+                      </div>
+                      <div className="flex flex-col text-left">
+                          <span className="text-sm font-semibold text-slate-700 leading-tight">Repetir último</span>
+                          <span className="text-[9.5px] text-slate-400 font-medium truncate w-24">
+                            {latestShift ? getWorkplace(latestShift.workplace_id)?.name : 'Nenhum plantão'}
+                          </span>
+                      </div>
+                  </button>
+                  
+                  <button onClick={() => setShowMarcarPagoModal(true)} className="quick-action-btn">
+                      <div className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
+                          <Check size={16} strokeWidth={2.5} />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-700">Marcar pago</span>
+                  </button>
+                  
+                  <button onClick={() => setShowTodosPlantoes(true)} className="quick-action-btn">
+                      <div className="w-7 h-7 rounded-full bg-violet-50 text-violet-500 flex items-center justify-center shrink-0">
+                          <List size={16} strokeWidth={2} />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-700">Meus plantões</span>
+                  </button>
+              </div>
+          </div>
+
+          {/* Próximos Plantões */}
+          {upcomingShifts.length > 0 && (
+            <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Próximos Plantões</p>
+                <div className="space-y-2">
+                    {upcomingShifts.map(s => {
+                        const wpp = getWorkplace(s.workplace_id);
+                        if (!wpp) return null;
+                        return (
+                          <button key={s.id} onClick={() => setShiftDetails(s)} className="card-interactive w-full text-left bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden flex items-center justify-between gap-2">
+                              <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: wpp.color }}></div>
+                              <div className="pl-2 min-w-0 flex-1">
+                                  <h4 className="font-bold text-slate-800 text-[13px] leading-tight truncate">{wpp.name}</h4>
+                                  <p className="text-[11px] text-slate-400 mt-0.5">{format(parseISO(s.start_datetime), "d MMM · HH:mm", { locale: ptBR })}–{format(parseISO(s.end_datetime), "HH:mm")}</p>
+                              </div>
+                              <span className="font-bold text-slate-900 text-[13px] tracking-tight shrink-0">{formatCurrency(s.expected_value)}</span>
+                          </button>
+                        );
+                    })}
+                </div>
+            </div>
+          )}
+      </main>
+
+      {/* Backdrop Global */}
+      <div 
+        onClick={() => { setShiftDetails(null); setShowRepetirModal(false); setShowMarcarPagoModal(false); }} 
+        className={`absolute inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300 ${anyModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      </div>
+
+      {/* MODAL: DETALHES DO PLANTÃO */}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${shiftDetails ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`bg-white w-full max-w-sm rounded-[24px] shadow-2xl transition-transform duration-300 flex flex-col max-h-[90vh] ${shiftDetails ? 'scale-100' : 'scale-95'}`}>
+          
+          {shiftDetails && (
+            <>
+                <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+                    <h2 className="text-xl font-bold text-slate-900">Detalhes do Plantão</h2>
+                    <button onClick={() => setShiftDetails(null)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
+                        <X size={16} />
+                    </button>
+                </div>
+                
+                <div className="p-6 overflow-y-auto hide-scrollbar">
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mb-2 inline-block">
+                              {shiftDetails.date === todayStr ? 'Hoje' : format(parseISO(shiftDetails.date), 'dd/MM/yyyy')}
+                            </span>
+                            <h2 className="text-xl font-bold text-slate-900 leading-tight">{getWorkplace(shiftDetails.workplace_id)?.name}</h2>
+                            <p className="text-sm text-slate-500 mt-0.5">{format(parseISO(shiftDetails.start_datetime), 'HH:mm')} – {format(parseISO(shiftDetails.end_datetime), 'HH:mm')} ({shiftDetails.duration_hours}h)</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-0.5">Valor</p>
+                            <p className="text-2xl font-black text-slate-900 leading-none">{formatCurrency(shiftDetails.expected_value)}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3">
+                        <button onClick={() => handleMarkDone(shiftDetails)} className="w-full py-3.5 rounded-xl bg-blue-600 text-white text-sm font-bold shadow-sm hover:bg-blue-700 transition active:scale-95 flex justify-center items-center gap-2">
+                            <Check size={20} strokeWidth={2.5} />
+                            Marcar como Concluído
+                        </button>
+                        
+                        <div className="flex gap-3">
+                            <button onClick={() => { setShiftDetails(null); onNavigate('calendario'); }} className="flex-1 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2">
+                                Editar
+                            </button>
+                            
+                            <button onClick={() => handleCancelShift(shiftDetails)} className="flex-1 py-3 rounded-xl bg-red-50 text-red-600 text-sm font-bold hover:bg-red-100 transition active:scale-95 flex justify-center items-center gap-2">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </>
+          )}
+          </div>
+      </div>
+
+      {/* MODAL: CONFIRMAR REPETIÇÃO */}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${showRepetirModal ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`bg-white w-full max-w-sm rounded-[24px] shadow-2xl transition-transform duration-300 flex flex-col max-h-[90vh] ${showRepetirModal ? 'scale-100' : 'scale-95'}`}>
+              <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+                  <div>
+                      <h2 className="text-xl font-bold text-slate-900">Repetir Plantão</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">Confirme os dados a duplicar</p>
+                  </div>
+                  <button onClick={() => setShowRepetirModal(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
+                      <X size={16} />
+                  </button>
+              </div>
+          
+              <div className="p-5 overflow-y-auto hide-scrollbar">
+                  {latestShift ? (
+                    <div className="bg-[#4b80e5] p-4 rounded-[16px] text-white shadow-lg shadow-blue-500/20 mb-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-white opacity-10 rounded-full -mr-8 -mt-8 blur-xl pointer-events-none"></div>
+                        <div className="relative z-10 flex justify-between items-start">
+                            <div>
+                                <h4 className="font-bold text-[16px] leading-tight tracking-tight">{getWorkplace(latestShift.workplace_id)?.name}</h4>
+                                <p className="text-blue-100 text-[12px] mt-0.5">{latestShift.title}</p>
+                            </div>
+                        </div>
+                        <div className="relative z-10 flex justify-between items-end mt-4 pt-3 border-t border-white/10">
+                            <div>
+                                <p className="text-[8px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">Horário</p>
+                                <p className="font-bold text-[13px] tracking-tight">{format(parseISO(latestShift.start_datetime), 'HH:mm')}–{format(parseISO(latestShift.end_datetime), 'HH:mm')}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[8px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">Valor a repetir</p>
+                                <p className="font-bold text-[20px] tracking-tight leading-none">{formatCurrency(latestShift.expected_value)}</p>
+                            </div>
+                        </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 mb-4 text-center">Nenhum plantão anterior encontrado.</p>
+                  )}
+
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Para qual data?</label>
+                  <div className="grid grid-cols-2 gap-2 mb-6">
+                      <button onClick={() => setRepDateOpt('hoje')} className={`font-semibold text-sm py-3 rounded-xl border transition ${repDateOpt === 'hoje' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>Hoje</button>
+                      <button onClick={() => setRepDateOpt('amanha')} className={`font-semibold text-sm py-3 rounded-xl border transition ${repDateOpt === 'amanha' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>Amanhã</button>
+                  </div>
+
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowRepetirModal(false)} className="flex-1 py-3.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50 transition active:scale-95">Cancelar</button>
+                      <button onClick={handleConfirmRepeat} disabled={!latestShift} className="flex-[2] py-3.5 rounded-xl bg-blue-600 text-white text-sm font-bold shadow-sm hover:bg-blue-700 transition active:scale-95 disabled:opacity-50">Confirmar</button>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      {/* MODAL: MARCAR COMO PAGO */}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${showMarcarPagoModal ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`bg-white w-full max-w-sm rounded-[24px] shadow-2xl transition-transform duration-300 flex flex-col max-h-[80vh] ${showMarcarPagoModal ? 'scale-100' : 'scale-95'}`}>
+              <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+                  <div>
+                      <h2 className="text-xl font-bold text-slate-900">Confirmar Pagamento</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">Selecione os plantões recebidos</p>
+                  </div>
+                  <button onClick={() => setShowMarcarPagoModal(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
+                      <X size={16} />
+                  </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-3 hide-scrollbar bg-slate-50/50">
+                  {pendingShifts.length === 0 ? (
+                    <p className="text-center text-sm text-slate-500 py-4">Nenhum plantão pendente de pagamento.</p>
+                  ) : pendingShifts.map(s => {
+                    const wpp = getWorkplace(s.workplace_id);
+                    const isSelected = selectedPending.includes(s.id);
+                    return (
+                      <label key={s.id} className={`flex items-center justify-between p-4 bg-white border rounded-2xl cursor-pointer transition-colors ${isSelected ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 hover:border-emerald-500'}`}>
+                          <div className="flex items-center gap-3">
+                              <div className="relative flex items-center justify-center w-5 h-5">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) setSelectedPending([...selectedPending, s.id]);
+                                      else setSelectedPending(selectedPending.filter(id => id !== s.id));
+                                    }}
+                                    className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-md checked:bg-emerald-500 checked:border-emerald-500 transition-colors" 
+                                  />
+                                  <Check size={12} strokeWidth={3} className="absolute text-white pointer-events-none opacity-0 peer-checked:opacity-100" />
+                              </div>
+                              <div>
+                                  <h4 className="font-bold text-slate-800 text-sm">{wpp?.name}</h4>
+                                  <p className="text-xs text-slate-500">{format(parseISO(s.date), 'EEE, dd MMM', { locale: ptBR })}</p>
+                              </div>
+                          </div>
+                          <span className="font-bold text-slate-900">{formatCurrency(s.expected_value)}</span>
+                      </label>
+                    );
+                  })}
+              </div>
+
+              <div className="p-5 border-t border-slate-100 bg-white rounded-b-[24px]">
+                  <button 
+                    onClick={handleConfirmPaid} 
+                    disabled={selectedPending.length === 0}
+                    className="w-full py-3.5 rounded-xl bg-emerald-500 text-white text-sm font-bold shadow-sm hover:bg-emerald-600 transition active:scale-95 flex justify-center items-center gap-2 disabled:opacity-50 disabled:bg-slate-300"
+                  >
+                      {selectedPending.length > 0 ? `Confirmar (${formatCurrency(totalSelected)})` : 'Confirmar Recebimento'}
+                  </button>
+              </div>
+          </div>
+      </div>
+
+      {/* MODAL: MEUS PLANTÕES */}
+      <div className={`fixed inset-0 z-50 flex items-end justify-center transition-all duration-300 ${showTodosPlantoes ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowTodosPlantoes(false)} />
+          <div className={`relative bg-white w-full max-w-[430px] rounded-t-[24px] shadow-2xl transition-transform duration-300 flex flex-col max-h-[85vh] mb-[61px] ${showTodosPlantoes ? 'translate-y-0' : 'translate-y-full'}`}>
+              <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+                  <div>
+                      <h2 className="text-xl font-bold text-slate-900">Meus plantões</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">{allShifts.length} {allShifts.length !== 1 ? 'plantões' : 'plantão'} no total</p>
+                  </div>
+                  <button onClick={() => setShowTodosPlantoes(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
+                      <X size={16} />
+                  </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                  {allShifts.length === 0 ? (
+                      <p className="text-center text-sm text-slate-500 py-8">Nenhum plantão cadastrado ainda.</p>
+                  ) : (() => {
+                      const sorted = [...allShifts].sort((a, b) => b.date.localeCompare(a.date));
+                      const groups: Record<string, typeof allShifts> = {};
+                      sorted.forEach(s => {
+                          const key = format(parseISO(s.date), 'MMMM yyyy', { locale: ptBR });
+                          if (!groups[key]) groups[key] = [];
+                          groups[key].push(s);
+                      });
+                      return Object.entries(groups).map(([month, monthShifts]) => (
+                          <div key={month}>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 capitalize">{month}</p>
+                              <div className="space-y-1.5">
+                                  {monthShifts.map(s => {
+                                      const wpp = getWorkplace(s.workplace_id);
+                                      return (
+                                          <div key={s.id} className="bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100">
+                                              <button
+                                                onClick={() => { setShowTodosPlantoes(false); setShiftDetails(s); }}
+                                                className="w-full flex items-center justify-between gap-2 text-left">
+                                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: wpp?.color || '#94a3b8' }} />
+                                                      <div className="min-w-0">
+                                                          <p className="text-[13px] font-semibold text-slate-800 leading-tight truncate">{wpp?.name || 'Local removido'}</p>
+                                                          <p className="text-[10px] text-slate-400">{format(parseISO(s.date), "dd 'de' MMM", { locale: ptBR })} · {format(parseISO(s.start_datetime), 'HH:mm')}–{format(parseISO(s.end_datetime), 'HH:mm')}</p>
+                                                      </div>
+                                                  </div>
+                                                  <span className="text-[12px] font-bold text-slate-900 shrink-0">{formatCurrency(s.expected_value)}</span>
+                                              </button>
+                                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                                                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider status-${s.status}`}>{STATUS_LABELS[s.status]}</span>
+                                                  <div className="flex items-center gap-1">
+                                                      {s.status !== 'recebido' && s.status !== 'cancelado' && (
+                                                          <button onClick={() => handleMarkDone(s)} className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition active:scale-95">
+                                                              <Check size={11} className="inline mr-0.5" /> Concluir
+                                                          </button>
+                                                      )}
+                                                      <button onClick={() => handleDeleteShift(s)} className="w-7 h-7 rounded-md bg-white hover:bg-red-50 flex items-center justify-center transition border border-slate-200 hover:border-red-200">
+                                                          <Trash2 size={11} className="text-slate-400 hover:text-red-500 transition" />
+                                                      </button>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+                      ));
+                  })()}
+              </div>
+          </div>
+      </div>
+
+      {/* Toast Notification */}
+      <div className={`absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2.5 rounded-full shadow-lg text-xs font-medium flex items-center gap-2 z-[60] pointer-events-none whitespace-nowrap transition-all duration-300 ${toastMsg ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+          <Check size={16} className="text-emerald-400" />
+          <span>{toastMsg}</span>
+      </div>
+
+    </div>
+  );
+}

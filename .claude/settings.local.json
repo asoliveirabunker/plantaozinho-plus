@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --base main --title 'Refine UX, add password auth, and fix pluralization' --body ' *)",
+      "PowerShell(Test-Path \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\"; Test-Path \"C:\\\\Program Files \\(x86\\)\\\\GitHub CLI\\\\gh.exe\"; Test-Path \"$env:LOCALAPPDATA\\\\Programs\\\\GitHub CLI\\\\gh.exe\"; Test-Path \"$env:USERPROFILE\\\\scoop\\\\shims\\\\gh.exe\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" auth login --hostname github.com --git-protocol https --web 2>&1)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
+    ]
+  }
+}
