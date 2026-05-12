@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getMonthlyStats } from '../lib/db';
 import { format, subMonths } from 'date-fns';
@@ -6,7 +6,6 @@ import { ptBR } from 'date-fns/locale';
 import {
   FileText, Download, Share2, Mail, Settings, ChevronLeft, ChevronDown, X, Loader2
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
@@ -119,63 +118,294 @@ export default function RelatoriosScreen() {
     pendentes: 'Cobrança',
   };
 
-  const docRef = useRef<HTMLDivElement>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  const statusLabel: Record<string, string> = {
+    previsto: 'Previsto',
+    realizado: 'Realizado',
+    faturado: 'Faturado',
+    recebido: 'Recebido',
+    atrasado: 'Atrasado',
+    divergente: 'Divergente',
+    cancelado: 'Cancelado',
+  };
+
+  const fmtCNPJ = (cnpj?: string) => cnpj
+    ? cnpj.replace(/\D/g, '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+    : 'Não informado';
+
   const handleDownloadPDF = useCallback(async () => {
-    if (!docRef.current || pdfLoading) return;
+    if (pdfLoading) return;
     setPdfLoading(true);
     try {
-      const canvas = await html2canvas(docRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageW = 210;
+      const pageH = 297;
+      const ml = 15;
+      const mr = 15;
+      const contentW = pageW - ml - mr;
+      let y = 18;
+
+      const ensureSpace = (need: number) => {
+        if (y + need > pageH - 15) {
+          pdf.addPage();
+          y = 18;
+        }
+      };
+
+      // Title
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(13);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(docTitle.toUpperCase(), pageW / 2, y, { align: 'center' });
+      y += 5;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`Mês de Competência: ${format(selectedMonth, 'MMMM / yyyy', { locale: ptBR })}`, pageW / 2, y, { align: 'center' });
+      y += 4;
+      pdf.setFontSize(8);
+      pdf.text(`Gerado em: ${format(new Date(), 'dd/MM/yyyy')} às ${format(new Date(), 'HH:mm')} via Plantãozinho Plus`, pageW / 2, y, { align: 'center' });
+      y += 6;
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(ml, y, pageW - mr, y);
+      y += 6;
+
+      // 1. Dados da PJ
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('1. DADOS DO PROFISSIONAL (PJ)', ml, y);
+      y += 5;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(51, 65, 85);
+      const pjLines = [
+        ['Razão Social:', user?.company_name || `${user?.name || ''} Serviços Médicos LTDA`],
+        ['CNPJ:', fmtCNPJ(user?.cnpj)],
+        ['Responsável Técnico:', `Dr(a). ${user?.name || ''}`],
+        ['Regime Tributário:', `${user?.tax_regime || 'Simples Nacional'}${!isMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`],
+      ];
+      pjLines.forEach(([k, v]) => {
+        ensureSpace(5);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(k, ml + 2, y);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(String(v), ml + 40, y);
+        y += 4.5;
       });
-      const imgData = canvas.toDataURL('image/png');
-      const imgW = canvas.width;
-      const imgH = canvas.height;
-      const pdfW = 210;
-      const pdfH = (imgH * pdfW) / imgW;
-      const pdf = new jsPDF({ orientation: pdfH > 297 ? 'p' : 'p', unit: 'mm', format: [pdfW, Math.max(pdfH, 297)] });
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
-      const filename = `relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.pdf`;
-      pdf.save(filename);
-    } catch {
+      y += 4;
+
+      // 2. Resumo Financeiro
+      if (!isPendentes) {
+        ensureSpace(40);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text('2. RESUMO FINANCEIRO', ml, y);
+        y += 5;
+        pdf.setFillColor(248, 250, 252);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.roundedRect(ml, y, contentW, 28, 1.5, 1.5, 'FD');
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(51, 65, 85);
+        const sumLines: [string, string, boolean][] = [
+          ['Faturamento Bruto (Competência):', fmtCur(stats?.expected || 0), true],
+          ['Total Efetivamente Recebido (Caixa):', fmtCur(stats?.received || 0), false],
+          ['Total Pendente / A Receber:', fmtCur(stats?.pending || 0), false],
+          [`Provisão Estimada de Imposto (DAS${isMei ? ' MEI' : ` - ${(taxRate * 100).toFixed(1)}%`}):`, fmtCur(taxAmount), true],
+        ];
+        let sy = y + 5;
+        sumLines.forEach(([k, v, bold]) => {
+          pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+          pdf.text(k, ml + 3, sy);
+          pdf.text(v, pageW - mr - 3, sy, { align: 'right' });
+          sy += 5.5;
+        });
+        y += 32;
+      }
+
+      // 3. Faturamento por Fonte Pagadora
+      if (!isPendentes && Object.keys(wpBreakdown).length > 0) {
+        ensureSpace(15);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text('3. FATURAMENTO POR FONTE PAGADORA', ml, y);
+        y += 5;
+        Object.entries(wpBreakdown).forEach(([wpId, data]) => {
+          const wp = workplaces.find(w => w.id === wpId);
+          if (!wp) return;
+          ensureSpace(10);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(9);
+          pdf.setTextColor(30, 41, 59);
+          pdf.text(wp.name, ml + 2, y);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(100, 116, 139);
+          pdf.text(`(CNPJ: ${fmtCNPJ(wp.cnpj)})`, ml + 2 + pdf.getTextWidth(wp.name) + 2, y);
+          y += 4.5;
+          pdf.setTextColor(71, 85, 105);
+          pdf.text(`Composição: ${data.shifts} ${data.shifts !== 1 ? 'plantões' : 'plantão'}`, ml + 2, y);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(15, 23, 42);
+          pdf.text(fmtCur(data.total), pageW - mr - 2, y, { align: 'right' });
+          y += 6;
+        });
+        y += 2;
+      }
+
+      // 4. Tabela de Plantões
+      if (!isResumido) {
+        ensureSpace(20);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(isPendentes ? '2. PLANTÕES PENDENTES DE PAGAMENTO' : '4. EXTRATO DETALHADO DE PLANTÕES', ml, y);
+        y += 6;
+
+        const cols = [
+          { label: 'Data', x: ml + 2, w: 22, align: 'left' as const },
+          { label: 'Local', x: ml + 24, w: 70, align: 'left' as const },
+          { label: 'Valor', x: pageW - mr - 45, w: 25, align: 'right' as const },
+          { label: 'Status', x: pageW - mr - 2, w: 20, align: 'right' as const },
+        ];
+
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 116, 139);
+        pdf.setFont('helvetica', 'bold');
+        cols.forEach(c => pdf.text(c.label, c.x, y, { align: c.align }));
+        y += 1;
+        pdf.setDrawColor(203, 213, 225);
+        pdf.line(ml, y, pageW - mr, y);
+        y += 4;
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        shiftsToShow.forEach(s => {
+          ensureSpace(6);
+          const wp = workplaces.find(w => w.id === s.workplace_id);
+          const isPending = s.status !== 'recebido';
+          pdf.setTextColor(51, 65, 85);
+          pdf.text(format(new Date(s.date), 'dd/MM'), cols[0].x, y);
+          const wpName = (wp?.name || '').slice(0, 38);
+          pdf.text(wpName, cols[1].x, y);
+          if (isPending) pdf.setTextColor(220, 38, 38); else pdf.setTextColor(30, 41, 59);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(fmtCur(s.expected_value), cols[2].x, y, { align: 'right' });
+          pdf.setFont('helvetica', 'normal');
+          if (isPending) pdf.setTextColor(239, 68, 68); else pdf.setTextColor(5, 150, 105);
+          pdf.text(isPending ? 'Pendente' : 'Pago', cols[3].x, y, { align: 'right' });
+          y += 4.5;
+          pdf.setDrawColor(241, 245, 249);
+          pdf.line(ml, y - 1, pageW - mr, y - 1);
+        });
+
+        if (shiftsToShow.length === 0) {
+          ensureSpace(8);
+          pdf.setTextColor(148, 163, 184);
+          pdf.text('Nenhum plantão encontrado.', pageW / 2, y, { align: 'center' });
+          y += 6;
+        }
+
+        // Total row
+        ensureSpace(8);
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(ml, y - 1, contentW, 7, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text('TOTAL:', cols[1].x + 40, y + 3, { align: 'right' });
+        pdf.text(fmtCur(totalTableValue), cols[2].x, y + 3, { align: 'right' });
+        y += 10;
+      }
+
+      // Footer
+      ensureSpace(8);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(7);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Este documento é um relatório gerencial e não substitui notas fiscais ou recibos oficiais.', pageW / 2, y + 4, { align: 'center' });
+
+      pdf.save(`relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.pdf`);
+    } catch (err) {
+      console.error(err);
       alert('Erro ao gerar PDF. Tente novamente.');
     } finally {
       setPdfLoading(false);
     }
-  }, [pdfLoading, selectedMonth]);
+  }, [pdfLoading, selectedMonth, user, isMei, taxRate, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle]);
 
   const handleExportCSV = useCallback(() => {
-    const header = ['Data', 'Local', 'Tipo', 'Horário', 'Horas', 'Valor Esperado (R$)', 'Valor Recebido (R$)', 'Status'];
-    const rows = shiftsToShow.map(s => {
+    const lines: string[][] = [];
+    const sep: string[] = [];
+
+    lines.push([docTitle]);
+    lines.push([`Mês de Competência: ${format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}`]);
+    lines.push([`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`]);
+    lines.push(sep);
+
+    lines.push(['1. DADOS DO PROFISSIONAL (PJ)']);
+    lines.push(['Razão Social', user?.company_name || `${user?.name || ''} Serviços Médicos LTDA`]);
+    lines.push(['CNPJ', fmtCNPJ(user?.cnpj)]);
+    lines.push(['Responsável Técnico', `Dr(a). ${user?.name || ''}`]);
+    lines.push(['Regime Tributário', `${user?.tax_regime || 'Simples Nacional'}${!isMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`]);
+    lines.push(sep);
+
+    if (!isPendentes) {
+      lines.push(['2. RESUMO FINANCEIRO']);
+      lines.push(['Faturamento Bruto', (stats?.expected || 0).toFixed(2).replace('.', ',')]);
+      lines.push(['Total Recebido', (stats?.received || 0).toFixed(2).replace('.', ',')]);
+      lines.push(['Total Pendente', (stats?.pending || 0).toFixed(2).replace('.', ',')]);
+      lines.push([`Provisão de Imposto (DAS${isMei ? ' MEI' : ` ${(taxRate * 100).toFixed(1)}%`})`, taxAmount.toFixed(2).replace('.', ',')]);
+      lines.push(sep);
+
+      if (Object.keys(wpBreakdown).length > 0) {
+        lines.push(['3. FATURAMENTO POR FONTE PAGADORA']);
+        lines.push(['Local', 'CNPJ', 'Plantões', 'Valor Total (R$)']);
+        Object.entries(wpBreakdown).forEach(([wpId, data]) => {
+          const wp = workplaces.find(w => w.id === wpId);
+          if (!wp) return;
+          lines.push([wp.name, fmtCNPJ(wp.cnpj), String(data.shifts), data.total.toFixed(2).replace('.', ',')]);
+        });
+        lines.push(sep);
+      }
+    }
+
+    lines.push([isPendentes ? '2. PLANTÕES PENDENTES DE PAGAMENTO' : '4. EXTRATO DETALHADO DE PLANTÕES']);
+    lines.push(['Data', 'Local', 'CNPJ', 'Tipo', 'Início', 'Fim', 'Horas', 'Valor Esperado (R$)', 'Valor Recebido (R$)', 'Status']);
+    shiftsToShow.forEach(s => {
       const wp = workplaces.find(w => w.id === s.workplace_id);
-      return [
+      lines.push([
         format(new Date(s.date), 'dd/MM/yyyy'),
         wp?.name || '',
+        fmtCNPJ(wp?.cnpj),
         s.type || '',
-        `${s.start_time || ''} - ${s.end_time || ''}`,
+        s.start_time || '',
+        s.end_time || '',
         String(s.hours || ''),
         s.expected_value.toFixed(2).replace('.', ','),
-        (s.received_value ?? '').toString().replace('.', ','),
-        s.status,
-      ];
+        s.received_value != null ? Number(s.received_value).toFixed(2).replace('.', ',') : '',
+        statusLabel[s.status] || s.status,
+      ]);
     });
     const totalExpected = shiftsToShow.reduce((a, b) => a + b.expected_value, 0);
     const totalReceived = shiftsToShow.reduce((a, b) => a + (b.received_value || 0), 0);
-    rows.push(['', '', '', '', 'TOTAL', totalExpected.toFixed(2).replace('.', ','), totalReceived.toFixed(2).replace('.', ','), '']);
+    lines.push(['', '', '', '', '', '', 'TOTAL', totalExpected.toFixed(2).replace('.', ','), totalReceived.toFixed(2).replace('.', ','), '']);
+
     const bom = '﻿';
-    const csv = bom + [header, ...rows].map(r => r.map(c => `"${c}"`).join(';')).join('\n');
+    const csv = bom + lines.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [shiftsToShow, workplaces, selectedMonth]);
+  }, [selectedMonth, user, isMei, taxRate, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel]);
 
   return (
     <div className="page-content bg-white relative overflow-hidden h-full min-h-screen">
@@ -407,7 +637,7 @@ export default function RelatoriosScreen() {
         {/* Área de Rolagem do Documento */}
         <main className="flex-1 overflow-y-auto bg-slate-100 hide-scrollbar pb-32">
           {/* Documento (Folha "A4") */}
-          <div ref={docRef} className="bg-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] m-4 p-5 rounded-md text-[0.75rem] leading-[1.4] text-slate-700 md:max-w-[800px] md:mx-auto md:my-8 md:p-12 md:text-sm">
+          <div className="bg-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] m-4 p-5 rounded-md text-[0.75rem] leading-[1.4] text-slate-700 md:max-w-[800px] md:mx-auto md:my-8 md:p-12 md:text-sm">
             
             <div className="text-center mb-6">
               <h2 className="font-bold text-sm uppercase tracking-wider text-slate-900">{docTitle}</h2>

@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, ChevronLeft, Calendar, Wallet, RefreshCw, Stethoscope, Eye, EyeOff, Check, X, Lock } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Calendar, Wallet, RefreshCw, Stethoscope, Eye, EyeOff, Check, X, Lock, UserCircle2 } from 'lucide-react';
 import type { ProfileType } from '../types';
 import { PROFILE_TYPE_LABELS } from '../types';
-import { registerUser, loginUser } from '../lib/db';
+import { registerUser, loginUser, getUsers } from '../lib/db';
 import { useApp } from '../contexts/AppContext';
 
 const slides = [
@@ -139,6 +139,29 @@ export default function OnboardingScreen() {
     }
   }
 
+  function handleGuestLogin() {
+    // Reuse an existing guest if it already exists (keeps demo data between sessions)
+    const existing = getUsers().find(u => u.email === 'visitante@plantaozinho.app');
+    if (existing) {
+      login(existing, false);
+      return;
+    }
+    const guest = registerUser({
+      name: 'Visitante',
+      email: 'visitante@plantaozinho.app',
+      password: '',
+      specialty: 'Medicina de Urgência',
+      profile_type: 'plantonista',
+      subscription_plan: 'free',
+      whatsapp: '',
+      goals: ['Organizar minha escala', 'Controlar pagamentos'],
+      onboarding_completed: true,
+      tax_regime: 'Simples Nacional',
+      tax_rate: 6,
+    });
+    login(guest, true);
+  }
+
   // ---- VIEWS ----
 
   if (mode === 'login') {
@@ -194,9 +217,19 @@ export default function OnboardingScreen() {
           <button onClick={handleLogin} className="btn-primary mb-3">
             Entrar
           </button>
-          <button onClick={() => setMode('register')} className="btn-secondary">
+          <button onClick={() => setMode('register')} className="btn-secondary mb-3">
             Criar nova conta
           </button>
+          <button
+            onClick={handleGuestLogin}
+            className="w-full flex items-center justify-center gap-2 py-3 text-slate-500 hover:text-slate-800 transition text-sm font-medium"
+          >
+            <UserCircle2 size={16} />
+            Entrar como visitante
+          </button>
+          <p className="text-center text-[11px] text-slate-400 mt-1.5 px-4 leading-snug">
+            Acesse com dados de demonstração — sem precisar criar conta.
+          </p>
         </div>
       </div>
     );
@@ -463,9 +496,19 @@ export default function OnboardingScreen() {
             <button onClick={handleNext} className="btn-primary mb-3">
               Continuar <ChevronRight size={18} />
             </button>
-            <button onClick={() => setMode('login')} className="btn-secondary">
+            <button onClick={() => setMode('login')} className="btn-secondary mb-3">
               Já tenho conta — Entrar
             </button>
+            <button
+              onClick={handleGuestLogin}
+              className="w-full flex items-center justify-center gap-2 py-3 text-slate-500 hover:text-slate-800 transition text-sm font-medium"
+            >
+              <UserCircle2 size={16} />
+              Entrar como visitante
+            </button>
+            <p className="text-center text-[11px] text-slate-400 mt-1.5 px-4 leading-snug">
+              Explore o app com dados de demonstração — sem cadastro.
+            </p>
           </>
         ) : (
           <div className="flex gap-3">
