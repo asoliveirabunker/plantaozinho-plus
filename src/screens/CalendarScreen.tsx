@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Edit3, Copy, Check, Trash2, X } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { getWorkplace, updateShift, deleteShift, createShift } from '../lib/db';
@@ -21,6 +21,37 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [filterWorkplace, setFilterWorkplace] = useState<string>('all');
   const [sheetShift, setSheetShift] = useState<Shift | null>(null);
+  const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
+  const [panelMode, setPanelMode] = useState<'day' | 'month'>('day');
+  const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+
+  function goToPrevMonth() {
+    setSlideDir('right');
+    setCurrentMonth(m => subMonths(m, 1));
+  }
+  function goToNextMonth() {
+    setSlideDir('left');
+    setCurrentMonth(m => addMonths(m, 1));
+  }
+
+  function handleTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }
+  function handleTouchEnd(e: React.TouchEvent) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const end = e.changedTouches[0];
+    const dx = end.clientX - start.x;
+    const dy = end.clientY - start.y;
+    const dt = Date.now() - start.t;
+    // Require: dominant horizontal, min 50px, not too slow
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+      if (dx < 0) goToNextMonth();
+      else goToPrevMonth();
+    }
+  }
 
   const allShifts = shifts;
 
@@ -41,6 +72,22 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
   };
 
   const selectedDayShifts = selectedDate ? shiftsForDay(selectedDate) : [];
+
+  const monthShifts = useMemo(() => {
+    const prefix = format(currentMonth, 'yyyy-MM');
+    return filteredShifts
+      .filter(s => s.date.startsWith(prefix) && s.status !== 'cancelado')
+      .sort((a, b) => a.date.localeCompare(b.date) || a.start_datetime.localeCompare(b.start_datetime));
+  }, [filteredShifts, currentMonth]);
+
+  const monthShiftsByDay = useMemo(() => {
+    const map: Record<string, Shift[]> = {};
+    monthShifts.forEach(s => {
+      if (!map[s.date]) map[s.date] = [];
+      map[s.date].push(s);
+    });
+    return map;
+  }, [monthShifts]);
 
   const today = new Date();
 
@@ -74,6 +121,61 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
     deleteShift(id);
     refreshShifts();
     setSheetShift(null);
+  }
+
+  function renderShiftCard(shift: Shift, compact = false) {
+    const wp = getWorkplace(shift.workplace_id);
+    if (!wp) return null;
+    const startTime = format(parseISO(shift.start_datetime), 'HH:mm');
+    const endTime = format(parseISO(shift.end_datetime), 'HH:mm');
+    return (
+      <div key={shift.id} className="border border-slate-100 rounded-xl p-2.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="rounded-lg flex items-center justify-center shrink-0" style={{ background: wp.color, width: 28, height: 28, fontSize: 10, color: 'white', fontWeight: 700 }}>
+              {wp.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900 text-[13px] truncate leading-tight">{wp.name}</p>
+              <p className="text-[11px] text-slate-400">{startTime}–{endTime}</p>
+            </div>
+          </div>
+          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded status-${shift.status}`}>{STATUS_LABELS[shift.status]}</span>
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wide">Valor</p>
+          <p className="font-bold text-slate-900 text-[13px]">{formatCurrency(shift.expected_value)}</p>
+        </div>
+        {!compact && (
+          <div className="flex gap-1.5">
+            <button onClick={() => setSheetShift(shift)}
+              className="flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-[12px] font-medium flex items-center justify-center gap-1">
+              <Edit3 size={12} /> Editar
+            </button>
+            {shift.status === 'previsto' && (
+              <button onClick={() => handleMarkDone(shift.id)}
+                className="flex-1 py-1.5 rounded-lg text-white text-[12px] font-medium flex items-center justify-center gap-1"
+                style={{ background: '#1877F2' }}>
+                <Check size={12} /> Concluir
+              </button>
+            )}
+            {shift.status === 'realizado' && (
+              <button onClick={() => handleMarkReceived(shift.id)}
+                className="flex-1 py-1.5 rounded-lg text-white text-[12px] font-medium"
+                style={{ background: '#22c55e' }}>
+                Recebido
+              </button>
+            )}
+          </div>
+        )}
+        {compact && (
+          <button onClick={() => setSheetShift(shift)}
+            className="w-full py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-medium flex items-center justify-center gap-1 hover:bg-slate-50 transition">
+            <Edit3 size={11} /> Detalhes
+          </button>
+        )}
+      </div>
+    );
   }
 
   async function handleDuplicate(shift: Shift) {
@@ -127,21 +229,26 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
 
       {/* Month navigation */}
       <div className="flex items-center justify-between px-5 py-2">
-        <button onClick={() => setCurrentMonth(m => subMonths(m, 1))}
+        <button onClick={goToPrevMonth}
           className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100">
           <ChevronLeft size={14} />
         </button>
         <h2 className="font-semibold text-gray-900 uppercase text-[13px] tracking-wide">
           {format(currentMonth, 'MMMM yyyy', { locale: ptBR }).toUpperCase()}
         </h2>
-        <button onClick={() => setCurrentMonth(m => addMonths(m, 1))}
+        <button onClick={goToNextMonth}
           className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100">
           <ChevronRight size={14} />
         </button>
       </div>
 
-      {/* Calendar grid */}
-      <div className="px-3 mb-1">
+      {/* Calendar grid (swipeable) */}
+      <div
+        className="px-3 mb-1 select-none"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{ touchAction: 'pan-y' }}
+      >
         {/* Week headers */}
         <div className="grid grid-cols-7 mb-0.5">
           {weekHeaders.map((h, i) => (
@@ -149,7 +256,12 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
           ))}
         </div>
         {/* Days */}
-        <div className="grid grid-cols-7 gap-0.5">
+        <div
+          key={format(currentMonth, 'yyyy-MM')}
+          className={`grid grid-cols-7 gap-0.5 ${
+            slideDir === 'left' ? 'animate-tab-in' : slideDir === 'right' ? 'animate-tab-in-left' : ''
+          }`}
+        >
           {/* Empty cells for first row */}
           {Array.from({ length: firstDayOfWeek }).map((_, i) => (
             <div key={`empty-${i}`} className="aspect-square" />
@@ -193,81 +305,125 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
         </div>
       </div>
 
-      {/* Selected day panel */}
-      {selectedDate && (
-        <div className="mx-5 bg-white rounded-2xl border border-slate-100 p-3 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h3 className="font-bold text-slate-900 text-[14px] leading-tight">
-                {format(selectedDate, "d 'de' MMMM", { locale: ptBR })}
-              </h3>
-              <p className="text-[11px] text-slate-400 capitalize">
-                {format(selectedDate, 'EEEE', { locale: ptBR })}
-              </p>
-            </div>
-            <button onClick={() => onAddShift(format(selectedDate, 'yyyy-MM-dd'))}
-              className="flex items-center gap-1 text-blue-600 text-[12px] font-semibold px-2.5 py-1 rounded-lg bg-blue-50">
-              <Plus size={12} /> Plantão
-            </button>
-          </div>
-
-          {selectedDayShifts.length === 0 ? (
-            <div className="text-center py-3">
-              <p className="text-slate-400 text-[12px]">Nenhum plantão neste dia</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {selectedDayShifts.map(shift => {
-                const wp = getWorkplace(shift.workplace_id);
-                if (!wp) return null;
-                const startTime = format(parseISO(shift.start_datetime), 'HH:mm');
-                const endTime = format(parseISO(shift.end_datetime), 'HH:mm');
-
-                return (
-                  <div key={shift.id} className="border border-slate-100 rounded-xl p-2.5">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="rounded-lg flex items-center justify-center shrink-0" style={{ background: wp.color, width: 28, height: 28, fontSize: 10, color: 'white', fontWeight: 700 }}>
-                          {wp.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-900 text-[13px] truncate leading-tight">{wp.name}</p>
-                          <p className="text-[11px] text-slate-400">{startTime}–{endTime}</p>
-                        </div>
-                      </div>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded status-${shift.status}`}>{STATUS_LABELS[shift.status]}</span>
-                    </div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wide">Valor</p>
-                      <p className="font-bold text-slate-900 text-[13px]">{formatCurrency(shift.expected_value)}</p>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button onClick={() => setSheetShift(shift)}
-                        className="flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-[12px] font-medium flex items-center justify-center gap-1">
-                        <Edit3 size={12} /> Editar
-                      </button>
-                      {shift.status === 'previsto' && (
-                        <button onClick={() => handleMarkDone(shift.id)}
-                          className="flex-1 py-1.5 rounded-lg text-white text-[12px] font-medium flex items-center justify-center gap-1"
-                          style={{ background: '#1877F2' }}>
-                          <Check size={12} /> Concluir
-                        </button>
-                      )}
-                      {shift.status === 'realizado' && (
-                        <button onClick={() => handleMarkReceived(shift.id)}
-                          className="flex-1 py-1.5 rounded-lg text-white text-[12px] font-medium"
-                          style={{ background: '#22c55e' }}>
-                          Recebido
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {/* Panel: shifts for selected day OR all month */}
+      <div className="mx-5 bg-white rounded-2xl border border-slate-100 p-3 shadow-sm">
+        {/* Mode Toggle */}
+        <div className="flex bg-slate-100 p-0.5 rounded-lg mb-3">
+          <button
+            onClick={() => setPanelMode('day')}
+            className={`flex-1 py-1.5 rounded-[6px] text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 ${
+              panelMode === 'day' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Dia
+            {selectedDate && selectedDayShifts.length > 0 && (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
+                panelMode === 'day' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'
+              }`}>{selectedDayShifts.length}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setPanelMode('month')}
+            className={`flex-1 py-1.5 rounded-[6px] text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 ${
+              panelMode === 'month' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Mês
+            {monthShifts.length > 0 && (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
+                panelMode === 'month' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'
+              }`}>{monthShifts.length}</span>
+            )}
+          </button>
         </div>
-      )}
+
+        {panelMode === 'day' && selectedDate && (
+          <>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="font-bold text-slate-900 text-[14px] leading-tight">
+                  {format(selectedDate, "d 'de' MMMM", { locale: ptBR })}
+                </h3>
+                <p className="text-[11px] text-slate-400 capitalize">
+                  {format(selectedDate, 'EEEE', { locale: ptBR })}
+                </p>
+              </div>
+              <button onClick={() => onAddShift(format(selectedDate, 'yyyy-MM-dd'))}
+                className="flex items-center gap-1 text-blue-600 text-[12px] font-semibold px-2.5 py-1 rounded-lg bg-blue-50">
+                <Plus size={12} /> Plantão
+              </button>
+            </div>
+
+            {selectedDayShifts.length === 0 ? (
+              <div className="text-center py-3">
+                <p className="text-slate-400 text-[12px]">Nenhum plantão neste dia</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {selectedDayShifts.map(shift => renderShiftCard(shift))}
+              </div>
+            )}
+          </>
+        )}
+
+        {panelMode === 'month' && (
+          <>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="font-bold text-slate-900 text-[14px] leading-tight capitalize">
+                  {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  {monthShifts.length} {monthShifts.length !== 1 ? 'plantões' : 'plantão'} {monthShifts.length > 0 && `· ${formatCurrency(monthShifts.reduce((s, x) => s + x.expected_value, 0))}`}
+                </p>
+              </div>
+              <button onClick={() => onAddShift(selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(currentMonth, 'yyyy-MM-dd'))}
+                className="flex items-center gap-1 text-blue-600 text-[12px] font-semibold px-2.5 py-1 rounded-lg bg-blue-50">
+                <Plus size={12} /> Plantão
+              </button>
+            </div>
+
+            {monthShifts.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-slate-400 text-[12px]">Nenhum plantão neste mês</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[420px] overflow-y-auto hide-scrollbar -mx-1 px-1">
+                {Object.entries(monthShiftsByDay).map(([dateStr, dayShifts]) => {
+                  const day = parseISO(dateStr);
+                  const isTodayGroup = isSameDay(day, today);
+                  return (
+                    <div key={dateStr}>
+                      <button
+                        onClick={() => { setSelectedDate(day); setPanelMode('day'); }}
+                        className="w-full flex items-center justify-between gap-2 mb-1.5 group active:scale-[0.99] transition"
+                      >
+                        <div className="flex items-baseline gap-1.5 min-w-0">
+                          <span className={`text-[12px] font-bold tabular-nums ${isTodayGroup ? 'text-blue-600' : 'text-slate-700'}`}>
+                            {format(day, "dd 'de' MMM", { locale: ptBR })}
+                          </span>
+                          <span className="text-[10px] text-slate-400 capitalize truncate">
+                            · {format(day, 'EEE', { locale: ptBR })}
+                          </span>
+                          {isTodayGroup && (
+                            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase tracking-wider leading-none">hoje</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-medium shrink-0 group-hover:text-blue-600 transition">
+                          {dayShifts.length} {dayShifts.length !== 1 ? 'plantões' : 'plantão'}
+                        </span>
+                      </button>
+                      <div className="space-y-1.5">
+                        {dayShifts.map(shift => renderShiftCard(shift, true))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Shift action sheet */}
       {sheetShift && (

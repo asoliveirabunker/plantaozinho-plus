@@ -1,13 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { updateShift, getMonthlyStats } from '../lib/db';
-import { format, subMonths, isSameMonth } from 'date-fns';
+import { format, subMonths, isSameMonth, parseISO, startOfWeek, endOfWeek, addDays, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Shift, ShiftStatus } from '../types';
 import { STATUS_LABELS } from '../types';
 import {
   TrendingUp, ChevronRight, ChevronDown, Check, AlertCircle, X,
-  ChevronLeft, Calendar as CalendarIcon, DollarSign
+  ChevronLeft, Calendar as CalendarIcon, DollarSign, MapPin, CalendarRange
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -36,6 +36,15 @@ export default function GanhosScreen() {
   const [editGoal, setEditGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
 
+  // Extrato filters
+  const [filterWorkplace, setFilterWorkplace] = useState<string>('all');
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [showWorkplaceSheet, setShowWorkplaceSheet] = useState(false);
+  const [showDateSheet, setShowDateSheet] = useState(false);
+  const [dateFromDraft, setDateFromDraft] = useState('');
+  const [dateToDraft, setDateToDraft] = useState('');
+
   const year = selectedMonth.getFullYear();
   const month = selectedMonth.getMonth() + 1;
   const isCurrentMonth = isSameMonth(selectedMonth, new Date());
@@ -48,13 +57,30 @@ export default function GanhosScreen() {
     return allShifts.filter(s => s.date.startsWith(prefix) && s.status !== 'cancelado');
   }, [allShifts, year, month]);
 
+  const filteredShifts = useMemo(() => {
+    return monthShifts.filter(s => {
+      if (filterWorkplace !== 'all' && s.workplace_id !== filterWorkplace) return false;
+      if (filterDateFrom) {
+        const from = parseISO(filterDateFrom);
+        if (parseISO(s.date) < from) return false;
+      }
+      if (filterDateTo) {
+        const to = parseISO(filterDateTo);
+        if (parseISO(s.date) > to) return false;
+      }
+      return true;
+    });
+  }, [monthShifts, filterWorkplace, filterDateFrom, filterDateTo]);
+
+  const hasActiveFilter = filterWorkplace !== 'all' || filterDateFrom !== '' || filterDateTo !== '';
+
   const byStatus = useMemo(() => {
     const groups: Record<ShiftStatus, Shift[]> = {
       previsto: [], realizado: [], faturado: [], recebido: [], atrasado: [], divergente: [], cancelado: []
     };
-    monthShifts.forEach(s => groups[s.status].push(s));
+    filteredShifts.forEach(s => groups[s.status].push(s));
     return groups;
-  }, [monthShifts]);
+  }, [filteredShifts]);
 
   const workplaceBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
@@ -299,62 +325,69 @@ export default function GanhosScreen() {
               )}
             </div>
 
-            {/* ÚLTIMOS PLANTÕES */}
-            <div className="px-5 mb-4">
-              <div className="flex justify-between items-center mb-1.5">
-                <h3 className="font-semibold text-slate-800 text-[13px]">Últimos Plantões</h3>
-                <button onClick={() => setActiveTab('lista')} className="text-[11px] text-blue-600 font-medium">Ver todos</button>
-              </div>
-
-              <div className="space-y-1.5">
-                {monthShifts.slice(0, 3).map(shift => {
-                  const wp = workplaces.find(w => w.id === shift.workplace_id);
-                  const isPaid = shift.status === 'recebido';
-                  return (
-                    <div key={shift.id} className="bg-white p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] border border-slate-100 active:bg-slate-50 transition">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center border border-slate-100 shrink-0"
-                            style={{ background: wp?.color ? `${wp.color}20` : '#f8fafc', color: wp?.color || '#64748b' }}>
-                            <span className="text-xs font-bold">{wp?.name.slice(0,2).toUpperCase()}</span>
-                          </div>
-                          <div>
-                            <h4 className="font-semibold text-slate-900 text-sm">{wp?.name}</h4>
-                            <p className="text-xs text-slate-500">
-                              {format(new Date(shift.date), 'EEE, dd MMM', { locale: ptBR })} • {format(new Date(shift.start_datetime), 'HH:mm')} - {format(new Date(shift.end_datetime), 'HH:mm')}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="font-bold text-slate-900 text-sm">{fmtCur(shift.expected_value)}</span>
-                      </div>
-                      <div className={`flex items-center mt-2 ${!isPaid ? 'justify-between' : 'justify-end'}`}>
-                        {!isPaid && (
-                          <button onClick={() => handleMarkReceived(shift)} className="text-[11px] text-slate-400 font-medium flex items-center gap-1 active:scale-95 transition hover:text-emerald-600">
-                            <Check size={14} /> Marcar como pago
-                          </button>
-                        )}
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wide uppercase ${
-                          isPaid ? 'bg-emerald-50 text-emerald-600' :
-                          shift.status === 'atrasado' ? 'bg-red-50 text-red-600' :
-                          'bg-purple-50 text-purple-600'
-                        }`}>
-                          {STATUS_LABELS[shift.status]}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-                {monthShifts.length === 0 && (
-                  <div className="text-center py-6 text-slate-400 text-sm bg-white rounded-2xl border border-slate-100">
-                    Nenhum plantão registrado neste mês.
-                  </div>
-                )}
-              </div>
-            </div>
           </>
         ) : (
           /* TAB: LISTA COMPLETA POR STATUS */
-          <div className="px-5 space-y-6 mt-4">
+          <div className="px-5 mt-4">
+            {/* Filtros — barra compacta */}
+            {(() => {
+              const selectedWp = filterWorkplace !== 'all' ? workplaces.find(w => w.id === filterWorkplace) : null;
+              const fmtDate = (s: string) => format(parseISO(s), 'dd/MM');
+              const dateLabel =
+                filterDateFrom && filterDateTo ? `${fmtDate(filterDateFrom)} – ${fmtDate(filterDateTo)}` :
+                filterDateFrom ? `A partir de ${fmtDate(filterDateFrom)}` :
+                filterDateTo ? `Até ${fmtDate(filterDateTo)}` :
+                'Período';
+              const dateActive = !!(filterDateFrom || filterDateTo);
+              return (
+                <div className="flex items-center gap-2 mb-4">
+                  {/* Pill: Local */}
+                  <button
+                    onClick={() => setShowWorkplaceSheet(true)}
+                    className={`flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-95 border ${
+                      selectedWp
+                        ? 'bg-white border-slate-200 text-slate-800 shadow-[0_1px_3px_rgba(0,0,0,0.04)]'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {selectedWp ? (
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: selectedWp.color }} />
+                    ) : (
+                      <MapPin size={12} strokeWidth={2.5} className="text-slate-400" />
+                    )}
+                    <span className="truncate max-w-[110px]">{selectedWp ? selectedWp.name : 'Local'}</span>
+                    <ChevronDown size={12} strokeWidth={2.5} className="text-slate-400 -mr-0.5" />
+                  </button>
+
+                  {/* Pill: Período */}
+                  <button
+                    onClick={() => { setDateFromDraft(filterDateFrom); setDateToDraft(filterDateTo); setShowDateSheet(true); }}
+                    className={`flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-95 border ${
+                      dateActive
+                        ? 'bg-white border-slate-200 text-slate-800 shadow-[0_1px_3px_rgba(0,0,0,0.04)]'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <CalendarIcon size={12} strokeWidth={2.5} className={dateActive ? 'text-blue-600' : 'text-slate-400'} />
+                    <span className="truncate">{dateLabel}</span>
+                    <ChevronDown size={12} strokeWidth={2.5} className="text-slate-400 -mr-0.5" />
+                  </button>
+
+                  {/* Clear (only when active) */}
+                  {hasActiveFilter && (
+                    <button
+                      onClick={() => { setFilterWorkplace('all'); setFilterDateFrom(''); setFilterDateTo(''); }}
+                      className="ml-auto w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center active:scale-90 transition shrink-0"
+                      title="Limpar filtros"
+                    >
+                      <X size={13} strokeWidth={2.5} />
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="space-y-6">
             {(['atrasado', 'divergente', 'realizado', 'faturado', 'previsto', 'recebido'] as ShiftStatus[]).map(status => {
               const group = byStatus[status];
               if (!group.length) return null;
@@ -397,8 +430,9 @@ export default function GanhosScreen() {
                           </div>
                           {['realizado', 'faturado', 'atrasado'].includes(status) && (
                             <button onClick={() => handleMarkReceived(shift)}
-                              className="mt-3 w-full py-2.5 rounded-xl text-emerald-600 bg-emerald-50 text-xs font-bold uppercase tracking-wider hover:bg-emerald-100 transition">
-                              💰 Registrar Pagamento
+                              className="mt-3 w-full py-2.5 rounded-xl text-emerald-600 bg-emerald-50 text-xs font-bold uppercase tracking-wider hover:bg-emerald-100 transition flex items-center justify-center gap-1.5">
+                              <DollarSign size={13} strokeWidth={2.5} />
+                              Registrar Pagamento
                             </button>
                           )}
                         </div>
@@ -408,9 +442,12 @@ export default function GanhosScreen() {
                 </div>
               );
             })}
-            {monthShifts.length === 0 && (
-              <div className="text-center py-10 text-slate-400 text-sm">Nenhum plantão neste mês</div>
+            {filteredShifts.length === 0 && (
+              <div className="text-center py-10 text-slate-400 text-sm">
+                {hasActiveFilter ? 'Nenhum plantão corresponde aos filtros.' : 'Nenhum plantão neste mês'}
+              </div>
             )}
+            </div>
           </div>
         )}
       </main>
@@ -496,6 +533,212 @@ export default function GanhosScreen() {
                   Voltar para o mês atual
                 </button>
               )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* BOTTOM SHEET: FILTRO POR LOCAL */}
+      {showWorkplaceSheet && (
+        <div className="bottom-sheet-overlay" onClick={() => setShowWorkplaceSheet(false)}>
+          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+            <div className="sheet-handle" />
+
+            <div className="flex items-start justify-between mb-5">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Filtro</p>
+                <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Local</h3>
+                <p className="text-[12px] text-slate-500 mt-0.5">Selecione um local para filtrar.</p>
+              </div>
+              <button onClick={() => setShowWorkplaceSheet(false)}
+                className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-1.5 mb-2">
+              <button
+                onClick={() => { setFilterWorkplace('all'); setShowWorkplaceSheet(false); }}
+                className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all active:scale-[0.99] ${
+                  filterWorkplace === 'all' ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-slate-50 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    filterWorkplace === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200'
+                  }`}>
+                    <MapPin size={14} strokeWidth={2.5} />
+                  </div>
+                  <div className="text-left min-w-0">
+                    <p className={`text-[14px] font-bold truncate ${filterWorkplace === 'all' ? 'text-blue-700' : 'text-slate-800'}`}>Todos os locais</p>
+                    <p className="text-[11px] text-slate-500">{monthShifts.length} {monthShifts.length !== 1 ? 'plantões' : 'plantão'} no mês</p>
+                  </div>
+                </div>
+                {filterWorkplace === 'all' && (
+                  <Check size={16} strokeWidth={3} className="text-blue-600 shrink-0" />
+                )}
+              </button>
+
+              {workplaces.map(wp => {
+                const count = monthShifts.filter(s => s.workplace_id === wp.id).length;
+                const isSelected = filterWorkplace === wp.id;
+                return (
+                  <button
+                    key={wp.id}
+                    onClick={() => { setFilterWorkplace(wp.id); setShowWorkplaceSheet(false); }}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all active:scale-[0.99] ${
+                      isSelected ? 'ring-1 ring-blue-200' : 'bg-slate-50 hover:bg-slate-100'
+                    }`}
+                    style={isSelected ? { background: `${wp.color}10` } : undefined}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-[11px]"
+                        style={{ background: `${wp.color}20`, color: wp.color }}>
+                        {wp.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="text-left min-w-0">
+                        <p className="text-[14px] font-bold text-slate-800 truncate">{wp.name}</p>
+                        <p className="text-[11px] text-slate-500">{count} {count !== 1 ? 'plantões' : 'plantão'} no mês</p>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <Check size={16} strokeWidth={3} className="shrink-0" style={{ color: wp.color }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BOTTOM SHEET: FILTRO POR PERÍODO */}
+      {showDateSheet && (() => {
+        const iso = (d: Date) => format(d, 'yyyy-MM-dd');
+        const todayD = new Date();
+        const today = iso(todayD);
+        const monthStart = iso(new Date(year, month - 1, 1));
+        const monthMid = iso(new Date(year, month - 1, 15));
+        const monthMidNext = iso(new Date(year, month - 1, 16));
+        const monthEnd = iso(new Date(year, month, 0));
+        const weekStart = iso(startOfWeek(todayD, { weekStartsOn: 1 }));
+        const weekEnd = iso(endOfWeek(todayD, { weekStartsOn: 1 }));
+
+        const quickPresets = [
+          { label: 'Hoje', from: today, to: today },
+          { label: 'Esta semana', from: weekStart, to: weekEnd },
+          { label: 'Próx. 7 dias', from: today, to: iso(addDays(todayD, 6)) },
+          { label: 'Últ. 7 dias', from: iso(subDays(todayD, 6)), to: today },
+        ];
+        const monthPresets = [
+          { label: '1ª quinzena', from: monthStart, to: monthMid },
+          { label: '2ª quinzena', from: monthMidNext, to: monthEnd },
+        ];
+        const isActive = (p: { from: string; to: string }) => dateFromDraft === p.from && dateToDraft === p.to;
+        const anyDraft = !!(dateFromDraft || dateToDraft);
+
+        const previewLabel = (() => {
+          if (!dateFromDraft && !dateToDraft) return null;
+          const f = dateFromDraft ? format(parseISO(dateFromDraft), "dd 'de' MMM", { locale: ptBR }) : '...';
+          const t = dateToDraft ? format(parseISO(dateToDraft), "dd 'de' MMM", { locale: ptBR }) : '...';
+          if (dateFromDraft && dateToDraft && dateFromDraft === dateToDraft) return f;
+          return `${f} – ${t}`;
+        })();
+
+        const renderChip = (p: { label: string; from: string; to: string }) => {
+          const active = isActive(p);
+          return (
+            <button key={p.label}
+              onClick={() => { setDateFromDraft(p.from); setDateToDraft(p.to); }}
+              className={`px-3 py-2 rounded-full text-[12.5px] font-semibold transition-all active:scale-95 whitespace-nowrap ${
+                active
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          );
+        };
+
+        return (
+          <div className="bottom-sheet-overlay" onClick={() => setShowDateSheet(false)}>
+            <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+              <div className="sheet-handle" />
+
+              <div className="flex items-start justify-between mb-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Filtro</p>
+                  <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Período</h3>
+                  <p className="text-[12px] text-slate-500 mt-0.5">
+                    {previewLabel ? <>Mostrando <span className="font-semibold text-slate-700">{previewLabel}</span></> : 'Por padrão, exibe o mês inteiro.'}
+                  </p>
+                </div>
+                <button onClick={() => setShowDateSheet(false)}
+                  className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Group: Recentes */}
+              <div className="mb-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Atalhos rápidos</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {quickPresets.map(renderChip)}
+                </div>
+              </div>
+
+              {/* Group: Quinzena */}
+              <div className="mb-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Divisão do mês</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {monthPresets.map(renderChip)}
+                </div>
+              </div>
+
+              {/* Custom range */}
+              <div className="mb-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Intervalo personalizado</p>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-[10px] text-slate-500 mb-1 ml-0.5">De</label>
+                    <input
+                      type="date"
+                      value={dateFromDraft}
+                      onChange={e => setDateFromDraft(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
+                    />
+                  </div>
+                  <span className="pb-3 text-slate-400 text-[11px] font-medium">até</span>
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-[10px] text-slate-500 mb-1 ml-0.5">Até</label>
+                    <input
+                      type="date"
+                      value={dateToDraft}
+                      onChange={e => setDateToDraft(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => { setDateFromDraft(''); setDateToDraft(''); setFilterDateFrom(''); setFilterDateTo(''); setShowDateSheet(false); }}
+                  disabled={!anyDraft && !filterDateFrom && !filterDateTo}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <CalendarRange size={14} strokeWidth={2.25} />
+                  Mês todo
+                </button>
+                <button
+                  onClick={() => { setFilterDateFrom(dateFromDraft); setFilterDateTo(dateToDraft); setShowDateSheet(false); }}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-[13px] font-semibold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20"
+                >
+                  Aplicar
+                </button>
+              </div>
             </div>
           </div>
         );
