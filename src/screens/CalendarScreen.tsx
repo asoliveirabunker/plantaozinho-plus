@@ -27,11 +27,31 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
 
   function goToPrevMonth() {
     setSlideDir('right');
-    setCurrentMonth(m => subMonths(m, 1));
+    setCurrentMonth(m => {
+      const newMonth = subMonths(m, 1);
+      // Carry selected day to new month (clamp to last day)
+      if (selectedDate) {
+        const dayNum = selectedDate.getDate();
+        const lastDay = endOfMonth(newMonth).getDate();
+        const clampedDay = Math.min(dayNum, lastDay);
+        setSelectedDate(new Date(newMonth.getFullYear(), newMonth.getMonth(), clampedDay));
+      }
+      return newMonth;
+    });
   }
   function goToNextMonth() {
     setSlideDir('left');
-    setCurrentMonth(m => addMonths(m, 1));
+    setCurrentMonth(m => {
+      const newMonth = addMonths(m, 1);
+      // Carry selected day to new month (clamp to last day)
+      if (selectedDate) {
+        const dayNum = selectedDate.getDate();
+        const lastDay = endOfMonth(newMonth).getDate();
+        const clampedDay = Math.min(dayNum, lastDay);
+        setSelectedDate(new Date(newMonth.getFullYear(), newMonth.getMonth(), clampedDay));
+      }
+      return newMonth;
+    });
   }
 
   function handleTouchStart(e: React.TouchEvent) {
