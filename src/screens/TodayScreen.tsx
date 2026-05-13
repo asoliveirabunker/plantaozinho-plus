@@ -54,7 +54,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
 
   const alerts = useMemo(() => {
     const list: {type: string; title: string; desc: string}[] = [];
-    const pendingCount = allShifts.filter(s => ['previsto', 'realizado', 'faturado'].includes(s.status)).length;
+    const pendingCount = allShifts.filter(s => ['previsto', 'realizado'].includes(s.status)).length;
     const overdueShifts = allShifts.filter(s => s.status === 'atrasado');
     const overdueValue = overdueShifts.reduce((sum, s) => sum + s.expected_value, 0);
     const next7 = new Date(now.getTime() + 7 * 86400000);
@@ -101,7 +101,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
   }
 
   const pendingShifts = useMemo(() => {
-    return allShifts.filter(s => ['realizado', 'faturado', 'atrasado', 'divergente'].includes(s.status)).sort((a,b) => a.date.localeCompare(b.date));
+    return allShifts.filter(s => ['realizado', 'atrasado'].includes(s.status)).sort((a,b) => a.date.localeCompare(b.date));
   }, [allShifts]);
 
   const totalSelected = useMemo(() => {

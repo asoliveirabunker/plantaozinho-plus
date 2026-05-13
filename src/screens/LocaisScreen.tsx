@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { Plus, Trash2, X, Check, Building2, MapPin, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Trash2, X, Check, Building2, MapPin, ChevronRight, Pencil } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { createWorkplace, deleteWorkplace, createShiftTemplate, deleteShiftTemplate, getShiftTemplates } from '../lib/db';
-import type { Workplace, WorkplaceType, PaymentMethod, ShiftType } from '../types';
+import { createWorkplace, deleteWorkplace, createShiftTemplate, deleteShiftTemplate, getShiftTemplates, updateWorkplace, updateShiftTemplate } from '../lib/db';
+import type { Workplace, WorkplaceType, PaymentMethod, ShiftType, ShiftTemplate } from '../types';
 import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS } from '../types';
 import { format } from 'date-fns';
 
@@ -13,6 +13,8 @@ export default function LocaisScreen() {
   const { user, workplaces, shifts, refreshWorkplaces, refreshShifts } = useApp();
   const [view, setView] = useState<'list' | 'detail' | 'new' | 'newTemplate'>('list');
   const [selectedWp, setSelectedWp] = useState<Workplace | null>(null);
+  const [editWpSheet, setEditWpSheet] = useState<Workplace | null>(null);
+  const [editTemplateSheet, setEditTemplateSheet] = useState<ShiftTemplate | null>(null);
 
 
   // New workplace form
@@ -378,8 +380,12 @@ export default function LocaisScreen() {
       <div className="page-content">
         <div className="pt-14">
           <div className="px-5 mb-4">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center justify-between mb-4">
               <button onClick={() => setView('list')} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"><X size={16} /></button>
+              <button onClick={() => setEditWpSheet(selectedWp)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-[12px] font-semibold hover:bg-blue-100 transition active:scale-95">
+                <Pencil size={12} strokeWidth={2.5} /> Editar local
+              </button>
             </div>
             <div className="flex items-center gap-4 mb-4">
               <div className="hospital-avatar w-16 h-16 text-xl rounded-2xl" style={{ background: selectedWp.color, width: 64, height: 64, fontSize: 22, borderRadius: 18 }}>
@@ -424,20 +430,29 @@ export default function LocaisScreen() {
             ) : (
               <div className="space-y-2">
                 {templates.map(t => (
-                  <div key={t.id} className="card border border-gray-50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white" style={{ background: selectedWp.color }}>
+                  <div key={t.id} onClick={() => setEditTemplateSheet(t)}
+                    className="card border border-gray-50 flex items-center justify-between cursor-pointer hover:border-slate-200 active:scale-[0.99] transition">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: selectedWp.color }}>
                         {t.shift_type.slice(0,2).toUpperCase()}
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900 text-sm">{t.name}</p>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 text-sm truncate">{t.name}</p>
                         <p className="text-xs text-gray-400">{t.start_time}–{t.end_time} · {t.duration_hours}h · {fmtCur(t.default_value)}</p>
                       </div>
                     </div>
-                    <button onClick={() => { if(confirm('Excluir modelo?')) { deleteShiftTemplate(t.id); refreshWorkplaces(); } }}
-                      className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                      <Trash2 size={13} className="text-gray-400" />
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={e => { e.stopPropagation(); setEditTemplateSheet(t); }}
+                        className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition active:scale-95"
+                        title="Editar modelo">
+                        <Pencil size={12} strokeWidth={2.5} />
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); if(confirm('Excluir modelo?')) { deleteShiftTemplate(t.id); refreshWorkplaces(); } }}
+                        className="w-7 h-7 rounded-full bg-gray-100 hover:bg-red-50 flex items-center justify-center transition active:scale-95"
+                        title="Excluir modelo">
+                        <Trash2 size={13} className="text-gray-400 hover:text-red-500 transition" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -474,6 +489,25 @@ export default function LocaisScreen() {
             </button>
           </div>
         </div>
+
+        {editWpSheet && (
+          <EditWorkplaceSheet
+            key={editWpSheet.id}
+            workplace={editWpSheet}
+            onClose={() => setEditWpSheet(null)}
+            onSaved={(updated) => { setSelectedWp(updated); setEditWpSheet(null); refreshWorkplaces(); refreshShifts(); }}
+          />
+        )}
+        {editTemplateSheet && (
+          <EditTemplateSheet
+            key={editTemplateSheet.id}
+            template={editTemplateSheet}
+            workplaceColor={selectedWp.color}
+            onClose={() => setEditTemplateSheet(null)}
+            onSaved={() => { setEditTemplateSheet(null); refreshWorkplaces(); }}
+            onDelete={() => { deleteShiftTemplate(editTemplateSheet.id); setEditTemplateSheet(null); refreshWorkplaces(); }}
+          />
+        )}
       </div>
     );
   }
@@ -560,6 +594,360 @@ export default function LocaisScreen() {
               </div>
             );
           })
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// BOTTOM SHEET: EDITAR LOCAL
+// ============================================================
+function EditWorkplaceSheet({ workplace, onClose, onSaved }: {
+  workplace: Workplace;
+  onClose: () => void;
+  onSaved: (updated: Workplace) => void;
+}) {
+  const [name, setName] = useState(workplace.name);
+  const [type, setType] = useState<WorkplaceType>(workplace.type);
+  const [color, setColor] = useState(workplace.color);
+  const [defaultValue, setDefaultValue] = useState(String(workplace.default_shift_value));
+  const [defaultDuration, setDefaultDuration] = useState(String(workplace.default_duration_hours));
+  const [paymentDay, setPaymentDay] = useState(String(workplace.payment_day));
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(workplace.payment_method);
+  const [cnpj, setCnpj] = useState(workplace.cnpj || '');
+  const [address, setAddress] = useState(workplace.address || '');
+  const [contactName, setContactName] = useState(workplace.contact_name || '');
+  const [contactPhone, setContactPhone] = useState(workplace.contact_phone || '');
+  const [notes, setNotes] = useState(workplace.notes || '');
+  const [error, setError] = useState('');
+
+  function handleSave() {
+    setError('');
+    if (!name.trim()) { setError('Informe o nome do local.'); return; }
+    const dv = parseFloat(defaultValue.replace(',', '.'));
+    const dh = parseFloat(defaultDuration.replace(',', '.'));
+    const pd = parseInt(paymentDay);
+    if (isNaN(dv) || dv < 0) { setError('Valor padrão inválido.'); return; }
+    if (isNaN(dh) || dh <= 0) { setError('Duração padrão inválida.'); return; }
+    if (isNaN(pd) || pd < 1 || pd > 31) { setError('Dia de pagamento deve estar entre 1 e 31.'); return; }
+    const updated = updateWorkplace(workplace.id, {
+      name: name.trim(),
+      type,
+      color,
+      default_shift_value: dv,
+      default_duration_hours: dh,
+      payment_day: pd,
+      payment_method: paymentMethod,
+      cnpj: cnpj || undefined,
+      address: address || undefined,
+      contact_name: contactName || undefined,
+      contact_phone: contactPhone || undefined,
+      notes: notes || undefined,
+    });
+    onSaved(updated);
+  }
+
+  return (
+    <div className="bottom-sheet-overlay" onClick={onClose}>
+      <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+        <div className="sheet-handle" />
+
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-white text-[13px]"
+              style={{ background: color }}>
+              {name.slice(0, 2).toUpperCase() || '??'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Editar local</p>
+              <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight truncate">{name || 'Local'}</h3>
+              <p className="text-[12px] text-slate-500 mt-0.5">{WORKPLACE_TYPE_LABELS[type]}</p>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto hide-scrollbar -mx-1 px-1">
+          {/* Identificação */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Identificação</label>
+            <div className="space-y-2">
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do local"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              <select value={type} onChange={e => setType(e.target.value as WorkplaceType)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
+                {Object.entries(WORKPLACE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Cor */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Cor de identificação</label>
+            <div className="flex gap-2.5 flex-wrap">
+              {WORKPLACE_COLORS.map(c => (
+                <button key={c} onClick={() => setColor(c)}
+                  className="w-8 h-8 rounded-full transition-all flex items-center justify-center"
+                  style={{
+                    background: c,
+                    transform: color === c ? 'scale(1.15)' : 'scale(1)',
+                    boxShadow: color === c ? `0 0 0 2.5px white, 0 0 0 4.5px ${c}` : 'none',
+                  }}>
+                  {color === c && <Check size={12} color="white" strokeWidth={3} />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Plantão padrão */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Plantão padrão</label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Valor (R$)</p>
+                <input type="number" inputMode="decimal" step="0.01" value={defaultValue}
+                  onChange={e => setDefaultValue(e.target.value)} placeholder="1400"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Duração (h)</p>
+                <input type="number" inputMode="decimal" step="0.5" value={defaultDuration}
+                  onChange={e => setDefaultDuration(e.target.value)} placeholder="12"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              </div>
+            </div>
+          </div>
+
+          {/* Pagamento */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Pagamento</label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Dia do mês</p>
+                <input type="number" inputMode="numeric" min="1" max="31" value={paymentDay}
+                  onChange={e => setPaymentDay(e.target.value)} placeholder="10"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Método</p>
+                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
+                  {(['PJ', 'PF', 'RPA', 'cooperativa', 'outro'] as PaymentMethod[]).map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+            <input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="CNPJ/CPF (opcional)"
+              className="w-full mt-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+          </div>
+
+          {/* Contato */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Contato (opcional)</label>
+            <div className="space-y-2">
+              <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Endereço"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              <div className="grid grid-cols-2 gap-2">
+                <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Responsável"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+                <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Telefone"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              </div>
+            </div>
+          </div>
+
+          {/* Observações */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Observações</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              placeholder="Notas internas sobre este local..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition resize-none" />
+          </div>
+
+          {error && (
+            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-3 mt-2 border-t border-slate-100">
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+            Cancelar
+          </button>
+          <button onClick={handleSave}
+            className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-bold transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5"
+            style={{ background: color, boxShadow: `0 4px 12px ${color}40` }}>
+            <Check size={14} strokeWidth={3} /> Salvar alterações
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// BOTTOM SHEET: EDITAR MODELO DE PLANTÃO
+// ============================================================
+function EditTemplateSheet({ template, workplaceColor, onClose, onSaved, onDelete }: {
+  template: ShiftTemplate;
+  workplaceColor: string;
+  onClose: () => void;
+  onSaved: () => void;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(template.name);
+  const [shiftType, setShiftType] = useState<ShiftType>(template.shift_type);
+  const [startTime, setStartTime] = useState(template.start_time);
+  const [endTime, setEndTime] = useState(template.end_time);
+  const [defaultValue, setDefaultValue] = useState(String(template.default_value));
+  const [notes, setNotes] = useState(template.notes || '');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState('');
+
+  function calcDuration(s: string, e: string) {
+    const [sh, sm] = s.split(':').map(Number);
+    const [eh, em] = e.split(':').map(Number);
+    let diff = (eh * 60 + em) - (sh * 60 + sm);
+    if (diff <= 0) diff += 1440;
+    return diff / 60;
+  }
+
+  const duration = calcDuration(startTime, endTime);
+
+  function handleSave() {
+    setError('');
+    if (!name.trim()) { setError('Informe o nome do modelo.'); return; }
+    const v = parseFloat(defaultValue.replace(',', '.'));
+    if (isNaN(v) || v < 0) { setError('Valor inválido.'); return; }
+    updateShiftTemplate(template.id, {
+      name: name.trim(),
+      shift_type: shiftType,
+      start_time: startTime,
+      end_time: endTime,
+      duration_hours: duration,
+      default_value: v,
+      notes: notes || undefined,
+    });
+    onSaved();
+  }
+
+  return (
+    <div className="bottom-sheet-overlay" onClick={onClose}>
+      <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+        <div className="sheet-handle" />
+
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-white text-[12px]"
+              style={{ background: workplaceColor }}>
+              {shiftType.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Editar modelo</p>
+              <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight truncate">{name || 'Modelo'}</h3>
+              <p className="text-[12px] text-slate-500 mt-0.5">{startTime}–{endTime} · {duration}h</p>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Identificação */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Identificação</label>
+            <div className="space-y-2">
+              <input value={name} onChange={e => setName(e.target.value)} placeholder='Ex: "Noite 19h–7h"'
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              <select value={shiftType} onChange={e => setShiftType(e.target.value as ShiftType)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
+                {(['dia', 'noite', '24h', 'sobreaviso', 'sala_vermelha', 'UTI', 'anestesia', 'cirurgia', 'ambulatorio', 'outro'] as ShiftType[]).map(t => (
+                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Horário */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Horário</label>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Início</p>
+                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              </div>
+              <span className="pb-3 text-slate-400 text-[11px] font-medium">até</span>
+              <div className="flex-1">
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Fim</p>
+                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1.5 px-1">
+              Duração: <span className="font-semibold text-slate-600">{duration}h</span>
+            </p>
+          </div>
+
+          {/* Valor */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Valor padrão (R$)</label>
+            <input type="number" inputMode="decimal" step="0.01" value={defaultValue}
+              onChange={e => setDefaultValue(e.target.value)} placeholder="1400"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+          </div>
+
+          {/* Observações */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Observações</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              placeholder="Anotações sobre este modelo..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition resize-none" />
+          </div>
+
+          {error && (
+            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button onClick={() => setConfirmDelete(true)}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-50 text-red-600 text-[12.5px] font-semibold hover:bg-red-100 transition active:scale-[0.98]">
+              <Trash2 size={13} strokeWidth={2.5} /> Excluir
+            </button>
+            <button onClick={handleSave}
+              className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-bold transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5"
+              style={{ background: workplaceColor, boxShadow: `0 4px 12px ${workplaceColor}40` }}>
+              <Check size={14} strokeWidth={3} /> Salvar alterações
+            </button>
+          </div>
+        </div>
+
+        {confirmDelete && (
+          <div className="fixed inset-0 z-[400] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setConfirmDelete(false)}>
+            <div className="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
+              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+                <Trash2 size={20} className="text-red-600" />
+              </div>
+              <h4 className="text-center font-bold text-slate-900 text-[15px] mb-1">Excluir modelo?</h4>
+              <p className="text-center text-slate-500 text-[12px] mb-4">Essa ação não pode ser desfeita.</p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmDelete(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+                  Cancelar
+                </button>
+                <button onClick={() => { setConfirmDelete(false); onDelete(); }}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-[13px] font-bold hover:bg-red-700 transition active:scale-[0.98]">
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

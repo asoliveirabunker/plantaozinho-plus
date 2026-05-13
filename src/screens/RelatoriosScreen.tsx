@@ -121,12 +121,10 @@ export default function RelatoriosScreen() {
   const [pdfLoading, setPdfLoading] = useState(false);
 
   const statusLabel: Record<string, string> = {
-    previsto: 'Previsto',
+    previsto: 'Agendado',
     realizado: 'Realizado',
-    faturado: 'Faturado',
     recebido: 'Recebido',
     atrasado: 'Atrasado',
-    divergente: 'Divergente',
     cancelado: 'Cancelado',
   };
 

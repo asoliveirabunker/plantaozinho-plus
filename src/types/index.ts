@@ -61,7 +61,7 @@ export interface ShiftTemplate {
   notes?: string;
 }
 
-export type ShiftStatus = 'previsto' | 'realizado' | 'faturado' | 'recebido' | 'atrasado' | 'divergente' | 'cancelado';
+export type ShiftStatus = 'previsto' | 'realizado' | 'recebido' | 'atrasado' | 'cancelado';
 
 export interface Shift {
   id: string;
@@ -156,10 +156,8 @@ export interface WorkplaceStats {
 export const STATUS_LABELS: Record<ShiftStatus, string> = {
   previsto: 'Agendado',
   realizado: 'Realizado',
-  faturado: 'Faturado',
   recebido: 'Recebido',
   atrasado: 'Atrasado',
-  divergente: 'Divergente',
   cancelado: 'Cancelado',
 };
 

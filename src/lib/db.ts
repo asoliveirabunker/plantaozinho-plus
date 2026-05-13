@@ -162,9 +162,15 @@ export function deleteShiftTemplate(id: string): void {
 
 export function getShifts(userId: string): Shift[] {
   const shifts = get<Shift>('shifts').filter(s => s.user_id === userId);
-  // Auto-update overdue
   const now = new Date();
   let changed = false;
+  // Migrate legacy statuses
+  shifts.forEach(s => {
+    const legacy = s.status as unknown as string;
+    if (legacy === 'faturado') { s.status = 'realizado'; changed = true; }
+    else if (legacy === 'divergente') { s.status = 'recebido'; changed = true; }
+  });
+  // Auto-update overdue
   shifts.forEach(s => {
     if (
       s.status !== 'recebido' &&
@@ -228,9 +234,8 @@ export function deleteShift(id: string, deleteAll = false, recurrenceId?: string
 export function markShiftReceived(id: string, receivedValue: number): Shift {
   const shift = get<Shift>('shifts').find(s => s.id === id);
   if (!shift) throw new Error('Shift not found');
-  const status: ShiftStatus = Math.abs(receivedValue - shift.expected_value) > 0.01 ? 'divergente' : 'recebido';
   return updateShift(id, {
-    status,
+    status: 'recebido',
     received_value: receivedValue,
     payment_received_date: new Date().toISOString(),
   });

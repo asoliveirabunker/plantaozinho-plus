@@ -145,10 +145,8 @@
 
   .status-previsto { background: #dbeafe; color: #1d4ed8; }
   .status-realizado { background: #dcfce7; color: #15803d; }
-  .status-faturado { background: #fef3c7; color: #92400e; }
   .status-recebido { background: #d1fae5; color: #065f46; }
   .status-atrasado { background: #fee2e2; color: #991b1b; }
-  .status-divergente { background: #fce7f3; color: #9d174d; }
   .status-cancelado { background: #f3f4f6; color: #6b7280; }
 
   .bottom-nav {

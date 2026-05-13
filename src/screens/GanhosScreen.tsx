@@ -76,7 +76,7 @@ export default function GanhosScreen() {
 
   const byStatus = useMemo(() => {
     const groups: Record<ShiftStatus, Shift[]> = {
-      previsto: [], realizado: [], faturado: [], recebido: [], atrasado: [], divergente: [], cancelado: []
+      previsto: [], realizado: [], recebido: [], atrasado: [], cancelado: []
     };
     filteredShifts.forEach(s => groups[s.status].push(s));
     return groups;
@@ -116,8 +116,7 @@ export default function GanhosScreen() {
     if (!receiveModal) return;
     const val = parseFloat(receiveValue.replace(',', '.'));
     if (isNaN(val)) return;
-    const status: ShiftStatus = Math.abs(val - receiveModal.expected_value) > 0.01 ? 'divergente' : 'recebido';
-    updateShift(receiveModal.id, { status, received_value: val, payment_received_date: new Date().toISOString() });
+    updateShift(receiveModal.id, { status: 'recebido', received_value: val, payment_received_date: new Date().toISOString() });
     refreshShifts();
     setReceiveModal(null);
   }
@@ -388,7 +387,7 @@ export default function GanhosScreen() {
             })()}
 
             <div className="space-y-6">
-            {(['atrasado', 'divergente', 'realizado', 'faturado', 'previsto', 'recebido'] as ShiftStatus[]).map(status => {
+            {(['atrasado', 'realizado', 'previsto', 'recebido', 'cancelado'] as ShiftStatus[]).map(status => {
               const group = byStatus[status];
               if (!group.length) return null;
               const total = group.reduce((sum, s) => sum + s.expected_value, 0);
@@ -398,8 +397,7 @@ export default function GanhosScreen() {
                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wide uppercase ${
                       status === 'recebido' ? 'bg-emerald-50 text-emerald-600' :
                       status === 'atrasado' ? 'bg-red-50 text-red-600' :
-                      status === 'divergente' ? 'bg-orange-50 text-orange-600' :
-                      status === 'realizado' || status === 'faturado' ? 'bg-blue-50 text-blue-600' :
+                      status === 'realizado' ? 'bg-blue-50 text-blue-600' :
                       'bg-slate-100 text-slate-600'
                     }`}>{STATUS_LABELS[status]}</span>
                     <span className="text-sm font-bold text-slate-900">{fmtCur(total)}</span>
@@ -428,7 +426,7 @@ export default function GanhosScreen() {
                               )}
                             </div>
                           </div>
-                          {['realizado', 'faturado', 'atrasado'].includes(status) && (
+                          {['realizado', 'atrasado'].includes(status) && (
                             <button onClick={() => handleMarkReceived(shift)}
                               className="mt-3 w-full py-2.5 rounded-xl text-emerald-600 bg-emerald-50 text-xs font-bold uppercase tracking-wider hover:bg-emerald-100 transition flex items-center justify-center gap-1.5">
                               <DollarSign size={13} strokeWidth={2.5} />

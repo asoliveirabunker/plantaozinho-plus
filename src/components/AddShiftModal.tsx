@@ -3,6 +3,7 @@ import { X, Check, RefreshCw, Zap, SlidersHorizontal, Repeat2, Clock, Calendar }
 import { useApp } from '../contexts/AppContext';
 import { createShift, createRecurrenceShifts } from '../lib/db';
 import type { ShiftStatus, RecurrenceFrequency } from '../types';
+import { STATUS_LABELS } from '../types';
 import { format, addDays, addMonths } from 'date-fns';
 
 interface AddShiftModalProps {
@@ -434,8 +435,8 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
                     onChange={e => setStatus(e.target.value as ShiftStatus)}
                     className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none"
                   >
-                    {(['previsto', 'realizado', 'faturado', 'recebido'] as ShiftStatus[]).map(s => (
-                      <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                    {(['previsto', 'realizado', 'recebido'] as ShiftStatus[]).map(s => (
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                     ))}
                   </select>
                 </div>
