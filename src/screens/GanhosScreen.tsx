@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { updateShift, getMonthlyStats } from '../lib/db';
+import { updateShift, deleteShift, getMonthlyStats } from '../lib/db';
 import { format, subMonths, isSameMonth, parseISO, startOfWeek, endOfWeek, addDays, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Shift, ShiftStatus } from '../types';
 import { STATUS_LABELS } from '../types';
 import {
   TrendingUp, ChevronRight, ChevronDown, Check, AlertCircle, X,
-  ChevronLeft, Calendar as CalendarIcon, DollarSign, MapPin, CalendarRange
+  ChevronLeft, Calendar as CalendarIcon, DollarSign, MapPin, CalendarRange, Edit3
 } from 'lucide-react';
+import EditShiftSheet from '../components/EditShiftSheet';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -30,6 +31,7 @@ export default function GanhosScreen() {
   const [modalYear, setModalYear] = useState(selectedMonth.getFullYear());
   const [receiveModal, setReceiveModal] = useState<Shift | null>(null);
   const [receiveValue, setReceiveValue] = useState('');
+  const [editSheetShift, setEditSheetShift] = useState<Shift | null>(null);
   
   // Goals
   const [monthGoal, setMonthGoal] = useState<number | null>(25000); // Exemplo default
@@ -37,11 +39,12 @@ export default function GanhosScreen() {
   const [goalInput, setGoalInput] = useState('');
 
   // Extrato filters
-  const [filterWorkplace, setFilterWorkplace] = useState<string>('all');
+  const [filterWorkplaces, setFilterWorkplaces] = useState<string[]>([]); // empty = all
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [showWorkplaceSheet, setShowWorkplaceSheet] = useState(false);
   const [showDateSheet, setShowDateSheet] = useState(false);
+  const [workplacesDraft, setWorkplacesDraft] = useState<string[]>([]);
   const [dateFromDraft, setDateFromDraft] = useState('');
   const [dateToDraft, setDateToDraft] = useState('');
 
@@ -59,7 +62,7 @@ export default function GanhosScreen() {
 
   const filteredShifts = useMemo(() => {
     return monthShifts.filter(s => {
-      if (filterWorkplace !== 'all' && s.workplace_id !== filterWorkplace) return false;
+      if (filterWorkplaces.length > 0 && !filterWorkplaces.includes(s.workplace_id)) return false;
       if (filterDateFrom) {
         const from = parseISO(filterDateFrom);
         if (parseISO(s.date) < from) return false;
@@ -70,9 +73,9 @@ export default function GanhosScreen() {
       }
       return true;
     });
-  }, [monthShifts, filterWorkplace, filterDateFrom, filterDateTo]);
+  }, [monthShifts, filterWorkplaces, filterDateFrom, filterDateTo]);
 
-  const hasActiveFilter = filterWorkplace !== 'all' || filterDateFrom !== '' || filterDateTo !== '';
+  const hasActiveFilter = filterWorkplaces.length > 0 || filterDateFrom !== '' || filterDateTo !== '';
 
   const byStatus = useMemo(() => {
     const groups: Record<ShiftStatus, Shift[]> = {
@@ -119,6 +122,17 @@ export default function GanhosScreen() {
     updateShift(receiveModal.id, { status: 'recebido', received_value: val, payment_received_date: new Date().toISOString() });
     refreshShifts();
     setReceiveModal(null);
+  }
+
+  function handleMarkDone(shift: Shift) {
+    updateShift(shift.id, { status: 'realizado' });
+    refreshShifts();
+  }
+
+  function handleDeleteShift(id: string) {
+    deleteShift(id);
+    refreshShifts();
+    setEditSheetShift(null);
   }
 
   return (
@@ -225,16 +239,23 @@ export default function GanhosScreen() {
 
               {/* Gráfico */}
               <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
-                <div className="flex justify-between items-center mb-1.5">
+                <div className="flex justify-between items-center mb-2">
                   <h3 className="font-semibold text-slate-800 text-[13px]">Evolução</h3>
-                  <select
-                    value={chartPeriod}
-                    onChange={e => setChartPeriod(e.target.value as '6m'|'1y')}
-                    className="text-[11px] bg-slate-50 border border-slate-200 rounded-md px-1.5 py-0.5 outline-none text-slate-600 font-medium cursor-pointer hover:bg-slate-100 transition"
-                  >
-                    <option value="6m">6 meses</option>
-                    <option value="1y">1 ano</option>
-                  </select>
+                  <div className="flex bg-slate-100 p-0.5 rounded-lg gap-0.5">
+                    {(['6m', '1y'] as const).map(p => (
+                      <button
+                        key={p}
+                        onClick={() => setChartPeriod(p)}
+                        className={`px-2.5 py-1 rounded-[6px] text-[11px] font-semibold transition-all ${
+                          chartPeriod === p
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {p === '6m' ? '6 meses' : '1 ano'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="h-36 w-full relative">
@@ -253,14 +274,17 @@ export default function GanhosScreen() {
                 </div>
               </div>
 
-              {/* Meta Mensal */}
-              <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
+              {/* Meta Mensal — card inteiro clicável (drill-down) */}
+              <button
+                onClick={() => { setGoalInput(monthGoal?.toString() || ''); setEditGoal(true); }}
+                className="w-full text-left bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100 active:scale-[0.99] transition-all hover:border-blue-100 hover:shadow-[0_2px_12px_rgba(24,119,242,0.07)] group"
+              >
                 <div className="flex justify-between items-center mb-2">
                   <h3 className="font-semibold text-slate-800 text-[13px]">Meta do Mês</h3>
-                  <button onClick={() => { setGoalInput(monthGoal?.toString() || ''); setEditGoal(true); }}
-                    className="text-blue-600 text-[11px] font-medium bg-blue-50 px-2 py-0.5 rounded-full active:scale-95 transition">
-                    Editar
-                  </button>
+                  <span className="text-[11px] text-slate-400 group-hover:text-blue-500 transition flex items-center gap-1">
+                    Toque para editar
+                    <ChevronRight size={11} strokeWidth={2.5} />
+                  </span>
                 </div>
 
                 {monthGoal ? (
@@ -276,11 +300,11 @@ export default function GanhosScreen() {
                     </div>
                   </>
                 ) : (
-                  <button onClick={() => setEditGoal(true)} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-[12px] font-medium">
-                    Definir meta financeira
-                  </button>
+                  <div className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-[12px] font-medium text-center">
+                    Toque para definir uma meta financeira
+                  </div>
                 )}
-              </div>
+              </button>
 
               {/* Rentabilidade por Local (compacto) */}
               {workplaceBreakdown.length > 0 && (
@@ -330,7 +354,6 @@ export default function GanhosScreen() {
           <div className="px-5 mt-4">
             {/* Filtros — barra compacta */}
             {(() => {
-              const selectedWp = filterWorkplace !== 'all' ? workplaces.find(w => w.id === filterWorkplace) : null;
               const fmtDate = (s: string) => format(parseISO(s), 'dd/MM');
               const dateLabel =
                 filterDateFrom && filterDateTo ? `${fmtDate(filterDateFrom)} – ${fmtDate(filterDateTo)}` :
@@ -338,23 +361,37 @@ export default function GanhosScreen() {
                 filterDateTo ? `Até ${fmtDate(filterDateTo)}` :
                 'Período';
               const dateActive = !!(filterDateFrom || filterDateTo);
+
+              // Workplace pill label
+              const wpPillActive = filterWorkplaces.length > 0;
+              const wpPillLabel = filterWorkplaces.length === 0
+                ? 'Local'
+                : filterWorkplaces.length === 1
+                  ? (workplaces.find(w => w.id === filterWorkplaces[0])?.name ?? 'Local')
+                  : `${filterWorkplaces.length} locais`;
+              const wpPillColor = filterWorkplaces.length === 1
+                ? workplaces.find(w => w.id === filterWorkplaces[0])?.color
+                : undefined;
+
               return (
                 <div className="flex items-center gap-2 mb-4">
                   {/* Pill: Local */}
                   <button
-                    onClick={() => setShowWorkplaceSheet(true)}
+                    onClick={() => { setWorkplacesDraft(filterWorkplaces); setShowWorkplaceSheet(true); }}
                     className={`flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-95 border ${
-                      selectedWp
+                      wpPillActive
                         ? 'bg-white border-slate-200 text-slate-800 shadow-[0_1px_3px_rgba(0,0,0,0.04)]'
                         : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    {selectedWp ? (
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: selectedWp.color }} />
+                    {wpPillColor ? (
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: wpPillColor }} />
+                    ) : filterWorkplaces.length > 1 ? (
+                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 rounded-full w-4 h-4 flex items-center justify-center shrink-0">{filterWorkplaces.length}</span>
                     ) : (
                       <MapPin size={12} strokeWidth={2.5} className="text-slate-400" />
                     )}
-                    <span className="truncate max-w-[110px]">{selectedWp ? selectedWp.name : 'Local'}</span>
+                    <span className="truncate max-w-[110px]">{wpPillLabel}</span>
                     <ChevronDown size={12} strokeWidth={2.5} className="text-slate-400 -mr-0.5" />
                   </button>
 
@@ -375,7 +412,7 @@ export default function GanhosScreen() {
                   {/* Clear (only when active) */}
                   {hasActiveFilter && (
                     <button
-                      onClick={() => { setFilterWorkplace('all'); setFilterDateFrom(''); setFilterDateTo(''); }}
+                      onClick={() => { setFilterWorkplaces([]); setFilterDateFrom(''); setFilterDateTo(''); }}
                       className="ml-auto w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center active:scale-90 transition shrink-0"
                       title="Limpar filtros"
                     >
@@ -426,13 +463,27 @@ export default function GanhosScreen() {
                               )}
                             </div>
                           </div>
-                          {['realizado', 'atrasado'].includes(status) && (
-                            <button onClick={() => handleMarkReceived(shift)}
-                              className="mt-3 w-full py-2.5 rounded-xl text-emerald-600 bg-emerald-50 text-xs font-bold uppercase tracking-wider hover:bg-emerald-100 transition flex items-center justify-center gap-1.5">
-                              <DollarSign size={13} strokeWidth={2.5} />
-                              Registrar Pagamento
+
+                          {/* Action buttons */}
+                          <div className="mt-3 flex gap-2">
+                            <button onClick={() => setEditSheetShift(shift)}
+                              className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition active:scale-[0.98] flex items-center justify-center gap-1.5">
+                              <Edit3 size={12} strokeWidth={2.5} /> Editar
                             </button>
-                          )}
+                            {status === 'previsto' && (
+                              <button onClick={() => handleMarkDone(shift)}
+                                className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm shadow-blue-600/20">
+                                <Check size={12} strokeWidth={3} /> Concluir
+                              </button>
+                            )}
+                            {['realizado', 'atrasado'].includes(status) && (
+                              <button onClick={() => handleMarkReceived(shift)}
+                                className="flex-1 py-2 rounded-xl text-emerald-600 bg-emerald-50 text-xs font-bold uppercase tracking-wider hover:bg-emerald-100 transition flex items-center justify-center gap-1.5">
+                                <DollarSign size={12} strokeWidth={2.5} />
+                                Receber
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -536,7 +587,7 @@ export default function GanhosScreen() {
         );
       })()}
 
-      {/* BOTTOM SHEET: FILTRO POR LOCAL */}
+      {/* BOTTOM SHEET: FILTRO POR LOCAL (multi-select) */}
       {showWorkplaceSheet && (
         <div className="bottom-sheet-overlay" onClick={() => setShowWorkplaceSheet(false)}>
           <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
@@ -546,7 +597,13 @@ export default function GanhosScreen() {
               <div className="min-w-0">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Filtro</p>
                 <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Local</h3>
-                <p className="text-[12px] text-slate-500 mt-0.5">Selecione um local para filtrar.</p>
+                <p className="text-[12px] text-slate-500 mt-0.5">
+                  {workplacesDraft.length === 0
+                    ? 'Todos os locais selecionados.'
+                    : workplacesDraft.length === 1
+                      ? '1 local selecionado.'
+                      : `${workplacesDraft.length} locais selecionados.`}
+                </p>
               </div>
               <button onClick={() => setShowWorkplaceSheet(false)}
                 className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
@@ -554,40 +611,48 @@ export default function GanhosScreen() {
               </button>
             </div>
 
-            <div className="space-y-1.5 mb-2">
+            <div className="space-y-1.5 mb-4">
+              {/* Todos os locais */}
               <button
-                onClick={() => { setFilterWorkplace('all'); setShowWorkplaceSheet(false); }}
+                onClick={() => setWorkplacesDraft([])}
                 className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all active:scale-[0.99] ${
-                  filterWorkplace === 'all' ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-slate-50 hover:bg-slate-100'
+                  workplacesDraft.length === 0 ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-slate-50 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    filterWorkplace === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200'
+                    workplacesDraft.length === 0 ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200'
                   }`}>
                     <MapPin size={14} strokeWidth={2.5} />
                   </div>
                   <div className="text-left min-w-0">
-                    <p className={`text-[14px] font-bold truncate ${filterWorkplace === 'all' ? 'text-blue-700' : 'text-slate-800'}`}>Todos os locais</p>
+                    <p className={`text-[14px] font-bold truncate ${workplacesDraft.length === 0 ? 'text-blue-700' : 'text-slate-800'}`}>Todos os locais</p>
                     <p className="text-[11px] text-slate-500">{monthShifts.length} {monthShifts.length !== 1 ? 'plantões' : 'plantão'} no mês</p>
                   </div>
                 </div>
-                {filterWorkplace === 'all' && (
+                {workplacesDraft.length === 0 && (
                   <Check size={16} strokeWidth={3} className="text-blue-600 shrink-0" />
                 )}
               </button>
 
               {workplaces.map(wp => {
                 const count = monthShifts.filter(s => s.workplace_id === wp.id).length;
-                const isSelected = filterWorkplace === wp.id;
+                const isChecked = workplacesDraft.includes(wp.id);
+
+                function toggleWp() {
+                  setWorkplacesDraft(prev =>
+                    prev.includes(wp.id) ? prev.filter(id => id !== wp.id) : [...prev, wp.id]
+                  );
+                }
+
                 return (
                   <button
                     key={wp.id}
-                    onClick={() => { setFilterWorkplace(wp.id); setShowWorkplaceSheet(false); }}
-                    className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all active:scale-[0.99] ${
-                      isSelected ? 'ring-1 ring-blue-200' : 'bg-slate-50 hover:bg-slate-100'
-                    }`}
-                    style={isSelected ? { background: `${wp.color}10` } : undefined}
+                    onClick={toggleWp}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl transition-all active:scale-[0.99]"
+                    style={isChecked
+                      ? { background: `${wp.color}12`, boxShadow: `0 0 0 1.5px ${wp.color}70` }
+                      : { background: '#f8fafc' }}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-[11px]"
@@ -599,12 +664,33 @@ export default function GanhosScreen() {
                         <p className="text-[11px] text-slate-500">{count} {count !== 1 ? 'plantões' : 'plantão'} no mês</p>
                       </div>
                     </div>
-                    {isSelected && (
-                      <Check size={16} strokeWidth={3} className="shrink-0" style={{ color: wp.color }} />
-                    )}
+                    {/* Checkbox visual */}
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                      isChecked ? 'border-transparent' : 'border-slate-300 bg-white'
+                    }`} style={isChecked ? { background: wp.color } : undefined}>
+                      {isChecked && <Check size={12} strokeWidth={3} className="text-white" />}
+                    </div>
                   </button>
                 );
               })}
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-2 pt-1 border-t border-slate-100">
+              <button
+                onClick={() => { setWorkplacesDraft([]); setFilterWorkplaces([]); setShowWorkplaceSheet(false); }}
+                disabled={workplacesDraft.length === 0 && filterWorkplaces.length === 0}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <MapPin size={14} strokeWidth={2.25} />
+                Todos
+              </button>
+              <button
+                onClick={() => { setFilterWorkplaces(workplacesDraft); setShowWorkplaceSheet(false); }}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-[13px] font-semibold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20"
+              >
+                Aplicar{workplacesDraft.length > 0 ? ` (${workplacesDraft.length})` : ''}
+              </button>
             </div>
           </div>
         </div>
@@ -799,6 +885,17 @@ export default function GanhosScreen() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* EDIT SHEET (shared with Calendar) */}
+      {editSheetShift && (
+        <EditShiftSheet
+          key={editSheetShift.id}
+          shift={editSheetShift}
+          onClose={() => setEditSheetShift(null)}
+          onSaved={() => { refreshShifts(); setEditSheetShift(null); }}
+          onDelete={() => handleDeleteShift(editSheetShift.id)}
+        />
       )}
 
     </div>

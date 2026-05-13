@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, LogOut } from 'lucide-react';
+import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, LogOut, ChevronRight, DollarSign, Calendar as CalendarIcon } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { getMonthlyStats, getWorkplace, markShiftReceived, createShift } from '../lib/db';
-import { format, parseISO, addDays } from 'date-fns';
+import { getMonthlyStats, getWorkplace, markShiftReceived, createShift, updateShift } from '../lib/db';
+import { format, parseISO, addDays, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Shift } from '../types';
 
@@ -89,6 +89,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
   const [repDateOpt, setRepDateOpt] = useState<'hoje' | 'amanha'>('hoje');
   const [selectedPending, setSelectedPending] = useState<string[]>([]);
   
+  const [showOverdueSheet, setShowOverdueSheet] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   useEffect(() => {
     if (toastMsg) {
@@ -166,7 +167,31 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
     showToast('Plantões marcados como recebidos!');
   }
 
-  const anyModalOpen = shiftDetails || showRepetirModal || showMarcarPagoModal;
+  const overdueShiftsData = useMemo(() =>
+    allShifts.filter(s => s.status === 'atrasado').sort((a, b) => a.date.localeCompare(b.date)),
+    [allShifts]
+  );
+
+  function daysOverdue(shift: Shift): number {
+    if (shift.payment_due_date) {
+      const due = parseISO(shift.payment_due_date);
+      const diff = differenceInDays(now, due);
+      return diff > 0 ? diff : 0;
+    }
+    return differenceInDays(now, parseISO(shift.date));
+  }
+
+  async function handleRegisterPayment(shift: Shift) {
+    updateShift(shift.id, {
+      status: 'recebido',
+      received_value: shift.expected_value,
+      payment_received_date: new Date().toISOString(),
+    });
+    refreshShifts();
+    showToast(`Pagamento registrado: ${formatCurrency(shift.expected_value)}`);
+  }
+
+  const anyModalOpen = shiftDetails || showRepetirModal || showMarcarPagoModal || showOverdueSheet;
 
   return (
     <div className="flex flex-col min-h-screen relative overflow-hidden bg-white">
@@ -269,17 +294,30 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
           {/* Alertas */}
           {alerts.length > 0 && (
               <div className="space-y-2 mb-4">
-                  {alerts.map((alert, i) => (
-                      <div key={i} className={`border p-2.5 rounded-xl flex items-start gap-2.5 ${alert.type === 'overdue' ? 'bg-red-50/50 border-red-100' : 'bg-blue-50/50 border-blue-100'}`}>
-                          <div className={`mt-0.5 ${alert.type === 'overdue' ? 'text-red-500' : 'text-blue-500'}`}>
-                              {alert.type === 'overdue' ? <AlertCircle size={18} /> : <Bell size={18} />}
+                  {alerts.map((alert, i) => {
+                    const isOverdue = alert.type === 'overdue';
+                    const Wrapper = isOverdue ? 'button' : 'div';
+                    return (
+                      <Wrapper
+                        key={i}
+                        {...(isOverdue ? { onClick: () => setShowOverdueSheet(true) } : {})}
+                        className={`w-full text-left border p-2.5 rounded-xl flex items-start gap-2.5 transition-all ${
+                          isOverdue
+                            ? 'bg-red-50/50 border-red-100 active:scale-[0.99] hover:border-red-200 hover:bg-red-50'
+                            : 'bg-blue-50/50 border-blue-100'
+                        }`}
+                      >
+                          <div className={`mt-0.5 ${isOverdue ? 'text-red-500' : 'text-blue-500'}`}>
+                              {isOverdue ? <AlertCircle size={18} /> : <Bell size={18} />}
                           </div>
-                          <div>
-                              <p className={`text-[13px] font-bold ${alert.type === 'overdue' ? 'text-red-800' : 'text-blue-800'}`}>{alert.title}</p>
-                              <p className={`text-[11px] mt-0.5 ${alert.type === 'overdue' ? 'text-red-600/80' : 'text-blue-600/80'}`}>{alert.desc}</p>
+                          <div className="flex-1 min-w-0">
+                              <p className={`text-[13px] font-bold ${isOverdue ? 'text-red-800' : 'text-blue-800'}`}>{alert.title}</p>
+                              <p className={`text-[11px] mt-0.5 ${isOverdue ? 'text-red-600/80' : 'text-blue-600/80'}`}>{alert.desc}</p>
                           </div>
-                      </div>
-                  ))}
+                          {isOverdue && <ChevronRight size={15} strokeWidth={2.5} className="text-red-400 mt-0.5 shrink-0" />}
+                      </Wrapper>
+                    );
+                  })}
               </div>
           )}
 
@@ -509,6 +547,87 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                   </button>
               </div>
           </div>
+      </div>
+
+      {/* MODAL: PAGAMENTOS ATRASADOS */}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${showOverdueSheet ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setShowOverdueSheet(false)}>
+        <div className={`bg-white w-full max-w-sm rounded-[24px] shadow-2xl overflow-hidden transition-transform duration-300 flex flex-col max-h-[80vh] ${showOverdueSheet ? 'scale-100' : 'scale-95'}`}
+          onClick={e => e.stopPropagation()}>
+
+          <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Pagamentos Atrasados</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {overdueShiftsData.length} {overdueShiftsData.length !== 1 ? 'plantões' : 'plantão'} · <span className="text-red-500 font-semibold">{formatCurrency(overdueShiftsData.reduce((s, x) => s + x.expected_value, 0))}</span>
+              </p>
+            </div>
+            <button onClick={() => setShowOverdueSheet(false)}
+              className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-3 hide-scrollbar bg-slate-50/50">
+            {overdueShiftsData.map(shift => {
+              const wp = getWorkplace(shift.workplace_id);
+              if (!wp) return null;
+              const days = daysOverdue(shift);
+              const hasDueDate = !!shift.payment_due_date;
+              return (
+                <div key={shift.id} className="bg-white border border-slate-200 rounded-2xl p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-xs"
+                      style={{ background: `${wp.color}20`, color: wp.color }}>
+                      {wp.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-slate-900 text-sm truncate">{wp.name}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                        <CalendarIcon size={10} strokeWidth={2.5} />
+                        Plantão em {format(parseISO(shift.date), "d 'de' MMM", { locale: ptBR })}
+                      </p>
+                    </div>
+                    <p className="font-bold text-slate-900 text-sm shrink-0">{formatCurrency(shift.expected_value)}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-0.5">
+                        {hasDueDate ? 'Vencimento' : 'Plantão em'}
+                      </p>
+                      <p className="text-[13px] font-bold text-slate-800">
+                        {hasDueDate
+                          ? format(parseISO(shift.payment_due_date!), "d 'de' MMM", { locale: ptBR })
+                          : format(parseISO(shift.date), "d 'de' MMM", { locale: ptBR })}
+                      </p>
+                    </div>
+                    <div className="bg-red-50 rounded-xl px-3 py-2 border border-red-100">
+                      <p className="text-[10px] text-red-400 uppercase tracking-wider font-bold mb-0.5">Em atraso</p>
+                      <p className="text-[13px] font-black text-red-600">
+                        {days > 0 ? `${days} ${days !== 1 ? 'dias' : 'dia'}` : 'Hoje'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {shift.notes && (
+                    <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-2.5 py-2 border border-slate-100 mb-3">
+                      {shift.notes}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={() => { handleRegisterPayment(shift); if (overdueShiftsData.length <= 1) setShowOverdueSheet(false); }}
+                    className="w-full py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-emerald-600 transition active:scale-[0.98] shadow-sm"
+                  >
+                    <DollarSign size={13} strokeWidth={2.5} />
+                    Registrar Pagamento
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Toast Notification */}

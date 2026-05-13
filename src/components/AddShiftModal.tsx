@@ -405,6 +405,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
               <span className="text-sm text-slate-400 mr-2 font-semibold">R$</span>
               <input
                 type="number"
+                step="50"
                 value={expectedValue}
                 onChange={e => setExpectedValue(e.target.value)}
                 placeholder={selectedWp?.default_shift_value.toString() || '0,00'}
