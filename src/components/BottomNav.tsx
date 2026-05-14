@@ -28,7 +28,6 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
               id={`nav-${tab.id}`}
               onClick={() => onTabChange(tab.id)}
               className={`nav-item flex-1 flex flex-col items-center justify-center gap-0.5 ${isActive ? 'active' : ''}`}
-              style={{ color: isActive ? '#1877F2' : '#9ca3af' }}
             >
               {isActive && <span className="nav-indicator" />}
               <span className="nav-icon flex items-center justify-center">

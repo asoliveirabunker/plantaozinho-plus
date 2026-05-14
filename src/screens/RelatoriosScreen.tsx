@@ -29,6 +29,7 @@ export default function RelatoriosScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [showFormatModal, setShowFormatModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [previewFormat, setPreviewFormat] = useState<PreviewFormat>('completo');
 
   const [settingsData, setSettingsData] = useState({
@@ -101,7 +102,8 @@ export default function RelatoriosScreen() {
       `Pendente: ${fmtCur(stats?.pending || 0)}\n` +
       `Plantões: ${stats?.totalShifts || 0}`
     );
-    window.open(`mailto:?subject=${subject}&body=${body}`);
+    const to = user?.email || '';
+    window.open(`mailto:${to}?subject=${subject}&body=${body}`);
   }
 
   // Derived logic for the Preview Document
@@ -789,11 +791,11 @@ export default function RelatoriosScreen() {
               </button>
             </div>
             <button
-              onClick={handleWhatsApp}
-              className="w-full mt-3 flex justify-center items-center gap-2 text-slate-500 font-medium text-sm py-2 hover:text-slate-800 transition"
+              onClick={() => setShowShareModal(true)}
+              className="w-full mt-3 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
             >
-              <WhatsAppIcon size={16} />
-              Compartilhar via WhatsApp/Email
+              <WhatsAppIcon size={16} className="text-emerald-500" />
+              Compartilhar
             </button>
           </div>
         </main>
@@ -989,6 +991,68 @@ export default function RelatoriosScreen() {
               >
                 Salvar Configurações
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL DE COMPARTILHAMENTO (WhatsApp / Email)               */}
+      {/* ========================================================= */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowShareModal(false)}>
+          <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Compartilhar</p>
+                <h3 className="text-lg font-bold text-slate-900 leading-tight">Enviar relatório</h3>
+              </div>
+              <button onClick={() => setShowShareModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-2">
+              {/* WhatsApp */}
+              <button
+                onClick={() => { handleWhatsApp(); setShowShareModal(false); }}
+                disabled={!user?.whatsapp}
+                className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-[0.98] text-left disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <WhatsAppIcon size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-slate-900 text-sm">WhatsApp</p>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {user?.whatsapp || 'Cadastre seu WhatsApp no perfil'}
+                  </p>
+                </div>
+                <ChevronDown size={16} className="text-slate-400 -rotate-90 shrink-0" />
+              </button>
+
+              {/* E-mail */}
+              <button
+                onClick={() => { handleEmail(); setShowShareModal(false); }}
+                disabled={!user?.email}
+                className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-[0.98] text-left disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Mail size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-slate-900 text-sm">E-mail</p>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {user?.email || 'Cadastre seu e-mail no perfil'}
+                  </p>
+                </div>
+                <ChevronDown size={16} className="text-slate-400 -rotate-90 shrink-0" />
+              </button>
+
+              <p className="text-[10px] text-slate-400 text-center pt-2 leading-relaxed">
+                O relatório será enviado para o contato cadastrado no seu perfil.
+              </p>
             </div>
           </div>
         </div>
