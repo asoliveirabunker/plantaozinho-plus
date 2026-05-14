@@ -69,15 +69,6 @@
   .hide-scrollbar::-webkit-scrollbar { display: none; }
   .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   
-  .receipt-edge {
-    background-image: radial-gradient(circle at 10px 0, transparent 10px, var(--color-bg) 11px);
-    background-size: 20px 20px;
-    background-repeat: repeat-x;
-    height: 20px;
-    margin-top: -20px;
-    position: relative;
-    z-index: 10;
-  }
 }
 
 @layer components {

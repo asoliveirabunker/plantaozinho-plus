@@ -451,7 +451,7 @@ export default function RelatoriosScreen() {
         {activeTab === 'mes' && (
           <>
             {/* Extrato Card */}
-            <div className="bg-blue-600 rounded-t-2xl p-6 text-white relative">
+            <div className="bg-blue-600 rounded-2xl p-6 text-white relative">
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <p className="text-blue-200 text-xs font-bold tracking-wider uppercase mb-1 flex items-center gap-1">
@@ -502,9 +502,6 @@ export default function RelatoriosScreen() {
               </div>
             </div>
             
-            {/* Receipt Edge Effect */}
-            <div className="receipt-edge"></div>
-
             {/* Previsão Tributária */}
             <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100 mt-4 mb-6">
               <div className="flex justify-between items-center mb-4">
@@ -545,10 +542,10 @@ export default function RelatoriosScreen() {
 
             {/* Central de Exportação */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <button 
-                onClick={() => setShowPreview(true)} 
-                className="col-span-2 bg-slate-900 text-white font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-800 transition flex justify-center items-center gap-2">
-                <FileText size={20} className="text-slate-300" />
+              <button
+                onClick={() => setShowPreview(true)}
+                className="col-span-2 bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
+                <FileText size={16} className="text-blue-500" />
                 Gerar PDF para Contador
               </button>
               <button

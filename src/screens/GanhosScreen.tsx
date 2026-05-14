@@ -278,7 +278,7 @@ export default function GanhosScreen() {
                   </div>
                 </div>
 
-                <div className="h-36 w-full relative">
+                <div className="h-36 w-full relative" style={{ touchAction: 'pan-y' }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -287,14 +287,15 @@ export default function GanhosScreen() {
                         tickFormatter={v => 'R$ ' + (v/1000).toFixed(0) + 'k'} />
                       <Tooltip
                         content={<CompactTooltip />}
-                        cursor={false}
+                        cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3', strokeOpacity: 0.6 }}
                         wrapperStyle={{ outline: 'none' }}
                         offset={12}
                         animationDuration={120}
+                        trigger="hover"
                       />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', color: '#64748b', fontWeight: 500, paddingTop: '10px' }} />
-                      <Line type="monotone" dataKey="received" stroke="#2563eb" strokeWidth={2.5} dot={{ fill: '#fff', stroke: '#2563eb', strokeWidth: 2, r: 4 }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: '#2563eb' }} name="Realizado (Pago)" />
-                      <Line type="monotone" dataKey="expected" stroke="#a855f7" strokeWidth={2} strokeDasharray="4 4" dot={{ fill: '#fff', stroke: '#a855f7', strokeWidth: 2, r: 3 }} activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: '#a855f7' }} name="Previsto" />
+                      <Line type="monotone" dataKey="received" stroke="#2563eb" strokeWidth={2.5} dot={{ fill: '#fff', stroke: '#2563eb', strokeWidth: 2, r: 4 }} activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#2563eb' }} name="Realizado (Pago)" />
+                      <Line type="monotone" dataKey="expected" stroke="#a855f7" strokeWidth={2} strokeDasharray="4 4" dot={{ fill: '#fff', stroke: '#a855f7', strokeWidth: 2, r: 3 }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: '#a855f7' }} name="Previsto" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -324,16 +325,16 @@ export default function GanhosScreen() {
                   ];
                   return (
                     <div className="flex items-center gap-3">
-                      <div className="h-20 w-20 shrink-0 relative">
-                        <PieChart width={80} height={80}>
-                          <Pie data={goalData} cx={40} cy={40} innerRadius={26} outerRadius={36}
-                            dataKey="value" startAngle={90} endAngle={-270} strokeWidth={1.5} stroke="#fff">
+                      <div className="h-24 w-24 shrink-0 relative">
+                        <PieChart width={96} height={96}>
+                          <Pie data={goalData} cx={48} cy={48} innerRadius={32} outerRadius={44}
+                            dataKey="value" startAngle={90} endAngle={-270} strokeWidth={1.5} stroke="transparent">
                             {goalData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                           </Pie>
                         </PieChart>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-[8px] text-slate-400 leading-none">Meta</span>
-                          <span className="text-[10px] font-bold text-slate-800 leading-none mt-0.5">{fmtShortCur(monthGoal)}</span>
+                          <span className="text-[9px] text-slate-400 leading-none">Meta</span>
+                          <span className="text-[11px] font-bold text-slate-800 leading-none mt-0.5">{fmtShortCur(monthGoal)}</span>
                         </div>
                       </div>
                       <div className="flex-1 min-w-0 space-y-1">
@@ -364,9 +365,9 @@ export default function GanhosScreen() {
                 <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
                   <h3 className="font-semibold text-slate-800 text-[13px] mb-2">Rentabilidade por Local</h3>
                   <div className="flex items-center gap-3">
-                    <div className="h-20 w-20 shrink-0 relative">
-                      <PieChart width={80} height={80}>
-                        <Pie data={workplaceBreakdown} cx={40} cy={40} innerRadius={26} outerRadius={36} dataKey="value" strokeWidth={1.5} stroke="#fff">
+                    <div className="h-24 w-24 shrink-0 relative">
+                      <PieChart width={96} height={96}>
+                        <Pie data={workplaceBreakdown} cx={48} cy={48} innerRadius={32} outerRadius={44} dataKey="value" strokeWidth={1.5} stroke="transparent">
                           {workplaceBreakdown.map((entry, i) => {
                             const wp = workplaces.find(w => w.id === entry.id);
                             return <Cell key={i} fill={wp?.color || '#cbd5e1'} />;
@@ -374,8 +375,8 @@ export default function GanhosScreen() {
                         </Pie>
                       </PieChart>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-[8px] text-slate-400 leading-none">Total</span>
-                        <span className="text-[10px] font-bold text-slate-800 leading-none mt-0.5">{fmtShortCur(stats?.expected || 0)}</span>
+                        <span className="text-[9px] text-slate-400 leading-none">Total</span>
+                        <span className="text-[11px] font-bold text-slate-800 leading-none mt-0.5">{fmtShortCur(stats?.expected || 0)}</span>
                       </div>
                     </div>
                     <div className="flex-1 min-w-0 space-y-1">
