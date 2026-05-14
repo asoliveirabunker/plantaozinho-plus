@@ -321,16 +321,12 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDate(day)}
-                className="flex flex-col items-center justify-start pt-1 rounded-lg transition-all"
-                style={{
-                  background: isSelected ? '#1877F2' : isToday ? '#eff6ff' : 'white',
-                  border: isSelected ? 'none' : isToday ? '1.5px solid #1877F2' : '1px solid #f3f4f6',
-                  aspectRatio: '1',
-                  minHeight: 38,
-                }}
+                data-selected={isSelected ? 'true' : undefined}
+                data-today={isToday && !isSelected ? 'true' : undefined}
+                className="calendar-day flex flex-col items-center justify-start pt-1 rounded-lg transition-all"
+                style={{ aspectRatio: '1', minHeight: 38 }}
               >
-                <span className="text-[11px] font-semibold leading-none mb-0.5"
-                  style={{ color: isSelected ? 'white' : isToday ? '#1877F2' : '#374151' }}>
+                <span className="calendar-day-num text-[11px] font-semibold leading-none mb-0.5">
                   {format(day, 'd')}
                 </span>
                 {hasShifts && (
@@ -339,7 +335,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
                       const wp = getWorkplace(s.workplace_id);
                       return (
                         <span key={s.id} className="w-1 h-1 rounded-full"
-                          style={{ background: isSelected ? 'rgba(255,255,255,0.8)' : (wp?.color || '#1877F2') }} />
+                          style={{ background: isSelected ? 'rgba(255,255,255,0.85)' : (wp?.color || '#1877F2') }} />
                       );
                     })}
                   </div>

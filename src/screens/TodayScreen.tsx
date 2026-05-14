@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, LogOut, ChevronRight, DollarSign, Calendar as CalendarIcon } from 'lucide-react';
+import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, LogOut, ChevronRight, DollarSign, Calendar as CalendarIcon, Pencil, Sun, Moon } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { getMonthlyStats, getWorkplace, markShiftReceived, createShift, updateShift } from '../lib/db';
 import { format, parseISO, addDays, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useTheme } from '../hooks/useTheme';
+import ProfileScreen from './ProfileScreen';
 import type { Shift } from '../types';
 
 interface TodayScreenProps {
@@ -90,7 +92,10 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
   const [selectedPending, setSelectedPending] = useState<string[]>([]);
   
   const [showOverdueSheet, setShowOverdueSheet] = useState(false);
+  const [showPendingSheet, setShowPendingSheet] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const { theme, toggleTheme } = useTheme();
   useEffect(() => {
     if (toastMsg) {
       const timer = setTimeout(() => setToastMsg(null), 3000);
@@ -172,6 +177,13 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
     [allShifts]
   );
 
+  const pendingShiftsData = useMemo(() =>
+    allShifts
+      .filter(s => ['previsto', 'realizado'].includes(s.status))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    [allShifts]
+  );
+
   function daysOverdue(shift: Shift): number {
     if (shift.payment_due_date) {
       const due = parseISO(shift.payment_due_date);
@@ -191,7 +203,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
     showToast(`Pagamento registrado: ${formatCurrency(shift.expected_value)}`);
   }
 
-  const anyModalOpen = shiftDetails || showRepetirModal || showMarcarPagoModal || showOverdueSheet;
+  const anyModalOpen = shiftDetails || showRepetirModal || showMarcarPagoModal || showOverdueSheet || showPendingSheet;
 
   return (
     <div className="flex flex-col min-h-screen relative overflow-hidden bg-white">
@@ -210,13 +222,29 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                 Você tem <strong className="text-slate-700">{todayShifts.length} {todayShifts.length !== 1 ? 'plantões' : 'plantão'}</strong> hoje.
               </p>
             </div>
-            <button
-              onClick={() => { if (confirm('Deseja sair da sua conta?')) logout(); }}
-              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95 shrink-0 ml-3"
-              title="Sair"
-            >
-              <LogOut size={15} strokeWidth={2} />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0 ml-3">
+              <button
+                onClick={toggleTheme}
+                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95"
+                title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+              >
+                {theme === 'dark' ? <Sun size={15} strokeWidth={2.25} /> : <Moon size={15} strokeWidth={2.25} />}
+              </button>
+              <button
+                onClick={() => { if (confirm('Deseja sair da sua conta?')) logout(); }}
+                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95"
+                title="Sair"
+              >
+                <LogOut size={15} strokeWidth={2} />
+              </button>
+              <button
+                onClick={() => setShowProfile(true)}
+                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95"
+                title="Editar perfil"
+              >
+                <Pencil size={14} strokeWidth={2.25} />
+              </button>
+            </div>
           </div>
       </header>
 
@@ -296,15 +324,25 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
               <div className="space-y-2 mb-4">
                   {alerts.map((alert, i) => {
                     const isOverdue = alert.type === 'overdue';
-                    const Wrapper = isOverdue ? 'button' : 'div';
+                    const isPending = alert.type === 'pending';
+                    const pendingClickable = isPending && pendingShiftsData.length > 0;
+                    const clickable = isOverdue || pendingClickable;
+                    const Wrapper = clickable ? 'button' : 'div';
+                    const handleClick = isOverdue
+                      ? () => setShowOverdueSheet(true)
+                      : pendingClickable
+                        ? () => setShowPendingSheet(true)
+                        : undefined;
                     return (
                       <Wrapper
                         key={i}
-                        {...(isOverdue ? { onClick: () => setShowOverdueSheet(true) } : {})}
+                        {...(handleClick ? { onClick: handleClick } : {})}
                         className={`w-full text-left border p-2.5 rounded-xl flex items-start gap-2.5 transition-all ${
                           isOverdue
                             ? 'bg-red-50/50 border-red-100 active:scale-[0.99] hover:border-red-200 hover:bg-red-50'
-                            : 'bg-blue-50/50 border-blue-100'
+                            : pendingClickable
+                              ? 'bg-blue-50/50 border-blue-100 active:scale-[0.99] hover:border-blue-200 hover:bg-blue-50'
+                              : 'bg-blue-50/50 border-blue-100'
                         }`}
                       >
                           <div className={`mt-0.5 ${isOverdue ? 'text-red-500' : 'text-blue-500'}`}>
@@ -314,7 +352,10 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                               <p className={`text-[13px] font-bold ${isOverdue ? 'text-red-800' : 'text-blue-800'}`}>{alert.title}</p>
                               <p className={`text-[11px] mt-0.5 ${isOverdue ? 'text-red-600/80' : 'text-blue-600/80'}`}>{alert.desc}</p>
                           </div>
-                          {isOverdue && <ChevronRight size={15} strokeWidth={2.5} className="text-red-400 mt-0.5 shrink-0" />}
+                          {clickable && (
+                            <ChevronRight size={15} strokeWidth={2.5}
+                              className={`mt-0.5 shrink-0 ${isOverdue ? 'text-red-400' : 'text-blue-400'}`} />
+                          )}
                       </Wrapper>
                     );
                   })}
@@ -629,6 +670,84 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
           </div>
         </div>
       </div>
+
+      {/* MODAL: PLANTÕES A RECEBER */}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${showPendingSheet ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setShowPendingSheet(false)}>
+        <div className={`bg-white w-full max-w-sm rounded-[24px] shadow-2xl overflow-hidden transition-transform duration-300 flex flex-col max-h-[80vh] ${showPendingSheet ? 'scale-100' : 'scale-95'}`}
+          onClick={e => e.stopPropagation()}>
+
+          <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Plantões a Receber</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {pendingShiftsData.length} {pendingShiftsData.length !== 1 ? 'plantões' : 'plantão'} · <span className="text-blue-600 font-semibold">{formatCurrency(pendingShiftsData.reduce((s, x) => s + x.expected_value, 0))}</span>
+              </p>
+            </div>
+            <button onClick={() => setShowPendingSheet(false)}
+              className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-2 hide-scrollbar bg-slate-50/50">
+            {pendingShiftsData.map(shift => {
+              const wpp = getWorkplace(shift.workplace_id);
+              if (!wpp) return null;
+              const isRealizado = shift.status === 'realizado';
+              const statusLabel = isRealizado ? 'Realizado' : 'Agendado';
+              const statusClass = isRealizado ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500';
+              const dueLabel = shift.payment_due_date
+                ? `Vence ${format(parseISO(shift.payment_due_date), "dd/MM", { locale: ptBR })}`
+                : null;
+              return (
+                <div key={shift.id} className="bg-white rounded-xl p-3 border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold text-[11px]"
+                      style={{ background: `${wpp.color}20`, color: wpp.color }}>
+                      {wpp.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-900 text-[13px] truncate leading-tight">{wpp.name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[11px] text-slate-500">{format(parseISO(shift.date), "dd/MM", { locale: ptBR })}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${statusClass}`}>{statusLabel}</span>
+                        {dueLabel && <span className="text-[10px] text-slate-400">· {dueLabel}</span>}
+                      </div>
+                    </div>
+                    <p className="font-bold text-slate-900 text-[13px] tabular-nums shrink-0">{formatCurrency(shift.expected_value)}</p>
+                  </div>
+                  {isRealizado ? (
+                    <button
+                      onClick={() => { handleRegisterPayment(shift); if (pendingShiftsData.length <= 1) setShowPendingSheet(false); }}
+                      className="mt-2.5 w-full py-2 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-emerald-100 transition active:scale-[0.98]"
+                    >
+                      <DollarSign size={12} strokeWidth={2.5} />
+                      Registrar Pagamento
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleMarkDone(shift)}
+                      className="mt-2.5 w-full py-2 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-blue-100 transition active:scale-[0.98]"
+                    >
+                      <Check size={12} strokeWidth={3} />
+                      Marcar como Concluído
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* TELA: PERFIL */}
+      {showProfile && (
+        <ProfileScreen
+          onClose={() => setShowProfile(false)}
+          onSaved={() => showToast('Perfil atualizado com sucesso!')}
+        />
+      )}
 
       {/* Toast Notification */}
       <div className={`absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2.5 rounded-full shadow-lg text-xs font-medium flex items-center gap-2 z-[60] pointer-events-none whitespace-nowrap transition-all duration-300 ${toastMsg ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>

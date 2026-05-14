@@ -18,12 +18,27 @@ import {
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function fmtShortCur(v: number) { return 'R$ ' + (v / 1000).toFixed(1).replace('.0', '') + 'k'; }
 
+function CompactTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-slate-900/95 backdrop-blur rounded-lg px-2 py-1.5 shadow-lg pointer-events-none">
+      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">{label}</p>
+      {payload.map((entry: any, i: number) => (
+        <div key={i} className="flex items-center gap-1.5 leading-tight">
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: entry.color }} />
+          <span className="text-[10px] font-semibold text-white tabular-nums">{fmtShortCur(Number(entry.value))}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function GanhosScreen() {
   const { user, workplaces, shifts, refreshShifts } = useApp();
   
   // States
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [chartPeriod, setChartPeriod] = useState<'6m' | '1y'>('6m');
+  const [chartPeriod, setChartPeriod] = useState<'3m' | '6m' | '1y' | '2y'>('6m');
   const [activeTab, setActiveTab] = useState<'visao' | 'lista'>('visao');
   
   // Modals
@@ -97,7 +112,7 @@ export default function GanhosScreen() {
   const chartData = useMemo(() => {
     if (!user) return [];
     const data = [];
-    const numMonths = chartPeriod === '1y' ? 12 : 6;
+    const numMonths = chartPeriod === '2y' ? 24 : chartPeriod === '1y' ? 12 : chartPeriod === '3m' ? 3 : 6;
     for (let i = numMonths - 1; i >= 0; i--) {
       const d = subMonths(new Date(), i);
       const st = getMonthlyStats(user.id, d.getFullYear(), d.getMonth() + 1);
@@ -242,17 +257,22 @@ export default function GanhosScreen() {
                 <div className="flex justify-between items-center mb-2">
                   <h3 className="font-semibold text-slate-800 text-[13px]">Evolução</h3>
                   <div className="flex bg-slate-100 p-0.5 rounded-lg gap-0.5">
-                    {(['6m', '1y'] as const).map(p => (
+                    {([
+                      { key: '3m',  label: '3m' },
+                      { key: '6m',  label: '6m' },
+                      { key: '1y',  label: '1a' },
+                      { key: '2y',  label: '2a' },
+                    ] as const).map(({ key, label }) => (
                       <button
-                        key={p}
-                        onClick={() => setChartPeriod(p)}
-                        className={`px-2.5 py-1 rounded-[6px] text-[11px] font-semibold transition-all ${
-                          chartPeriod === p
+                        key={key}
+                        onClick={() => setChartPeriod(key)}
+                        className={`px-2 py-1 rounded-[6px] text-[11px] font-semibold transition-all ${
+                          chartPeriod === key
                             ? 'bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
                         }`}
                       >
-                        {p === '6m' ? '6 meses' : '1 ano'}
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -265,10 +285,16 @@ export default function GanhosScreen() {
                       <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
                         tickFormatter={v => 'R$ ' + (v/1000).toFixed(0) + 'k'} />
-                      <Tooltip formatter={(v: any) => fmtCur(Number(v))} cursor={{ stroke: '#e2e8f0', strokeWidth: 1, strokeDasharray: '4 4' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                      <Tooltip
+                        content={<CompactTooltip />}
+                        cursor={false}
+                        wrapperStyle={{ outline: 'none' }}
+                        offset={12}
+                        animationDuration={120}
+                      />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', color: '#64748b', fontWeight: 500, paddingTop: '10px' }} />
-                      <Line type="monotone" dataKey="received" stroke="#2563eb" strokeWidth={2.5} dot={{ fill: '#fff', stroke: '#2563eb', strokeWidth: 2, r: 4 }} name="Realizado (Pago)" />
-                      <Line type="monotone" dataKey="expected" stroke="#a855f7" strokeWidth={2} strokeDasharray="4 4" dot={{ fill: '#fff', stroke: '#a855f7', strokeWidth: 2, r: 3 }} name="Previsto" />
+                      <Line type="monotone" dataKey="received" stroke="#2563eb" strokeWidth={2.5} dot={{ fill: '#fff', stroke: '#2563eb', strokeWidth: 2, r: 4 }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: '#2563eb' }} name="Realizado (Pago)" />
+                      <Line type="monotone" dataKey="expected" stroke="#a855f7" strokeWidth={2} strokeDasharray="4 4" dot={{ fill: '#fff', stroke: '#a855f7', strokeWidth: 2, r: 3 }} activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: '#a855f7' }} name="Previsto" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -287,19 +313,46 @@ export default function GanhosScreen() {
                   </span>
                 </div>
 
-                {monthGoal ? (
-                  <>
-                    <div className="flex items-baseline gap-2 mb-1.5">
-                      <h2 className="text-[20px] font-bold text-slate-900 leading-none tracking-tight">{fmtShortCur(stats?.received || 0)}</h2>
-                      <span className="text-[12px] text-slate-400">/ {fmtShortCur(monthGoal)}</span>
-                      <span className="text-[11px] text-blue-600 font-semibold ml-auto">{Math.min(100, Math.round(((stats?.received || 0)/monthGoal)*100))}%</span>
+                {monthGoal ? (() => {
+                  const received = stats?.received || 0;
+                  const remaining = Math.max(0, monthGoal - received);
+                  const pctReceived = Math.min(100, Math.round((received / monthGoal) * 100));
+                  const pctRemaining = 100 - pctReceived;
+                  const goalData = [
+                    { label: 'Recebido',  value: received,  pct: pctReceived,  color: '#2563eb' },
+                    { label: 'Restante',  value: remaining, pct: pctRemaining, color: '#e2e8f0' },
+                  ];
+                  return (
+                    <div className="flex items-center gap-3">
+                      <div className="h-20 w-20 shrink-0 relative">
+                        <PieChart width={80} height={80}>
+                          <Pie data={goalData} cx={40} cy={40} innerRadius={26} outerRadius={36}
+                            dataKey="value" startAngle={90} endAngle={-270} strokeWidth={1.5} stroke="#fff">
+                            {goalData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                          </Pie>
+                        </PieChart>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                          <span className="text-[8px] text-slate-400 leading-none">Meta</span>
+                          <span className="text-[10px] font-bold text-slate-800 leading-none mt-0.5">{fmtShortCur(monthGoal)}</span>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        {goalData.map((entry, i) => (
+                          <div key={i} className="flex justify-between items-center gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: entry.color }} />
+                              <span className="text-[11px] font-medium text-slate-700 truncate">{entry.label}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] text-slate-400">{entry.pct}%</span>
+                              <span className="text-[11px] font-bold text-slate-900">{fmtShortCur(entry.value)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                      <div className="bg-blue-600 h-2 rounded-full transition-all duration-700"
-                        style={{ width: `${Math.min(100, ((stats?.received || 0)/monthGoal)*100)}%` }} />
-                    </div>
-                  </>
-                ) : (
+                  );
+                })() : (
                   <div className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-[12px] font-medium text-center">
                     Toque para definir uma meta financeira
                   </div>
