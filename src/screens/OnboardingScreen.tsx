@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTheme } from '../hooks/useTheme';
 import { ChevronRight, ChevronLeft, Calendar, Wallet, RefreshCw, Stethoscope, Eye, EyeOff, Check, X, Lock, UserCircle2 } from 'lucide-react';
 import type { ProfileType } from '../types';
 import { PROFILE_TYPE_LABELS } from '../types';
@@ -47,6 +48,8 @@ type Mode = 'onboarding' | 'login' | 'register';
 
 export default function OnboardingScreen() {
   const { login } = useApp();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<Mode>('onboarding');
 
@@ -167,38 +170,39 @@ export default function OnboardingScreen() {
   if (mode === 'login') {
     return (
       <div className="app-container flex flex-col min-h-screen bg-white">
-        <div className="flex-1 flex flex-col px-6 pt-16">
-          <button onClick={() => setMode('onboarding')} className="flex items-center gap-1 text-blue-600 font-medium mb-8">
-            <ChevronLeft size={20} />
+        <div className="flex-1 flex flex-col px-5 pt-10">
+          <button onClick={() => setMode('onboarding')} className="flex items-center gap-1 text-blue-600 font-medium mb-5 text-sm w-fit">
+            <ChevronLeft size={18} />
             Voltar
           </button>
-          <div className="mb-8">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style={{ background: '#1877F2' }}>
-              <Calendar size={28} className="text-white" />
+          <div className="mb-6">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#1877F2' }}>
+              <Calendar size={22} className="text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Entrar na sua conta</h1>
-            <p className="text-gray-500 mt-2">Digite o e-mail e senha cadastrados.</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Acesso</p>
+            <h1 className="text-[22px] font-black text-slate-900 tracking-tight leading-tight">Entrar na conta</h1>
+            <p className="text-slate-500 text-[13px] mt-0.5">Digite e-mail e senha cadastrados.</p>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             <div>
-              <label className="input-label">E-mail</label>
+              <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">E-mail</p>
               <input
                 type="email"
                 value={loginEmail}
                 onChange={e => { setLoginEmail(e.target.value); setLoginError(''); }}
                 placeholder="seu@email.com"
-                className="input-field"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
               />
             </div>
             <div>
-              <label className="input-label">Senha</label>
+              <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Senha</p>
               <div className="relative">
                 <input
                   type={showLoginPassword ? 'text' : 'password'}
                   value={loginPassword}
                   onChange={e => { setLoginPassword(e.target.value); setLoginError(''); }}
                   placeholder="Sua senha"
-                  className="input-field !pr-10"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
                   onKeyDown={e => e.key === 'Enter' && handleLogin()}
                 />
                 <button
@@ -210,26 +214,27 @@ export default function OnboardingScreen() {
                 </button>
               </div>
             </div>
-            {loginError && <p className="text-red-500 text-sm">{loginError}</p>}
+            {loginError && (
+              <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {loginError}
+              </div>
+            )}
           </div>
         </div>
-        <div className="px-6 pb-10 pt-4">
-          <button onClick={handleLogin} className="btn-primary mb-3">
+        <div className="px-5 pb-8 pt-3 space-y-2">
+          <button onClick={handleLogin} className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20">
             Entrar
           </button>
-          <button onClick={() => setMode('register')} className="btn-secondary mb-3">
+          <button onClick={() => setMode('register')} className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition active:scale-[0.98]">
             Criar nova conta
           </button>
           <button
             onClick={handleGuestLogin}
-            className="w-full flex items-center justify-center gap-2 py-3 text-slate-500 hover:text-slate-800 transition text-sm font-medium"
+            className="w-full flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-slate-800 transition text-[12.5px] font-medium"
           >
-            <UserCircle2 size={16} />
+            <UserCircle2 size={14} />
             Entrar como visitante
           </button>
-          <p className="text-center text-[11px] text-slate-400 mt-1.5 px-4 leading-snug">
-            Acesse com dados de demonstração — sem precisar criar conta.
-          </p>
         </div>
       </div>
     );
@@ -238,235 +243,223 @@ export default function OnboardingScreen() {
   if (mode === 'register') {
     return (
       <div className="app-container flex flex-col min-h-screen bg-white">
-        <div className="flex-1 overflow-y-auto px-6 pt-12 pb-32">
+        <div className="flex-1 overflow-y-auto px-5 pt-7 pb-24 hide-scrollbar">
+          {/* Header compacto */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-11 h-11 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
+              <Stethoscope size={20} className="text-blue-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Cadastro</p>
+              <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">Vamos personalizar</h1>
+              <p className="text-[11px] text-slate-500 leading-snug">Algumas informações rápidas.</p>
+            </div>
+          </div>
+
           {/* Progress */}
-          <div className="flex gap-1.5 mb-8 justify-center">
+          <div className="flex gap-1 mb-4">
             {[0,1,2,3].map(i => (
-              <div key={i} className="h-1 rounded-full transition-all duration-300"
-                style={{ width: i === 3 ? 24 : 8, background: '#1877F2', opacity: i <= 3 ? 1 : 0.2 }} />
+              <div key={i} className="h-1 rounded-full transition-all duration-300 flex-1"
+                style={{ background: '#1877F2', opacity: i <= 3 ? 1 : 0.2 }} />
             ))}
           </div>
 
-          <div className="flex flex-col items-center mb-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
-              <Stethoscope size={28} className="text-blue-600" />
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">Vamos personalizar</h1>
-            <p className="text-gray-500 text-sm mt-1">Algumas informações rápidas.</p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="input-label">Como podemos te chamar?</label>
-              <input
-                value={name} onChange={e => setName(e.target.value)}
-                placeholder="Marcos" className="input-field"
-              />
-              {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
-            </div>
-            <div>
-              <label className="input-label">E-mail</label>
-              <input
-                type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="seu@email.com" className="input-field"
-              />
-              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-            </div>
-
-            {/* Password with strength indicator */}
-            <div>
-              <label className="input-label flex items-center gap-1.5">
-                <Lock size={12} className="text-slate-400" />
-                Crie uma senha
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Mínimo 8 caracteres"
-                  className="input-field !pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+          {/* SEÇÃO: IDENTIFICAÇÃO */}
+          <section className="mb-3">
+            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <UserCircle2 size={11} strokeWidth={2.5} /> Identificação
+            </h2>
+            <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Nome</p>
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="Como podemos te chamar?"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+                {errors.name && <p className="text-red-500 text-[11px] mt-1 ml-0.5">{errors.name}</p>}
               </div>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">E-mail</p>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+                {errors.email && <p className="text-red-500 text-[11px] mt-1 ml-0.5">{errors.email}</p>}
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">WhatsApp <span className="text-slate-400 font-normal">(opcional)</span></p>
+                <input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="(11) 99999-0001"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              </div>
+            </div>
+          </section>
 
-              {/* Strength bar */}
-              {password.length > 0 && (
-                <div className="mt-2.5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Força da senha</span>
-                    <span className="text-[11px] font-bold" style={{ color: passwordStrength.color }}>
-                      {passwordStrength.label}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-3">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${passwordStrength.percent}%`, background: passwordStrength.color }}
-                    />
-                  </div>
-
-                  {/* Requirements checklist */}
-                  <div className="grid grid-cols-1 gap-1">
-                    {passwordChecks.map((check, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <div
-                          className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-                          style={{
-                            background: check.passed ? '#10b981' : '#f1f5f9',
-                            border: check.passed ? 'none' : '1.5px solid #e2e8f0',
-                          }}
-                        >
-                          {check.passed
-                            ? <Check size={9} color="white" strokeWidth={3} />
-                            : <X size={8} color="#cbd5e1" strokeWidth={2.5} />
-                          }
-                        </div>
-                        <span
-                          className="text-[11px] font-medium transition-colors"
-                          style={{ color: check.passed ? '#10b981' : '#94a3b8' }}
-                        >
-                          {check.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+          {/* SEÇÃO: SENHA */}
+          <section className="mb-3">
+            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Lock size={11} strokeWidth={2.5} /> Senha
+            </h2>
+            <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Criar senha</p>
+                <div className="relative">
+                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+                  <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition">
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
                 </div>
-              )}
-              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
-            </div>
 
-            {/* Confirm password */}
-            <div>
-              <label className="input-label">Confirme a senha</label>
-              <div className="relative">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  placeholder="Repita a senha"
-                  className="input-field !pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
-                >
-                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                {password.length > 0 && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Força</span>
+                      <span className="text-[10px] font-bold" style={{ color: passwordStrength.color }}>{passwordStrength.label}</span>
+                    </div>
+                    <div className="h-1 bg-slate-100 rounded-full overflow-hidden mb-2">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${passwordStrength.percent}%`, background: passwordStrength.color }} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      {passwordChecks.map((check, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full flex items-center justify-center shrink-0 transition-all"
+                            style={{ background: check.passed ? '#10b981' : 'transparent', border: check.passed ? 'none' : '1.5px solid #cbd5e1' }}>
+                            {check.passed && <Check size={7} color="white" strokeWidth={4} />}
+                          </div>
+                          <span className="text-[10px] font-medium leading-tight"
+                            style={{ color: check.passed ? '#10b981' : '#94a3b8' }}>{check.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {errors.password && <p className="text-red-500 text-[11px] mt-1 ml-0.5">{errors.password}</p>}
               </div>
-              {confirmPassword.length > 0 && password !== confirmPassword && (
-                <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                  <X size={11} /> As senhas não coincidem
-                </p>
-              )}
-              {confirmPassword.length > 0 && password === confirmPassword && password.length > 0 && (
-                <p className="text-emerald-500 text-xs mt-1 flex items-center gap-1">
-                  <Check size={11} /> Senhas coincidem
-                </p>
-              )}
-              {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>}
-            </div>
 
-            <div>
-              <label className="input-label">Especialidade</label>
-              <select value={specialty} onChange={e => setSpecialty(e.target.value)} className="input-field">
-                <option value="">Selecione...</option>
-                {specialties.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              {errors.specialty && <p className="text-red-500 text-xs mt-1">{errors.specialty}</p>}
-            </div>
-            <div>
-              <label className="input-label">WhatsApp (para enviar relatórios)</label>
-              <input
-                value={whatsapp} onChange={e => setWhatsapp(e.target.value)}
-                placeholder="(11) 99999-0001" className="input-field"
-              />
-              <p className="text-gray-400 text-xs mt-1">Usamos para abrir sua conversa no WhatsApp ao exportar — opcional.</p>
-            </div>
-            <div>
-              <label className="input-label">Perfil</label>
-              <select value={profile} onChange={e => setProfile(e.target.value as ProfileType)} className="input-field">
-                {profileOptions.map(p => <option key={p} value={p}>{PROFILE_TYPE_LABELS[p]}</option>)}
-              </select>
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="input-label !mb-0">Principais objetivos</label>
-                <span className="text-xs text-gray-400">Selecione um ou mais</span>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Confirmar senha</p>
+                <div className="relative">
+                  <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repita a senha"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+                  <button type="button" onClick={() => setShowConfirmPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition">
+                    {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {confirmPassword.length > 0 && password !== confirmPassword && (
+                  <p className="text-red-500 text-[11px] mt-1 ml-0.5 flex items-center gap-1"><X size={10} /> As senhas não coincidem</p>
+                )}
+                {confirmPassword.length > 0 && password === confirmPassword && password.length > 0 && (
+                  <p className="text-emerald-500 text-[11px] mt-1 ml-0.5 flex items-center gap-1"><Check size={10} /> Senhas coincidem</p>
+                )}
               </div>
-              <div className="space-y-2">
-                {goalOptions.map(g => (
-                  <button
-                    key={g}
-                    onClick={() => toggleGoal(g)}
-                    className="w-full text-left px-4 py-3 rounded-xl border-1.5 transition-all text-sm font-medium flex items-center justify-between"
+            </div>
+          </section>
+
+          {/* SEÇÃO: ATUAÇÃO PROFISSIONAL */}
+          <section className="mb-3">
+            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Stethoscope size={11} strokeWidth={2.5} /> Atuação profissional
+            </h2>
+            <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Especialidade</p>
+                <select value={specialty} onChange={e => setSpecialty(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
+                  <option value="">Selecione...</option>
+                  {specialties.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                {errors.specialty && <p className="text-red-500 text-[11px] mt-1 ml-0.5">{errors.specialty}</p>}
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Perfil</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {profileOptions.map(p => (
+                    <button key={p} onClick={() => setProfile(p)}
+                      className={`px-2.5 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95 ${
+                        profile === p
+                          ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}>
+                      {PROFILE_TYPE_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* SEÇÃO: OBJETIVOS */}
+          <section className="mb-3">
+            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Check size={11} strokeWidth={2.5} /> Principais objetivos
+              <span className="text-slate-400 font-normal normal-case tracking-normal text-[10px] ml-auto">Selecione um ou mais</span>
+            </h2>
+            <div className="grid grid-cols-2 gap-1.5">
+              {goalOptions.map(g => {
+                const sel = goals.includes(g);
+                return (
+                  <button key={g} onClick={() => toggleGoal(g)}
+                    className="px-3 py-2.5 rounded-xl text-[11.5px] font-semibold transition-all active:scale-95 text-left flex items-center justify-between gap-1.5"
                     style={{
-                      borderColor: goals.includes(g) ? '#1877F2' : '#e5e7eb',
-                      background: goals.includes(g) ? '#eff6ff' : 'white',
-                      color: goals.includes(g) ? '#1877F2' : '#374151',
-                    }}
-                  >
-                    {g}
-                    {goals.includes(g) && (
-                      <span className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                        <Check size={10} color="white" strokeWidth={2.5} />
+                      background: sel ? (isDark ? 'rgba(24,119,242,0.15)' : '#eff6ff') : (isDark ? '#1e293b' : '#f8fafc'),
+                      color: sel ? '#60a5fa' : (isDark ? '#e2e8f0' : '#475569'),
+                      border: `1.5px solid ${sel ? '#1877F2' : (isDark ? '#334155' : 'transparent')}`,
+                    }}>
+                    <span className="leading-tight">{g}</span>
+                    {sel && (
+                      <span className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                        <Check size={9} color="white" strokeWidth={3} />
                       </span>
                     )}
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-            <div>
-              <button
-                onClick={() => setWithDemo(v => !v)}
-                className="w-full text-left px-4 py-3 rounded-xl border-1.5 transition-all text-sm font-medium flex items-center justify-between"
-                style={{
-                  borderColor: withDemo ? '#1877F2' : '#e5e7eb',
-                  background: withDemo ? '#eff6ff' : 'white',
-                  color: withDemo ? '#1877F2' : '#374151',
-                }}
-              >
-                <div>
-                  <div className="font-semibold">Carregar dados de demonstração</div>
-                  <div className="text-xs font-normal text-gray-500">Plantões e locais pré-cadastrados para explorar o app</div>
-                </div>
-                {withDemo && (
-                  <span className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                    <Check size={10} color="white" strokeWidth={2.5} />
-                  </span>
-                )}
-              </button>
+          </section>
+
+          {/* TOGGLE DEMO */}
+          <button onClick={() => setWithDemo(v => !v)}
+            className="w-full text-left px-3 py-2.5 rounded-2xl transition-all flex items-center justify-between gap-2 mb-2"
+            style={{
+              background: withDemo ? (isDark ? 'rgba(24,119,242,0.15)' : '#eff6ff') : (isDark ? '#1e293b' : '#f8fafc'),
+              border: `1.5px solid ${withDemo ? '#1877F2' : (isDark ? '#334155' : 'transparent')}`,
+            }}>
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-bold leading-tight" style={{ color: withDemo ? '#60a5fa' : (isDark ? '#e2e8f0' : '#1e293b') }}>
+                Carregar dados de demonstração
+              </p>
+              <p className={`text-[10.5px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'} leading-tight mt-0.5`}>
+                Plantões e locais pré-cadastrados
+              </p>
             </div>
-          </div>
+            <div className={`w-9 h-5 rounded-full transition-all shrink-0 flex items-center ${withDemo ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'} px-0.5`}>
+              <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
+            </div>
+          </button>
         </div>
 
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] px-6 pb-10 pt-4 bg-white border-t border-gray-100 flex gap-3 z-[51]">
-          <button onClick={() => setMode('onboarding')} className="btn-secondary flex-1">Voltar</button>
-          <button onClick={handleRegister} className="btn-primary flex-2" style={{ flex: 2 }}>Começar</button>
+        {/* Footer sticky */}
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-6 pt-3 bg-white border-t border-slate-100 flex gap-2 z-[51]" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+          <button onClick={() => setMode('onboarding')} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+            Voltar
+          </button>
+          <button onClick={handleRegister} className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20">
+            Começar
+          </button>
         </div>
       </div>
     );
   }
 
-  // ONBOARDING SLIDES
+  // ONBOARDING SLIDES — layout compacto e equilibrado
   const slide = slides[step];
   return (
     <div className="app-container flex flex-col min-h-screen bg-white">
-      <div className="flex-1 flex flex-col items-center justify-start pt-12 px-6">
+      <div className="flex-1 flex flex-col items-center px-5 pt-10">
         {/* Progress dots */}
-        <div className="flex gap-1.5 mb-12">
+        <div className="flex gap-1.5 mb-8">
           {slides.map((_, i) => (
             <div key={i} className="rounded-full transition-all duration-300"
               style={{
-                width: i === step ? 24 : 8,
-                height: 4,
+                width: i === step ? 22 : 6,
+                height: 3,
                 background: '#1877F2',
                 opacity: i === step ? 1 : 0.25,
               }}
@@ -474,47 +467,47 @@ export default function OnboardingScreen() {
           ))}
         </div>
 
-        {/* Icon */}
-        <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-8 shadow-lg"
-          style={{ background: slide.iconBg }}>
-          {slide.icon}
-        </div>
+        {/* Hero block — centralizado verticalmente no espaço disponível */}
+        <div className="flex-1 flex flex-col items-center justify-center text-center max-w-xs pb-4">
+          {/* Icon */}
+          <div className="w-[68px] h-[68px] rounded-[20px] flex items-center justify-center mb-5 shadow-lg"
+            style={{ background: slide.iconBg, boxShadow: `0 10px 24px -8px ${slide.iconBg}55` }}>
+            {slide.icon}
+          </div>
 
-        {/* Text */}
-        <h1 className="text-2xl font-bold text-gray-900 text-center leading-tight whitespace-pre-line mb-4">
-          {slide.title}
-        </h1>
-        <p className="text-gray-500 text-center text-[15px] leading-relaxed max-w-xs">
-          {slide.subtitle}
-        </p>
+          {/* Text */}
+          <h1 className="text-[22px] font-black text-slate-900 leading-tight tracking-tight whitespace-pre-line mb-3">
+            {slide.title}
+          </h1>
+          <p className="text-slate-500 text-[13.5px] leading-relaxed">
+            {slide.subtitle}
+          </p>
+        </div>
       </div>
 
       {/* Buttons */}
-      <div className="px-6 pb-10 pt-4">
+      <div className="px-5 pb-8 pt-3" style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}>
         {step === 0 ? (
-          <>
-            <button onClick={handleNext} className="btn-primary mb-3">
-              Continuar <ChevronRight size={18} />
+          <div className="space-y-2">
+            <button onClick={handleNext} className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
+              Continuar <ChevronRight size={16} />
             </button>
-            <button onClick={() => setMode('login')} className="btn-secondary mb-3">
+            <button onClick={() => setMode('login')} className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition active:scale-[0.98]">
               Já tenho conta — Entrar
             </button>
-            <button
-              onClick={handleGuestLogin}
-              className="w-full flex items-center justify-center gap-2 py-3 text-slate-500 hover:text-slate-800 transition text-sm font-medium"
-            >
-              <UserCircle2 size={16} />
+            <button onClick={handleGuestLogin}
+              className="w-full flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-slate-800 transition text-[12.5px] font-medium">
+              <UserCircle2 size={14} />
               Entrar como visitante
             </button>
-            <p className="text-center text-[11px] text-slate-400 mt-1.5 px-4 leading-snug">
-              Explore o app com dados de demonstração — sem cadastro.
-            </p>
-          </>
+          </div>
         ) : (
-          <div className="flex gap-3">
-            <button onClick={handleBack} className="btn-secondary flex-1">Voltar</button>
-            <button onClick={handleNext} className="btn-primary flex-1">
-              {step === slides.length - 1 ? 'Começar' : 'Continuar'} <ChevronRight size={18} />
+          <div className="flex gap-2">
+            <button onClick={handleBack} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+              Voltar
+            </button>
+            <button onClick={handleNext} className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
+              {step === slides.length - 1 ? 'Começar' : 'Continuar'} <ChevronRight size={16} />
             </button>
           </div>
         )}
