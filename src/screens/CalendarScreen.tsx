@@ -42,7 +42,25 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
   const [sheetShift, setSheetShift] = useState<Shift | null>(null);
   const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
   const [panelMode, setPanelMode] = useState<'day' | 'month'>('day');
+  const [panelHighlight, setPanelHighlight] = useState(false);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+
+  function focusPanel() {
+    // Smooth scroll to the panel with a brief highlight glow
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setPanelHighlight(true);
+    if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = window.setTimeout(() => setPanelHighlight(false), 900);
+  }
+
+  function handleSelectDay(day: Date) {
+    setSelectedDate(day);
+    setPanelMode('day');
+    // Schedule the scroll on the next tick so the state update has rendered
+    requestAnimationFrame(() => focusPanel());
+  }
 
   function goToPrevMonth() {
     setSlideDir('right');
@@ -320,7 +338,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
             return (
               <button
                 key={day.toISOString()}
-                onClick={() => setSelectedDate(day)}
+                onClick={() => handleSelectDay(day)}
                 data-selected={isSelected ? 'true' : undefined}
                 data-today={isToday && !isSelected ? 'true' : undefined}
                 className="calendar-day flex flex-col items-center justify-start pt-1 rounded-lg transition-all"
@@ -347,7 +365,14 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
       </div>
 
       {/* Panel: shifts for selected day OR all month */}
-      <div className="mx-5 bg-white rounded-2xl border border-slate-100 p-3 shadow-sm">
+      <div
+        ref={panelRef}
+        className={`mx-5 bg-white rounded-2xl border p-3 shadow-sm transition-all duration-500 ${
+          panelHighlight
+            ? 'border-blue-300 shadow-[0_0_0_3px_rgba(59,130,246,0.15),0_8px_24px_rgba(59,130,246,0.18)] scale-[1.01]'
+            : 'border-slate-100'
+        }`}
+      >
         {/* Mode Toggle */}
         <div className="flex bg-slate-100 p-0.5 rounded-lg mb-3">
           <button
