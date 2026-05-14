@@ -604,8 +604,8 @@ export default function RelatoriosScreen() {
       {/* ========================================================= */}
       {/* TELA DE PRÉ-VISUALIZAÇÃO (INTEGRADA E DESLIZANTE)         */}
       {/* ========================================================= */}
-      <div 
-        className="absolute inset-0 z-50 bg-[#0f172a] flex flex-col transform transition-transform duration-300 ease-in-out"
+      <div
+        className="fixed inset-0 z-50 bg-[#0f172a] flex flex-col transform transition-transform duration-300 ease-in-out"
         style={{ transform: showPreview ? 'translateX(0)' : 'translateX(100%)' }}
       >
         {/* Header do Preview */}
@@ -638,8 +638,8 @@ export default function RelatoriosScreen() {
         </div>
 
         {/* Área de Rolagem do Documento */}
-        <main className="flex-1 overflow-y-auto bg-slate-100 hide-scrollbar pb-32">
-          {/* Documento (Folha "A4") */}
+        <main className="flex-1 overflow-y-auto bg-slate-100 hide-scrollbar">
+          {/* Documento (Folha "A4") — sem flex-1 para acompanhar o tamanho real do conteúdo */}
           <div className="bg-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] m-4 p-5 rounded-md text-[0.75rem] leading-[1.4] text-slate-700 md:max-w-[800px] md:mx-auto md:my-8 md:p-12 md:text-sm">
             
             <div className="text-center mb-6">
@@ -764,35 +764,39 @@ export default function RelatoriosScreen() {
             </div>
 
           </div>
-        </main>
 
-        {/* Ações Fixas no Rodapé da Preview */}
-        <div className="absolute bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
-          <div className="flex gap-3">
+          {/* Ações no Rodapé — sticky bottom:0 garante que fique visível durante o scroll,
+              mas naturalmente próximo do documento quando o conteúdo é curto */}
+          <div
+            className="sticky bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20"
+            style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+          >
+            <div className="flex gap-3">
+              <button
+                onClick={handleDownloadPDF}
+                disabled={pdfLoading}
+                className="flex-1 bg-blue-600 text-white font-semibold py-3.5 rounded-xl shadow-sm hover:bg-blue-700 transition active:scale-95 flex justify-center items-center gap-2 text-sm disabled:opacity-60"
+              >
+                {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                {pdfLoading ? 'Gerando...' : 'Baixar PDF'}
+              </button>
+              <button
+                onClick={handleExportCSV}
+                className="flex-1 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
+              >
+                <FileText size={18} className="text-emerald-500" />
+                Exportar CSV
+              </button>
+            </div>
             <button
-              onClick={handleDownloadPDF}
-              disabled={pdfLoading}
-              className="flex-1 bg-blue-600 text-white font-semibold py-3.5 rounded-xl shadow-sm hover:bg-blue-700 transition active:scale-95 flex justify-center items-center gap-2 text-sm disabled:opacity-60"
+              onClick={handleWhatsApp}
+              className="w-full mt-3 flex justify-center items-center gap-2 text-slate-500 font-medium text-sm py-2 hover:text-slate-800 transition"
             >
-              {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-              {pdfLoading ? 'Gerando...' : 'Baixar PDF'}
-            </button>
-            <button
-              onClick={handleExportCSV}
-              className="flex-1 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
-            >
-              <FileText size={18} className="text-emerald-500" />
-              Exportar CSV
+              <WhatsAppIcon size={16} />
+              Compartilhar via WhatsApp/Email
             </button>
           </div>
-          <button
-            onClick={handleWhatsApp}
-            className="w-full mt-3 flex justify-center items-center gap-2 text-slate-500 font-medium text-sm py-2 hover:text-slate-800 transition"
-          >
-            <WhatsAppIcon size={16} />
-            Compartilhar via WhatsApp/Email
-          </button>
-        </div>
+        </main>
       </div>
 
       {/* ========================================================= */}

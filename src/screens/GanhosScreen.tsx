@@ -278,7 +278,16 @@ export default function GanhosScreen() {
                   </div>
                 </div>
 
-                <div className="h-36 w-full relative" style={{ touchAction: 'pan-y' }}>
+                <div
+                  className="h-36 w-full relative select-none"
+                  style={{
+                    touchAction: 'pan-y',
+                    WebkitTouchCallout: 'none',
+                    WebkitUserSelect: 'none',
+                    userSelect: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
