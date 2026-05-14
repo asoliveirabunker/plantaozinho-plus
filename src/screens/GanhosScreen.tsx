@@ -255,7 +255,7 @@ export default function GanhosScreen() {
               {/* Gráfico */}
               <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold text-slate-800 text-[13px]">Evolução</h3>
+                  <h3 className="font-semibold text-slate-800 text-[13px]">Evolução de Ganhos</h3>
                   <div className="flex bg-slate-100 p-0.5 rounded-lg gap-0.5">
                     {([
                       { key: '3m',  label: '3m' },
@@ -302,7 +302,18 @@ export default function GanhosScreen() {
                         animationDuration={120}
                         trigger="hover"
                       />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', color: '#64748b', fontWeight: 500, paddingTop: '10px' }} />
+                      <Legend
+                        content={({ payload }) => (
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, paddingTop: 10 }}>
+                            {payload?.map((entry: any) => (
+                              <div key={entry.value} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: entry.color, flexShrink: 0 }} />
+                                <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b', lineHeight: 1 }}>{entry.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      />
                       <Line type="monotone" dataKey="received" stroke="#2563eb" strokeWidth={2.5} dot={{ fill: '#fff', stroke: '#2563eb', strokeWidth: 2, r: 4 }} activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff', fill: '#2563eb' }} name="Realizado (Pago)" />
                       <Line type="monotone" dataKey="expected" stroke="#a855f7" strokeWidth={2} strokeDasharray="4 4" dot={{ fill: '#fff', stroke: '#a855f7', strokeWidth: 2, r: 3 }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff', fill: '#a855f7' }} name="Previsto" />
                     </LineChart>
@@ -335,9 +346,9 @@ export default function GanhosScreen() {
                   return (
                     <div className="flex items-center gap-3">
                       <div className="h-24 w-24 shrink-0 relative">
-                        <PieChart width={96} height={96}>
-                          <Pie data={goalData} cx={48} cy={48} innerRadius={32} outerRadius={44}
-                            dataKey="value" startAngle={90} endAngle={-270} strokeWidth={1.5} stroke="transparent">
+                        <PieChart width={96} height={96} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                          <Pie data={goalData} innerRadius={32} outerRadius={44}
+                            dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
                             {goalData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                           </Pie>
                         </PieChart>
@@ -375,8 +386,8 @@ export default function GanhosScreen() {
                   <h3 className="font-semibold text-slate-800 text-[13px] mb-2">Rentabilidade por Local</h3>
                   <div className="flex items-center gap-3">
                     <div className="h-24 w-24 shrink-0 relative">
-                      <PieChart width={96} height={96}>
-                        <Pie data={workplaceBreakdown} cx={48} cy={48} innerRadius={32} outerRadius={44} dataKey="value" strokeWidth={1.5} stroke="transparent">
+                      <PieChart width={96} height={96} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                        <Pie data={workplaceBreakdown} innerRadius={32} outerRadius={44} dataKey="value" strokeWidth={0}>
                           {workplaceBreakdown.map((entry, i) => {
                             const wp = workplaces.find(w => w.id === entry.id);
                             return <Cell key={i} fill={wp?.color || '#cbd5e1'} />;
