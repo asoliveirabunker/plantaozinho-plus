@@ -5,6 +5,7 @@ import { getMonthlyStats, getWorkplace, markShiftReceived, createShift, updateSh
 import { format, parseISO, addDays, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useTheme } from '../hooks/useTheme';
+import { useLanguage } from '../hooks/useLanguage';
 import ProfileScreen from './ProfileScreen';
 import type { Shift } from '../types';
 
@@ -26,6 +27,9 @@ function formatCurrency(v: number) {
 
 export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps) {
   const { user, shifts, refreshShifts, logout } = useApp();
+  const { t, language } = useLanguage();
+  const dateLocale = language === 'es-LATAM' ? undefined : ptBR;
+  void dateLocale;
   const now = new Date();
   const todayStr = format(now, 'yyyy-MM-dd');
 
@@ -68,15 +72,17 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
     const upcoming7Value = upcoming7Shifts.reduce((sum, s) => sum + s.expected_value, 0);
 
     if (overdueShifts.length > 0) {
-      list.push({ type: 'overdue', title: `${overdueShifts.length} pagamento${overdueShifts.length > 1 ? 's' : ''} atrasado${overdueShifts.length > 1 ? 's' : ''}`, desc: `Total de ${formatCurrency(overdueValue)} aguardando regularização.` });
+      const label = overdueShifts.length > 1 ? t('pagamentos atrasados') : t('pagamento atrasado');
+      list.push({ type: 'overdue', title: `${overdueShifts.length} ${label}`, desc: `${t('Total de')} ${formatCurrency(overdueValue)} ${t('aguardando regularização.')}` });
     }
     if (upcoming7Value > 0) {
-      list.push({ type: 'pending', title: `${formatCurrency(upcoming7Value)} a receber`, desc: 'Plantões previstos para os próximos 7 dias.' });
+      list.push({ type: 'pending', title: `${formatCurrency(upcoming7Value)} ${t('A receber').toLowerCase()}`, desc: t('Plantões realizados aguardando pagamento.') });
     } else if (pendingCount > 0 && overdueShifts.length === 0) {
-      list.push({ type: 'pending', title: `${pendingCount} ${pendingCount > 1 ? 'plantões' : 'plantão'} a receber`, desc: 'Plantões realizados aguardando pagamento.' });
+      const label = pendingCount > 1 ? t('plantões a receber') : t('plantão a receber');
+      list.push({ type: 'pending', title: `${pendingCount} ${label}`, desc: t('Plantões realizados aguardando pagamento.') });
     }
     return list;
-  }, [allShifts, now]);
+  }, [allShifts, now, t]);
 
   const wp = nextShift ? getWorkplace(nextShift.workplace_id) : null;
 
@@ -216,31 +222,31 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                 {format(now, "EEEE, d 'de' MMMM", { locale: ptBR })}
               </p>
               <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">
-                {getGreeting()}, Dr. {getFirstName(user?.name || 'Médico')}
+                {t(getGreeting())}, Dr. {getFirstName(user?.name || 'Médico')}
               </h1>
               <p className="text-[12px] text-slate-500 mt-0.5">
-                Você tem <strong className="text-slate-700">{todayShifts.length} {todayShifts.length !== 1 ? 'plantões' : 'plantão'}</strong> hoje.
+                {t('Você tem')} <strong className="text-slate-700">{todayShifts.length} {todayShifts.length !== 1 ? t('plantões') : t('plantão')}</strong> {t('hoje.')}
               </p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0 ml-3">
               <button
                 onClick={toggleTheme}
                 className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95"
-                title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+                title={theme === 'dark' ? t('Modo claro') : t('Modo escuro')}
               >
                 {theme === 'dark' ? <Sun size={15} strokeWidth={2.25} /> : <Moon size={15} strokeWidth={2.25} />}
               </button>
               <button
-                onClick={() => { if (confirm('Deseja sair da sua conta?')) logout(); }}
+                onClick={() => { if (confirm(t('Deseja sair da sua conta?'))) logout(); }}
                 className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95"
-                title="Sair"
+                title={t('Sair')}
               >
                 <LogOut size={15} strokeWidth={2} />
               </button>
               <button
                 onClick={() => setShowProfile(true)}
                 className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95"
-                title="Editar perfil"
+                title={t('Editar perfil')}
               >
                 <Pencil size={14} strokeWidth={2.25} />
               </button>
@@ -254,7 +260,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
           {/* Próximo Plantão */}
           <div className="mt-3 mb-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                {nextShift?.date === todayStr ? 'Próximo Plantão (Hoje)' : 'Próximo Plantão'}
+                {nextShift?.date === todayStr ? t('Próximo Plantão (Hoje)') : t('Próximo Plantão')}
               </p>
 
               {nextShift && wp ? (
@@ -264,7 +270,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                     <div className="relative z-10 flex justify-between items-start">
                         <div>
                             <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider inline-block mb-1.5">
-                              {nextShift.date === todayStr ? 'Hoje' : format(parseISO(nextShift.date), 'dd/MM')}
+                              {nextShift.date === todayStr ? t('Hoje') : format(parseISO(nextShift.date), 'dd/MM')}
                             </span>
                             <h2 className="text-[19px] font-bold mb-0.5 leading-tight tracking-tight">{wp.name}</h2>
                             <p className="text-blue-100 text-[12px]">{nextShift.title}</p>
@@ -273,11 +279,11 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
 
                     <div className="relative z-10 flex justify-between items-end mt-3">
                         <div>
-                            <p className="text-[9px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">Horário</p>
+                            <p className="text-[9px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">{t('Horário')}</p>
                             <p className="font-bold text-[14px] tracking-tight">{format(parseISO(nextShift.start_datetime), 'HH:mm')}–{format(parseISO(nextShift.end_datetime), 'HH:mm')}</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-[9px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">Valor</p>
+                            <p className="text-[9px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">{t('Valor')}</p>
                             <p className="font-bold text-[20px] tracking-tight leading-none">{formatCurrency(nextShift.expected_value)}</p>
                         </div>
                     </div>
@@ -287,10 +293,10 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                   <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-2">
                     <Clock size={18} className="text-blue-500" />
                   </div>
-                  <h3 className="font-semibold text-gray-900 text-sm mb-0.5">Nenhum plantão hoje</h3>
-                  <p className="text-gray-500 text-xs mb-3">Aproveite o dia de folga! 🎉</p>
+                  <h3 className="font-semibold text-gray-900 text-sm mb-0.5">{t('Nenhum plantão hoje')}</h3>
+                  <p className="text-gray-500 text-xs mb-3">{t('Aproveite o dia de folga! 🎉')}</p>
                   <button onClick={onAddShift} className="bg-[#4b80e5] text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm hover:bg-blue-600 transition active:scale-95 flex items-center gap-2 mx-auto">
-                    <Plus size={14} /> Adicionar plantão
+                    <Plus size={14} /> {t('Adicionar plantão')}
                   </button>
                 </div>
               )}
@@ -301,19 +307,19 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{format(now, "MMMM 'de' yyyy", { locale: ptBR })}</p>
               <div className="grid grid-cols-2 gap-2">
                   <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <p className="text-[11px] text-slate-500 font-medium">Previsto</p>
+                      <p className="text-[11px] text-slate-500 font-medium">{t('Previsto')}</p>
                       <p className="text-[15px] font-bold text-slate-900 tracking-tight">{formatCurrency(stats?.expected || 0)}</p>
                   </div>
                   <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <p className="text-[11px] text-slate-500 font-medium">Recebido</p>
+                      <p className="text-[11px] text-slate-500 font-medium">{t('Recebido')}</p>
                       <p className="text-[15px] font-bold text-emerald-500 tracking-tight">{formatCurrency(stats?.received || 0)}</p>
                   </div>
                   <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <p className="text-[11px] text-slate-500 font-medium">A receber</p>
+                      <p className="text-[11px] text-slate-500 font-medium">{t('A receber')}</p>
                       <p className="text-[15px] font-bold text-blue-500 tracking-tight">{formatCurrency(stats?.pending || 0)}</p>
                   </div>
                   <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <p className="text-[11px] text-slate-500 font-medium">Atrasado</p>
+                      <p className="text-[11px] text-slate-500 font-medium">{t('Atrasado')}</p>
                       <p className="text-[15px] font-bold text-red-500 tracking-tight">{formatCurrency(stats?.overdue || 0)}</p>
                   </div>
               </div>
@@ -364,39 +370,39 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
 
           {/* Atalhos */}
           <div className="mb-4">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Atalhos</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('Atalhos')}</p>
               <div className="grid grid-cols-2 gap-2">
                   <button onClick={onAddShift} className="quick-action-btn">
                       <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
                           <Plus size={16} strokeWidth={2.5} />
                       </div>
-                      <span className="text-sm font-semibold text-slate-700">Novo plantão</span>
+                      <span className="text-sm font-semibold text-slate-700">{t('Novo plantão')}</span>
                   </button>
-                  
+
                   <button onClick={() => setShowRepetirModal(true)} className="quick-action-btn">
                       <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center shrink-0">
                           <RefreshCw size={16} strokeWidth={2} />
                       </div>
                       <div className="flex flex-col text-left">
-                          <span className="text-sm font-semibold text-slate-700 leading-tight">Repetir último</span>
+                          <span className="text-sm font-semibold text-slate-700 leading-tight">{t('Repetir último')}</span>
                           <span className="text-[9.5px] text-slate-400 font-medium truncate w-24">
-                            {latestShift ? getWorkplace(latestShift.workplace_id)?.name : 'Nenhum plantão'}
+                            {latestShift ? getWorkplace(latestShift.workplace_id)?.name : t('Nenhum plantão')}
                           </span>
                       </div>
                   </button>
-                  
+
                   <button onClick={() => setShowMarcarPagoModal(true)} className="quick-action-btn">
                       <div className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
                           <Check size={16} strokeWidth={2.5} />
                       </div>
-                      <span className="text-sm font-semibold text-slate-700">Marcar pago</span>
+                      <span className="text-sm font-semibold text-slate-700">{t('Marcar pago')}</span>
                   </button>
-                  
+
                   <button onClick={() => onNavigate('calendario')} className="quick-action-btn">
                       <div className="w-7 h-7 rounded-full bg-violet-50 text-violet-500 flex items-center justify-center shrink-0">
                           <List size={16} strokeWidth={2} />
                       </div>
-                      <span className="text-sm font-semibold text-slate-700">Ver agenda</span>
+                      <span className="text-sm font-semibold text-slate-700">{t('Ver agenda')}</span>
                   </button>
               </div>
           </div>
@@ -404,7 +410,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
           {/* Próximos Plantões */}
           {upcomingShifts.length > 0 && (
             <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Próximos Plantões</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('Próximos Plantões')}</p>
                 <div className="space-y-2">
                     {upcomingShifts.map(s => {
                         const wpp = getWorkplace(s.workplace_id);

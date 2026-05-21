@@ -7,6 +7,7 @@ import { ptBR } from 'date-fns/locale';
 import type { Shift } from '../types';
 import { STATUS_LABELS } from '../types';
 import EditShiftSheet from '../components/EditShiftSheet';
+import { useLanguage } from '../hooks/useLanguage';
 
 /** Abbreviate workplace names: "Hospital São Paulo" → "H.São Paulo" */
 function abbreviateWorkplace(name: string): string {
@@ -36,6 +37,7 @@ function formatCurrency(v: number) {
 
 export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
   const { user, workplaces, shifts, refreshShifts } = useApp();
+  const { t } = useLanguage();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [filterWorkplaces, setFilterWorkplaces] = useState<string[]>([]); // empty = all
@@ -196,7 +198,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
               <p className="text-[11px] text-slate-400">{startTime}–{endTime}</p>
             </div>
           </div>
-          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded status-${shift.status}`}>{STATUS_LABELS[shift.status]}</span>
+          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded status-${shift.status}`}>{t(STATUS_LABELS[shift.status])}</span>
         </div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wide">Valor</p>
@@ -206,20 +208,20 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
           <div className="flex gap-1.5">
             <button onClick={() => setSheetShift(shift)}
               className="flex-1 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-[12px] font-medium flex items-center justify-center gap-1">
-              <Edit3 size={12} /> Editar
+              <Edit3 size={12} /> {t('Editar')}
             </button>
             {shift.status === 'previsto' && (
               <button onClick={() => handleMarkDone(shift.id)}
                 className="flex-1 py-1.5 rounded-lg text-white text-[12px] font-medium flex items-center justify-center gap-1"
                 style={{ background: '#1877F2' }}>
-                <Check size={12} /> Concluir
+                <Check size={12} /> {t('Concluir')}
               </button>
             )}
             {shift.status === 'realizado' && (
               <button onClick={() => handleMarkReceived(shift.id)}
                 className="flex-1 py-1.5 rounded-lg text-white text-[12px] font-medium"
                 style={{ background: '#22c55e' }}>
-                Recebido
+                {t('Recebido')}
               </button>
             )}
           </div>
@@ -227,7 +229,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
         {compact && (
           <button onClick={() => setSheetShift(shift)}
             className="w-full py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-medium flex items-center justify-center gap-1 hover:bg-slate-50 transition">
-            <Edit3 size={11} /> Detalhes
+            <Edit3 size={11} /> {t('Detalhes')}
           </button>
         )}
       </div>
@@ -262,9 +264,9 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
       <div className="px-5 pt-7 pb-2 bg-white">
         <div className="flex items-center justify-between mb-2.5">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Agenda</p>
-            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">Calendário</h1>
-            <p className="text-[12px] text-slate-500 mt-0.5">Toque em um dia para ver os plantões.</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Agenda')}</p>
+            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Calendário')}</h1>
+            <p className="text-[12px] text-slate-500 mt-0.5">{t('Toque em um dia para ver os plantões.')}</p>
           </div>
           <button onClick={() => onAddShift(selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined)}
             className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shrink-0 ml-3"
@@ -275,7 +277,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
 
         {/* Filter — multi-select, flex wrap */}
         <div className="flex flex-wrap gap-1.5">
-          <FilterChip label="Todos" active={filterWorkplaces.length === 0} onClick={() => setFilterWorkplaces([])} />
+          <FilterChip label={t('Todos')} active={filterWorkplaces.length === 0} onClick={() => setFilterWorkplaces([])} />
           {workplaces.map(wp => (
             <FilterChip
               key={wp.id}
@@ -381,7 +383,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
               panelMode === 'day' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            Dia
+            {t('Dia')}
             {selectedDate && selectedDayShifts.length > 0 && (
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
                 panelMode === 'day' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'
@@ -394,7 +396,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
               panelMode === 'month' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            Mês
+            {t('Mês')}
             {monthShifts.length > 0 && (
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
                 panelMode === 'month' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'
@@ -416,13 +418,13 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
               </div>
               <button onClick={() => onAddShift(format(selectedDate, 'yyyy-MM-dd'))}
                 className="flex items-center gap-1 text-blue-600 text-[12px] font-semibold px-2.5 py-1 rounded-lg bg-blue-50">
-                <Plus size={12} /> Plantão
+                <Plus size={12} /> {t('Plantão')}
               </button>
             </div>
 
             {selectedDayShifts.length === 0 ? (
               <div className="text-center py-3">
-                <p className="text-slate-400 text-[12px]">Nenhum plantão neste dia</p>
+                <p className="text-slate-400 text-[12px]">{t('Nenhum plantão neste dia')}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -445,13 +447,13 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
               </div>
               <button onClick={() => onAddShift(selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(currentMonth, 'yyyy-MM-dd'))}
                 className="flex items-center gap-1 text-blue-600 text-[12px] font-semibold px-2.5 py-1 rounded-lg bg-blue-50">
-                <Plus size={12} /> Plantão
+                <Plus size={12} /> {t('Plantão')}
               </button>
             </div>
 
             {monthShifts.length === 0 ? (
               <div className="text-center py-6">
-                <p className="text-slate-400 text-[12px]">Nenhum plantão neste mês</p>
+                <p className="text-slate-400 text-[12px]">{t('Nenhum plantão neste mês')}</p>
               </div>
             ) : (
               <div className="space-y-3 max-h-[420px] overflow-y-auto hide-scrollbar -mx-1 px-1">

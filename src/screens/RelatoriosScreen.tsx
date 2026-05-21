@@ -7,6 +7,7 @@ import {
   FileText, Download, Mail, Settings, ChevronLeft, ChevronDown, X, Loader2
 } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { useLanguage } from '../hooks/useLanguage';
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
@@ -22,6 +23,7 @@ type PreviewFormat = 'completo' | 'resumido' | 'pendentes';
 
 export default function RelatoriosScreen() {
   const { user, workplaces, shifts, updateProfile } = useApp();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'mes' | 'ano'>('mes');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   
@@ -81,20 +83,20 @@ export default function RelatoriosScreen() {
 
   function handleWhatsApp() {
     const msg = encodeURIComponent(
-      `📊 *Relatório Plantãozinho Plus*\n` +
+      `📊 *Relatório Plantão Pro*\n` +
       `📅 *${format(selectedMonth, 'MMMM yyyy', { locale: ptBR }).toUpperCase()}*\n\n` +
       `💰 Faturamento Bruto: ${fmtCur(stats?.expected || 0)}\n` +
       `✅ Recebido: ${fmtCur(stats?.received || 0)}\n` +
       `⏳ Pendente: ${fmtCur(stats?.pending || 0)}\n` +
       `🏥 Plantões: ${stats?.totalShifts || 0} (${stats?.totalHours || 0}h)\n\n` +
-      `_Gerado via Plantãozinho Plus_`
+      `_Gerado via Plantão Pro_`
     );
     const phone = user?.whatsapp?.replace(/\D/g, '') || '';
     window.open(`https://wa.me/${phone ? '55' + phone : ''}?text=${msg}`, '_blank');
   }
 
   function handleEmail() {
-    const subject = encodeURIComponent(`Relatório Plantãozinho Plus — ${format(selectedMonth, 'MMMM/yyyy', { locale: ptBR })}`);
+    const subject = encodeURIComponent(`Relatório Plantão Pro — ${format(selectedMonth, 'MMMM/yyyy', { locale: ptBR })}`);
     const body = encodeURIComponent(
       `Relatório Mensal — ${format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}\n\n` +
       `Faturamento: ${fmtCur(stats?.expected || 0)}\n` +
@@ -173,7 +175,7 @@ export default function RelatoriosScreen() {
       pdf.text(`Mês de Competência: ${format(selectedMonth, 'MMMM / yyyy', { locale: ptBR })}`, pageW / 2, y, { align: 'center' });
       y += 4;
       pdf.setFontSize(8);
-      pdf.text(`Gerado em: ${format(new Date(), 'dd/MM/yyyy')} às ${format(new Date(), 'HH:mm')} via Plantãozinho Plus`, pageW / 2, y, { align: 'center' });
+      pdf.text(`Gerado em: ${format(new Date(), 'dd/MM/yyyy')} às ${format(new Date(), 'HH:mm')} via Plantão Pro`, pageW / 2, y, { align: 'center' });
       y += 6;
       pdf.setDrawColor(226, 232, 240);
       pdf.line(ml, y, pageW - mr, y);
@@ -422,9 +424,9 @@ export default function RelatoriosScreen() {
       <header className="bg-white px-5 pt-7 pb-2 shrink-0">
         <div className="flex items-center justify-between">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Contabilidade</p>
-            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">Relatórios</h1>
-            <p className="text-[12px] text-slate-500 mt-0.5">Exporte para o contador em segundos.</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Contabilidade')}</p>
+            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Relatórios')}</h1>
+            <p className="text-[12px] text-slate-500 mt-0.5">{t('Exporte para o contador em segundos.')}</p>
           </div>
           <button onClick={() => setShowSettingsModal(true)}
             className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-95 shrink-0 ml-3"
@@ -438,15 +440,15 @@ export default function RelatoriosScreen() {
         
         {/* Toggle Mês/Ano */}
         <div className="bg-slate-100 p-1 rounded-xl flex my-5">
-          <button 
+          <button
             onClick={() => setActiveTab('mes')}
             className={`flex-1 font-semibold text-sm py-2 rounded-lg transition-all ${activeTab === 'mes' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
-            Mês
+            {t('Mês')}
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('ano')}
             className={`flex-1 font-semibold text-sm py-2 rounded-lg transition-all ${activeTab === 'ano' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
-            Ano
+            {t('Ano')}
           </button>
         </div>
 
@@ -485,12 +487,12 @@ export default function RelatoriosScreen() {
 
               <div className="space-y-3">
                 <div className="flex justify-between items-end border-b border-blue-500 pb-3">
-                  <span className="text-blue-100 text-sm">Faturamento Bruto Total</span>
+                  <span className="text-blue-100 text-sm">{t('Faturamento Bruto Total')}</span>
                   <span className="text-2xl font-bold text-white">{fmtCur(stats?.expected || 0)}</span>
                 </div>
                 
                 <div className="flex justify-between text-sm pt-1">
-                  <span className="text-blue-200">Plantões realizados</span>
+                  <span className="text-blue-200">{t('Plantões realizados')}</span>
                   <span className="font-medium">{stats?.totalShifts || 0} plantões ({stats?.totalHours || 0}h)</span>
                 </div>
                 <div className="flex justify-between text-sm">
@@ -548,7 +550,7 @@ export default function RelatoriosScreen() {
                 onClick={() => setShowPreview(true)}
                 className="col-span-2 bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
                 <FileText size={16} className="text-blue-500" />
-                Gerar PDF para Contador
+                {t('Gerar PDF para Contador')}
               </button>
               <button
                 onClick={handleWhatsApp}
@@ -566,7 +568,7 @@ export default function RelatoriosScreen() {
 
             {/* Fontes Pagadoras (Hospitais) */}
             <div className="mb-4">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Detalhamento por CNPJ/Local</h3>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">{t('Detalhamento por CNPJ/Local')}</h3>
               <div className="space-y-3">
                 {Object.entries(wpBreakdown).map(([wpId, data]) => {
                   const wp = workplaces.find(w => w.id === wpId);
@@ -647,7 +649,7 @@ export default function RelatoriosScreen() {
             <div className="text-center mb-6">
               <h2 className="font-bold text-sm uppercase tracking-wider text-slate-900">{docTitle}</h2>
               <p className="text-xs text-slate-500 mt-1">Mês de Competência: {format(selectedMonth, 'MMMM / yyyy', { locale: ptBR })}</p>
-              <p className="text-[10px] text-slate-400 mt-1">Gerado em: {format(new Date(), 'dd/MM/yyyy')} às {format(new Date(), 'HH:mm')} via Plantãozinho Plus</p>
+              <p className="text-[10px] text-slate-400 mt-1">Gerado em: {format(new Date(), 'dd/MM/yyyy')} às {format(new Date(), 'HH:mm')} via Plantão Pro</p>
             </div>
 
             <hr className="border-slate-200 mb-4" />
@@ -780,14 +782,14 @@ export default function RelatoriosScreen() {
                 className="flex-1 bg-blue-600 text-white font-semibold py-3.5 rounded-xl shadow-sm hover:bg-blue-700 transition active:scale-95 flex justify-center items-center gap-2 text-sm disabled:opacity-60"
               >
                 {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                {pdfLoading ? 'Gerando...' : 'Baixar PDF'}
+                {pdfLoading ? t('Gerando...') : t('Baixar PDF')}
               </button>
               <button
                 onClick={handleExportCSV}
                 className="flex-1 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
               >
                 <FileText size={18} className="text-emerald-500" />
-                Exportar CSV
+                {t('Exportar CSV')}
               </button>
             </div>
             <button
@@ -795,7 +797,7 @@ export default function RelatoriosScreen() {
               className="w-full mt-3 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
             >
               <WhatsAppIcon size={16} className="text-emerald-500" />
-              Compartilhar
+              {t('Compartilhar')}
             </button>
           </div>
         </main>
@@ -1004,8 +1006,8 @@ export default function RelatoriosScreen() {
           <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Compartilhar</p>
-                <h3 className="text-lg font-bold text-slate-900 leading-tight">Enviar relatório</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Compartilhar')}</p>
+                <h3 className="text-lg font-bold text-slate-900 leading-tight">{t('Enviar relatório')}</h3>
               </div>
               <button onClick={() => setShowShareModal(false)}
                 className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
@@ -1026,7 +1028,7 @@ export default function RelatoriosScreen() {
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-slate-900 text-sm">WhatsApp</p>
                   <p className="text-[11px] text-slate-500 truncate">
-                    {user?.whatsapp || 'Cadastre seu WhatsApp no perfil'}
+                    {user?.whatsapp || t('Cadastre seu WhatsApp no perfil')}
                   </p>
                 </div>
                 <ChevronDown size={16} className="text-slate-400 -rotate-90 shrink-0" />
@@ -1044,14 +1046,14 @@ export default function RelatoriosScreen() {
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-slate-900 text-sm">E-mail</p>
                   <p className="text-[11px] text-slate-500 truncate">
-                    {user?.email || 'Cadastre seu e-mail no perfil'}
+                    {user?.email || t('Cadastre seu e-mail no perfil')}
                   </p>
                 </div>
                 <ChevronDown size={16} className="text-slate-400 -rotate-90 shrink-0" />
               </button>
 
               <p className="text-[10px] text-slate-400 text-center pt-2 leading-relaxed">
-                O relatório será enviado para o contato cadastrado no seu perfil.
+                {t('O relatório será enviado para o contato cadastrado no seu perfil.')}
               </p>
             </div>
           </div>

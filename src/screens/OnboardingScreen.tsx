@@ -1,10 +1,32 @@
 import { useState, useMemo } from 'react';
 import { useTheme } from '../hooks/useTheme';
+import { useLanguage } from '../hooks/useLanguage';
 import { ChevronRight, ChevronLeft, Calendar, Wallet, RefreshCw, Stethoscope, Eye, EyeOff, Check, X, Lock, UserCircle2 } from 'lucide-react';
 import type { ProfileType } from '../types';
 import { PROFILE_TYPE_LABELS } from '../types';
 import { registerUser, loginUser, getUsers } from '../lib/db';
 import { useApp } from '../contexts/AppContext';
+
+/** Bandeira BR mini para o seletor de idioma */
+function MiniFlagBR() {
+  return (
+    <svg width="16" height="11" viewBox="0 0 700 490" aria-hidden="true">
+      <rect width="700" height="490" fill="#009C3B" />
+      <polygon points="350,40 660,245 350,450 40,245" fill="#FFDF00" />
+      <circle cx="350" cy="245" r="90" fill="#002776" />
+    </svg>
+  );
+}
+/** Bandeira MX mini representando ES-LATAM */
+function MiniFlagMX() {
+  return (
+    <svg width="16" height="11" viewBox="0 0 700 490" aria-hidden="true">
+      <rect width="233" height="490" fill="#006847" />
+      <rect x="233" width="234" height="490" fill="#ffffff" />
+      <rect x="467" width="233" height="490" fill="#ce1126" />
+    </svg>
+  );
+}
 
 const slides = [
   {
@@ -49,6 +71,7 @@ type Mode = 'onboarding' | 'login' | 'register';
 export default function OnboardingScreen() {
   const { login } = useApp();
   const { theme } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
   const isDark = theme === 'dark';
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<Mode>('onboarding');
@@ -144,14 +167,14 @@ export default function OnboardingScreen() {
 
   function handleGuestLogin() {
     // Reuse an existing guest if it already exists (keeps demo data between sessions)
-    const existing = getUsers().find(u => u.email === 'visitante@plantaozinho.app');
+    const existing = getUsers().find(u => u.email === 'visitante@plantaopro.app');
     if (existing) {
       login(existing, false);
       return;
     }
     const guest = registerUser({
       name: 'Visitante',
-      email: 'visitante@plantaozinho.app',
+      email: 'visitante@plantaopro.app',
       password: '',
       specialty: 'Medicina de Urgência',
       profile_type: 'plantonista',
@@ -173,19 +196,19 @@ export default function OnboardingScreen() {
         <div className="flex-1 flex flex-col px-5 pt-10">
           <button onClick={() => setMode('onboarding')} className="flex items-center gap-1 text-blue-600 font-medium mb-5 text-sm w-fit">
             <ChevronLeft size={18} />
-            Voltar
+            {t('Voltar')}
           </button>
           <div className="mb-6">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#1877F2' }}>
               <Calendar size={22} className="text-white" />
             </div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Acesso</p>
-            <h1 className="text-[22px] font-black text-slate-900 tracking-tight leading-tight">Entrar na conta</h1>
-            <p className="text-slate-500 text-[13px] mt-0.5">Digite e-mail e senha cadastrados.</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Acesso')}</p>
+            <h1 className="text-[22px] font-black text-slate-900 tracking-tight leading-tight">{t('Entrar na conta')}</h1>
+            <p className="text-slate-500 text-[13px] mt-0.5">{t('Digite e-mail e senha cadastrados.')}</p>
           </div>
           <div className="space-y-2.5">
             <div>
-              <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">E-mail</p>
+              <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('E-mail')}</p>
               <input
                 type="email"
                 value={loginEmail}
@@ -195,13 +218,13 @@ export default function OnboardingScreen() {
               />
             </div>
             <div>
-              <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Senha</p>
+              <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('Senha')}</p>
               <div className="relative">
                 <input
                   type={showLoginPassword ? 'text' : 'password'}
                   value={loginPassword}
                   onChange={e => { setLoginPassword(e.target.value); setLoginError(''); }}
-                  placeholder="Sua senha"
+                  placeholder={t('Sua senha')}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
                   onKeyDown={e => e.key === 'Enter' && handleLogin()}
                 />
@@ -223,17 +246,17 @@ export default function OnboardingScreen() {
         </div>
         <div className="px-5 pb-8 pt-3 space-y-2">
           <button onClick={handleLogin} className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20">
-            Entrar
+            {t('Entrar')}
           </button>
           <button onClick={() => setMode('register')} className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition active:scale-[0.98]">
-            Criar nova conta
+            {t('Criar nova conta')}
           </button>
           <button
             onClick={handleGuestLogin}
             className="w-full flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-slate-800 transition text-[12.5px] font-medium"
           >
             <UserCircle2 size={14} />
-            Entrar como visitante
+            {t('Entrar como visitante')}
           </button>
         </div>
       </div>
@@ -250,9 +273,9 @@ export default function OnboardingScreen() {
               <Stethoscope size={20} className="text-blue-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Cadastro</p>
-              <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">Vamos personalizar</h1>
-              <p className="text-[11px] text-slate-500 leading-snug">Algumas informações rápidas.</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Cadastro')}</p>
+              <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Vamos personalizar')}</h1>
+              <p className="text-[11px] text-slate-500 leading-snug">{t('Algumas informações rápidas.')}</p>
             </div>
           </div>
 
@@ -267,23 +290,23 @@ export default function OnboardingScreen() {
           {/* SEÇÃO: IDENTIFICAÇÃO */}
           <section className="mb-3">
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <UserCircle2 size={11} strokeWidth={2.5} /> Identificação
+              <UserCircle2 size={11} strokeWidth={2.5} /> {t('Identificação')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Nome</p>
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="Como podemos te chamar?"
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('Nome')}</p>
+                <input value={name} onChange={e => setName(e.target.value)} placeholder={t('Como podemos te chamar?')}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
                 {errors.name && <p className="text-red-500 text-[11px] mt-1 ml-0.5">{errors.name}</p>}
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">E-mail</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('E-mail')}</p>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
                 {errors.email && <p className="text-red-500 text-[11px] mt-1 ml-0.5">{errors.email}</p>}
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">WhatsApp <span className="text-slate-400 font-normal">(opcional)</span></p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">WhatsApp <span className="text-slate-400 font-normal">{t('(opcional)')}</span></p>
                 <input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="(11) 99999-0001"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
               </div>
@@ -293,11 +316,11 @@ export default function OnboardingScreen() {
           {/* SEÇÃO: SENHA */}
           <section className="mb-3">
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Lock size={11} strokeWidth={2.5} /> Senha
+              <Lock size={11} strokeWidth={2.5} /> {t('Senha')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Criar senha</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('Criar senha')}</p>
                 <div className="relative">
                   <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
@@ -309,8 +332,8 @@ export default function OnboardingScreen() {
                 {password.length > 0 && (
                   <div className="mt-2">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Força</span>
-                      <span className="text-[10px] font-bold" style={{ color: passwordStrength.color }}>{passwordStrength.label}</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Força')}</span>
+                      <span className="text-[10px] font-bold" style={{ color: passwordStrength.color }}>{t(passwordStrength.label)}</span>
                     </div>
                     <div className="h-1 bg-slate-100 rounded-full overflow-hidden mb-2">
                       <div className="h-full rounded-full transition-all duration-500"
@@ -324,7 +347,7 @@ export default function OnboardingScreen() {
                             {check.passed && <Check size={7} color="white" strokeWidth={4} />}
                           </div>
                           <span className="text-[10px] font-medium leading-tight"
-                            style={{ color: check.passed ? '#10b981' : '#94a3b8' }}>{check.label}</span>
+                            style={{ color: check.passed ? '#10b981' : '#94a3b8' }}>{t(check.label)}</span>
                         </div>
                       ))}
                     </div>
@@ -334,7 +357,7 @@ export default function OnboardingScreen() {
               </div>
 
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Confirmar senha</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('Confirmar senha')}</p>
                 <div className="relative">
                   <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repita a senha"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 pr-10 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
@@ -343,10 +366,10 @@ export default function OnboardingScreen() {
                   </button>
                 </div>
                 {confirmPassword.length > 0 && password !== confirmPassword && (
-                  <p className="text-red-500 text-[11px] mt-1 ml-0.5 flex items-center gap-1"><X size={10} /> As senhas não coincidem</p>
+                  <p className="text-red-500 text-[11px] mt-1 ml-0.5 flex items-center gap-1"><X size={10} /> {t('As senhas não coincidem')}</p>
                 )}
                 {confirmPassword.length > 0 && password === confirmPassword && password.length > 0 && (
-                  <p className="text-emerald-500 text-[11px] mt-1 ml-0.5 flex items-center gap-1"><Check size={10} /> Senhas coincidem</p>
+                  <p className="text-emerald-500 text-[11px] mt-1 ml-0.5 flex items-center gap-1"><Check size={10} /> {t('Senhas coincidem')}</p>
                 )}
               </div>
             </div>
@@ -355,20 +378,20 @@ export default function OnboardingScreen() {
           {/* SEÇÃO: ATUAÇÃO PROFISSIONAL */}
           <section className="mb-3">
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Stethoscope size={11} strokeWidth={2.5} /> Atuação profissional
+              <Stethoscope size={11} strokeWidth={2.5} /> {t('Atuação profissional')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Especialidade</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('Especialidade')}</p>
                 <select value={specialty} onChange={e => setSpecialty(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
-                  <option value="">Selecione...</option>
-                  {specialties.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value="">{t('Selecione...')}</option>
+                  {specialties.map(s => <option key={s} value={s}>{t(s)}</option>)}
                 </select>
                 {errors.specialty && <p className="text-red-500 text-[11px] mt-1 ml-0.5">{errors.specialty}</p>}
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">Perfil</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('Perfil')}</p>
                 <div className="grid grid-cols-2 gap-1.5">
                   {profileOptions.map(p => (
                     <button key={p} onClick={() => setProfile(p)}
@@ -377,7 +400,7 @@ export default function OnboardingScreen() {
                           ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
                           : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                       }`}>
-                      {PROFILE_TYPE_LABELS[p]}
+                      {t(PROFILE_TYPE_LABELS[p])}
                     </button>
                   ))}
                 </div>
@@ -388,8 +411,8 @@ export default function OnboardingScreen() {
           {/* SEÇÃO: OBJETIVOS */}
           <section className="mb-3">
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Check size={11} strokeWidth={2.5} /> Principais objetivos
-              <span className="text-slate-400 font-normal normal-case tracking-normal text-[10px] ml-auto">Selecione um ou mais</span>
+              <Check size={11} strokeWidth={2.5} /> {t('Principais objetivos')}
+              <span className="text-slate-400 font-normal normal-case tracking-normal text-[10px] ml-auto">{t('Selecione um ou mais')}</span>
             </h2>
             <div className="grid grid-cols-2 gap-1.5">
               {goalOptions.map(g => {
@@ -402,7 +425,7 @@ export default function OnboardingScreen() {
                       color: sel ? '#60a5fa' : (isDark ? '#e2e8f0' : '#475569'),
                       border: `1.5px solid ${sel ? '#1877F2' : (isDark ? '#334155' : 'transparent')}`,
                     }}>
-                    <span className="leading-tight">{g}</span>
+                    <span className="leading-tight">{t(g)}</span>
                     {sel && (
                       <span className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
                         <Check size={9} color="white" strokeWidth={3} />
@@ -423,10 +446,10 @@ export default function OnboardingScreen() {
             }}>
             <div className="min-w-0">
               <p className="text-[12.5px] font-bold leading-tight" style={{ color: withDemo ? '#60a5fa' : (isDark ? '#e2e8f0' : '#1e293b') }}>
-                Carregar dados de demonstração
+                {t('Carregar dados de demonstração')}
               </p>
               <p className={`text-[10.5px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'} leading-tight mt-0.5`}>
-                Plantões e locais pré-cadastrados
+                {t('Plantões e locais pré-cadastrados')}
               </p>
             </div>
             <div className={`w-9 h-5 rounded-full transition-all shrink-0 flex items-center ${withDemo ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'} px-0.5`}>
@@ -438,10 +461,10 @@ export default function OnboardingScreen() {
         {/* Footer sticky */}
         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-6 pt-3 bg-white border-t border-slate-100 flex gap-2 z-[51]" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
           <button onClick={() => setMode('onboarding')} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-            Voltar
+            {t('Voltar')}
           </button>
           <button onClick={handleRegister} className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20">
-            Começar
+            {t('Começar')}
           </button>
         </div>
       </div>
@@ -452,6 +475,24 @@ export default function OnboardingScreen() {
   const slide = slides[step];
   return (
     <div className="app-container flex flex-col min-h-screen bg-white">
+      {/* Top bar: discrete language toggle (only on first screen) */}
+      {step === 0 && (
+        <div className="absolute top-0 right-0 left-0 z-10 flex justify-end px-4 pt-4">
+          <button
+            onClick={() => setLanguage(language === 'pt-BR' ? 'es-LATAM' : 'pt-BR')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200 hover:bg-slate-100 transition active:scale-95 shadow-sm"
+            title={language === 'pt-BR' ? 'Cambiar a español' : 'Mudar para português'}
+          >
+            <span className="rounded-[3px] overflow-hidden leading-none ring-1 ring-black/5">
+              {language === 'pt-BR' ? <MiniFlagBR /> : <MiniFlagMX />}
+            </span>
+            <span className="text-[11px] font-semibold text-slate-700 leading-none">
+              {language === 'pt-BR' ? 'PT' : 'ES'}
+            </span>
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 flex flex-col items-center px-5 pt-10">
         {/* Progress dots */}
         <div className="flex gap-1.5 mb-8">
@@ -477,10 +518,10 @@ export default function OnboardingScreen() {
 
           {/* Text */}
           <h1 className="text-[22px] font-black text-slate-900 leading-tight tracking-tight whitespace-pre-line mb-3">
-            {slide.title}
+            {t(slide.title)}
           </h1>
           <p className="text-slate-500 text-[13.5px] leading-relaxed">
-            {slide.subtitle}
+            {t(slide.subtitle)}
           </p>
         </div>
       </div>
@@ -490,24 +531,24 @@ export default function OnboardingScreen() {
         {step === 0 ? (
           <div className="space-y-2">
             <button onClick={handleNext} className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
-              Continuar <ChevronRight size={16} />
+              {t('Continuar')} <ChevronRight size={16} />
             </button>
             <button onClick={() => setMode('login')} className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition active:scale-[0.98]">
-              Já tenho conta — Entrar
+              {t('Já tenho conta — Entrar')}
             </button>
             <button onClick={handleGuestLogin}
               className="w-full flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-slate-800 transition text-[12.5px] font-medium">
               <UserCircle2 size={14} />
-              Entrar como visitante
+              {t('Entrar como visitante')}
             </button>
           </div>
         ) : (
           <div className="flex gap-2">
             <button onClick={handleBack} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-              Voltar
+              {t('Voltar')}
             </button>
             <button onClick={handleNext} className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
-              {step === slides.length - 1 ? 'Começar' : 'Continuar'} <ChevronRight size={16} />
+              {step === slides.length - 1 ? t('Começar') : t('Continuar')} <ChevronRight size={16} />
             </button>
           </div>
         )}

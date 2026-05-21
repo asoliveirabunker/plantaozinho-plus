@@ -1,5 +1,6 @@
 import React from 'react';
 import { Home, Calendar, DollarSign, MapPin, BarChart2 } from 'lucide-react';
+import { useLanguage } from '../hooks/useLanguage';
 
 type Tab = 'hoje' | 'calendario' | 'ganhos' | 'locais' | 'relatorios';
 
@@ -17,6 +18,7 @@ const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
 ];
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const { t } = useLanguage();
   return (
     <nav className="bottom-nav">
       <div className="flex items-stretch" style={{ height: 60 }}>
@@ -34,7 +36,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                 {tab.icon}
               </span>
               <span className="text-[10px] font-semibold leading-none mt-0.5">
-                {tab.label}
+                {t(tab.label)}
               </span>
             </button>
           );

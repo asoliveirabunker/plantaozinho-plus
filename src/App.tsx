@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
+import { LanguageProvider } from './hooks/useLanguage';
 import OnboardingScreen from './screens/OnboardingScreen';
 import TodayScreen from './screens/TodayScreen';
 import CalendarScreen from './screens/CalendarScreen';
@@ -99,8 +100,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <LanguageProvider>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </LanguageProvider>
   );
 }

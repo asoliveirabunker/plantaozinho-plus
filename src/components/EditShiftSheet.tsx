@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Shift, ShiftStatus } from '../types';
 import { STATUS_LABELS } from '../types';
+import { useLanguage } from '../hooks/useLanguage';
 
 function formatCurrency(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -45,6 +46,7 @@ interface EditShiftSheetProps {
 
 export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDuplicate }: EditShiftSheetProps) {
   const wp = getWorkplace(shift.workplace_id);
+  const { t } = useLanguage();
 
   const [status, setStatus] = useState<ShiftStatus>(shift.status);
   const [date, setDate] = useState(shift.date);
@@ -124,7 +126,7 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Editar plantão</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Editar plantão')}</p>
               <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight truncate">{wp?.name || 'Plantão'}</h3>
               <p className="text-[12px] text-slate-500 mt-0.5 capitalize">{format(parseISO(shift.date), "EEEE, dd 'de' MMM", { locale: ptBR })}</p>
             </div>
@@ -138,7 +140,7 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
         <div className="space-y-4">
           {/* Status */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Status</label>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('Status')}</label>
             <div className="flex flex-wrap gap-1.5">
               {STATUS_ORDER.map(s => (
                 <button
@@ -146,7 +148,7 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
                   onClick={() => setStatus(s)}
                   className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-all active:scale-95 ${statusChipStyle(s, status === s)}`}
                 >
-                  {STATUS_LABELS[s]}
+                  {t(STATUS_LABELS[s])}
                 </button>
               ))}
             </div>
@@ -155,7 +157,7 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
           {/* Data e horário */}
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <CalendarDays size={11} strokeWidth={2.5} /> Data e horário
+              <CalendarDays size={11} strokeWidth={2.5} /> {t('Data e horário')}
             </label>
             <div className="grid grid-cols-3 gap-2">
               <input
@@ -163,15 +165,15 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
                 className="col-span-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
               />
               <div className="col-span-1">
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 flex items-center gap-1"><Clock size={10} strokeWidth={2.5} /> Início</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 flex items-center gap-1"><Clock size={10} strokeWidth={2.5} /> {t('Início')}</p>
                 <input
                   type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
                 />
               </div>
-              <span className="self-end pb-3 text-center text-slate-400 text-[12px]">até</span>
+              <span className="self-end pb-3 text-center text-slate-400 text-[12px]">{t('até')}</span>
               <div className="col-span-1">
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 flex items-center gap-1"><Clock size={10} strokeWidth={2.5} /> Fim</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 flex items-center gap-1"><Clock size={10} strokeWidth={2.5} /> {t('Fim')}</p>
                 <input
                   type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
@@ -183,11 +185,11 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
           {/* Valores */}
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <DollarSign size={11} strokeWidth={2.5} /> Valores
+              <DollarSign size={11} strokeWidth={2.5} /> {t('Valores')}
             </label>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Previsto (R$)</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{t('Previsto (R$)')}</p>
                 <input
                   type="number" inputMode="decimal" step="50" value={expectedValue}
                   onChange={e => setExpectedValue(e.target.value)}
@@ -195,11 +197,11 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
                 />
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Recebido (R$)</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{t('Recebido (R$)')}</p>
                 <input
                   type="number" inputMode="decimal" step="50" value={receivedValue}
                   onChange={e => setReceivedValue(e.target.value)}
-                  placeholder={isReceivedFlow ? '0,00' : 'Opcional'}
+                  placeholder={isReceivedFlow ? '0,00' : t('Opcional')}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
                 />
               </div>
@@ -207,7 +209,7 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
             {receivedValue && expectedValue && Math.abs(parseFloat(receivedValue) - parseFloat(expectedValue)) > 0.01 && (
               <div className="flex items-start gap-1.5 mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
                 <AlertCircle size={12} className="shrink-0 mt-0.5" />
-                <span>Diferença de <strong>{formatCurrency(Math.abs(parseFloat(receivedValue) - parseFloat(expectedValue)))}</strong> entre o valor previsto e o recebido.</span>
+                <span>{t('Diferença de')} <strong>{formatCurrency(Math.abs(parseFloat(receivedValue) - parseFloat(expectedValue)))}</strong> {t('entre o valor previsto e o recebido.')}</span>
               </div>
             )}
           </div>
@@ -215,18 +217,18 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
           {/* Datas de pagamento */}
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <CalendarDays size={11} strokeWidth={2.5} /> Pagamento
+              <CalendarDays size={11} strokeWidth={2.5} /> {t('Pagamento')}
             </label>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Previsto para</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{t('Previsto para')}</p>
                 <input
                   type="date" value={paymentDue} onChange={e => setPaymentDue(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
                 />
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Pago em</p>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{t('Pago em')}</p>
                 <input
                   type="date" value={paymentReceived} onChange={e => setPaymentReceived(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
@@ -238,11 +240,11 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
           {/* Observações */}
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <FileText size={11} strokeWidth={2.5} /> Observações
+              <FileText size={11} strokeWidth={2.5} /> {t('Observações')}
             </label>
             <textarea
               value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="Anotações sobre o plantão (escala, contatos, divergências...)"
+              placeholder={t('Anotações sobre o plantão (escala, contatos, divergências...)')}
               rows={3}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition resize-none"
             />
@@ -259,16 +261,16 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
             {onDuplicate && (
               <button onClick={onDuplicate}
                 className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[12.5px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-                <Copy size={13} strokeWidth={2.5} /> Duplicar
+                <Copy size={13} strokeWidth={2.5} /> {t('Duplicar')}
               </button>
             )}
             <button onClick={() => setConfirmDelete(true)}
               className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-50 text-red-600 text-[12.5px] font-semibold hover:bg-red-100 transition active:scale-[0.98]">
-              <Trash2 size={13} strokeWidth={2.5} /> Excluir
+              <Trash2 size={13} strokeWidth={2.5} /> {t('Excluir')}
             </button>
             <button onClick={handleSave}
               className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
-              <Check size={14} strokeWidth={3} /> Salvar alterações
+              <Check size={14} strokeWidth={3} /> {t('Salvar alterações')}
             </button>
           </div>
         </div>
@@ -280,16 +282,16 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
               <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
                 <Trash2 size={20} className="text-red-600" />
               </div>
-              <h4 className="text-center font-bold text-slate-900 text-[15px] mb-1">Excluir plantão?</h4>
-              <p className="text-center text-slate-500 text-[12px] mb-4">Essa ação não pode ser desfeita.</p>
+              <h4 className="text-center font-bold text-slate-900 text-[15px] mb-1">{t('Excluir plantão?')}</h4>
+              <p className="text-center text-slate-500 text-[12px] mb-4">{t('Essa ação não pode ser desfeita.')}</p>
               <div className="flex gap-2">
                 <button onClick={() => setConfirmDelete(false)}
                   className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-                  Cancelar
+                  {t('Cancelar')}
                 </button>
                 <button onClick={() => { setConfirmDelete(false); onDelete(); }}
                   className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-[13px] font-bold hover:bg-red-700 transition active:scale-[0.98]">
-                  Excluir
+                  {t('Excluir')}
                 </button>
               </div>
             </div>

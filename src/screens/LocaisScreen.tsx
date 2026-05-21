@@ -5,12 +5,14 @@ import { createWorkplace, deleteWorkplace, createShiftTemplate, deleteShiftTempl
 import type { Workplace, WorkplaceType, PaymentMethod, ShiftType, ShiftTemplate } from '../types';
 import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS } from '../types';
 import { format } from 'date-fns';
+import { useLanguage } from '../hooks/useLanguage';
 
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
 export default function LocaisScreen() {
   const { user, workplaces, shifts, refreshWorkplaces, refreshShifts } = useApp();
+  const { t } = useLanguage();
   const [view, setView] = useState<'list' | 'detail' | 'new' | 'newTemplate'>('list');
   const [selectedWp, setSelectedWp] = useState<Workplace | null>(null);
   const [editWpSheet, setEditWpSheet] = useState<Workplace | null>(null);
@@ -519,8 +521,8 @@ export default function LocaisScreen() {
         <div className="flex items-center justify-between">
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Cadastro</p>
-            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">Locais de Plantão</h1>
-            <p className="text-[12px] text-slate-500 mt-0.5">{workplaces.length} {workplaces.length !== 1 ? 'locais cadastrados' : 'local cadastrado'}.</p>
+            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Locais de Plantão')}</h1>
+            <p className="text-[12px] text-slate-500 mt-0.5">{workplaces.length} {workplaces.length !== 1 ? t('locais cadastrados') : t('local cadastrado')}.</p>
           </div>
           <button onClick={() => setView('new')}
             className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shrink-0 ml-3"
@@ -536,8 +538,8 @@ export default function LocaisScreen() {
             <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-2.5">
               <Building2 size={22} className="text-blue-500" />
             </div>
-            <p className="font-semibold text-slate-900 text-sm mb-1">Nenhum local cadastrado</p>
-            <p className="text-slate-500 text-[12px] mb-3 px-6">Adicione hospitais, UPAs e clínicas onde você faz plantões.</p>
+            <p className="font-semibold text-slate-900 text-sm mb-1">{t('Nenhum local cadastrado')}</p>
+            <p className="text-slate-500 text-[12px] mb-3 px-6">{t('Adicione hospitais, UPAs e clínicas onde você faz plantões.')}</p>
             <button onClick={() => setView('new')} className="bg-blue-600 text-white text-[12px] font-bold px-4 py-2 rounded-lg active:scale-95 transition">
               Adicionar primeiro local
             </button>
@@ -561,7 +563,7 @@ export default function LocaisScreen() {
                         <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{WORKPLACE_TYPE_LABELS[wp.type]}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
-                        <span>Pag. dia {wp.payment_day} · {wp.payment_method}</span>
+                        <span>{t('Pag. dia')} {wp.payment_day} · {wp.payment_method}</span>
                       </div>
                       {wp.address && (
                         <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400 truncate">
@@ -574,15 +576,15 @@ export default function LocaisScreen() {
                   </div>
                   <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-50">
                     <div className="flex-1">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Padrão</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Padrão')}</p>
                       <p className="font-bold text-slate-900 text-[12px] tracking-tight">{fmtCur(wp.default_shift_value)}</p>
                     </div>
                     <div className="flex-1">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Plant./mês</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Plant./mês')}</p>
                       <p className="font-bold text-blue-600 text-[12px]">{stats.count}</p>
                     </div>
                     <div className="flex-1">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Total')}</p>
                       <p className="font-bold text-slate-900 text-[12px] tracking-tight">{fmtCur(stats.total)}</p>
                     </div>
                     <button onClick={e => { e.stopPropagation(); handleDeleteWp(wp.id); }}

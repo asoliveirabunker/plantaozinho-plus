@@ -1,5 +1,5 @@
 // ============================================================
-// TIPOS PRINCIPAIS DO SISTEMA PLANTÃOZINHO PLUS
+// TIPOS PRINCIPAIS DO SISTEMA PLANTÃO PRO
 // ============================================================
 
 export type ProfileType = 'residente' | 'plantonista' | 'especialista' | 'anestesista' | 'cirurgiao' | 'intensivista' | 'urgencista' | 'outro';

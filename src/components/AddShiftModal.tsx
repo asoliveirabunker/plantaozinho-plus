@@ -5,6 +5,7 @@ import { createShift, createRecurrenceShifts } from '../lib/db';
 import type { ShiftStatus, RecurrenceFrequency } from '../types';
 import { STATUS_LABELS } from '../types';
 import { format, addDays, addMonths } from 'date-fns';
+import { useLanguage } from '../hooks/useLanguage';
 
 interface AddShiftModalProps {
   onClose: () => void;
@@ -51,6 +52,7 @@ function calcDuration(start: string, end: string) {
 
 export default function AddShiftModal({ onClose, initialDate }: AddShiftModalProps) {
   const { user, workplaces, templates, refreshShifts } = useApp();
+  const { t } = useLanguage();
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const [mode, setMode] = useState<Mode>('quick');
@@ -222,7 +224,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-1 pb-3 shrink-0">
-          <h2 className="font-bold text-[17px] text-slate-900">Adicionar Plantão</h2>
+          <h2 className="font-bold text-[17px] text-slate-900">{t('Adicionar Plantão')}</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition"
@@ -238,7 +240,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
               const active = mode === m;
               const c = TAB_META[m].color;
               const Icon = TAB_ICONS[m];
-              const label = { quick: 'Rápido', manual: 'Manual', recurrence: 'Recorrente' }[m];
+              const label = { quick: t('Rápido'), manual: t('Manual'), recurrence: t('Recorrente') }[m];
               return (
                 <button
                   key={m}
@@ -259,7 +261,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
 
           {/* Tab context chip */}
           <div className="mt-2 px-3 py-1.5 rounded-xl" style={{ background: meta.bg }}>
-            <p className="text-[11px] font-medium" style={{ color: tabColor }}>{meta.label}</p>
+            <p className="text-[11px] font-medium" style={{ color: tabColor }}>{t(meta.label)}</p>
           </div>
         </div>
 
@@ -268,10 +270,10 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
 
           {/* Local */}
           <div className="mb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Local</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Local')}</p>
             {workplaces.length === 0 ? (
               <div className="p-3 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium">
-                ⚠️ Cadastre um local antes de adicionar plantões
+                {t('⚠️ Cadastre um local antes de adicionar plantões')}
               </div>
             ) : (
               <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
@@ -306,7 +308,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
           {/* QUICK: Template cards */}
           {mode === 'quick' && (
             <div className="mb-4">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Modelo de Escala</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Modelo de Escala')}</p>
               {wpTemplates.length === 0 ? (
                 <div className="p-3 rounded-xl bg-slate-50 text-center">
                   <p className="text-xs text-slate-500">Nenhum modelo salvo para este local.</p>
@@ -352,7 +354,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
 
           {/* Data & Horário */}
           <div className="mb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Data & Horário</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Data & Horário')}</p>
             <div className="bg-slate-50 rounded-[14px] overflow-hidden">
               <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
                 <Calendar size={14} className="text-slate-400 flex-shrink-0" />
@@ -400,7 +402,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
 
           {/* Valor */}
           <div className="mb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Valor Previsto</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Valor Previsto')}</p>
             <div className="bg-slate-50 rounded-[14px] flex items-center px-3 py-2.5">
               <span className="text-sm text-slate-400 mr-2 font-semibold">R$</span>
               <input
@@ -430,19 +432,19 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
                   />
                 </div>
                 <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                  <span className="text-[11px] text-slate-400 w-24 flex-shrink-0 font-semibold">Status</span>
+                  <span className="text-[11px] text-slate-400 w-24 flex-shrink-0 font-semibold">{t('Status')}</span>
                   <select
                     value={status}
                     onChange={e => setStatus(e.target.value as ShiftStatus)}
                     className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none"
                   >
                     {(['previsto', 'realizado', 'recebido'] as ShiftStatus[]).map(s => (
-                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                      <option key={s} value={s}>{t(STATUS_LABELS[s])}</option>
                     ))}
                   </select>
                 </div>
                 <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                  <span className="text-[11px] text-slate-400 w-24 flex-shrink-0 font-semibold">Vencimento</span>
+                  <span className="text-[11px] text-slate-400 w-24 flex-shrink-0 font-semibold">{t('Vencimento')}</span>
                   <input
                     type="date"
                     value={paymentDueDate}
@@ -451,7 +453,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
                   />
                 </div>
                 <div className="flex items-start gap-3 px-3 py-2.5">
-                  <span className="text-[11px] text-slate-400 w-24 flex-shrink-0 font-semibold pt-0.5">Observações</span>
+                  <span className="text-[11px] text-slate-400 w-24 flex-shrink-0 font-semibold pt-0.5">{t('Observações')}</span>
                   <textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
@@ -592,15 +594,15 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
               opacity: saving ? 0.7 : 1,
             }}
           >
-            {saving ? 'Salvando...' : (
+            {saving ? t('Salvando...') : (
               <>
                 {mode === 'recurrence'
                   ? <Repeat2 size={16} strokeWidth={2.5} />
                   : <Check size={16} strokeWidth={2.5} />
                 }
                 {mode === 'recurrence' && preview
-                  ? `Criar ${preview.match(/^\d+/)?.[0] || ''} plantões`
-                  : 'Salvar plantão'}
+                  ? `${t('Criar')} ${preview.match(/^\d+/)?.[0] || ''} ${t('plantões')}`
+                  : t('Salvar plantão')}
               </>
             )}
           </button>

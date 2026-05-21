@@ -1,7 +1,32 @@
 import { useState } from 'react';
-import { ArrowLeft, Check, User as UserIcon, Briefcase, LogOut, Calculator } from 'lucide-react';
+import { ArrowLeft, Check, User as UserIcon, Briefcase, LogOut, Calculator, Languages } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { PROFILE_TYPE_LABELS, type ProfileType } from '../types';
+import { useLanguage, type Language } from '../hooks/useLanguage';
+
+/** Bandeira do Brasil — SVG inline */
+function FlagBR({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={(size * 7) / 10} viewBox="0 0 700 490" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="700" height="490" fill="#009C3B" />
+      <polygon points="350,40 660,245 350,450 40,245" fill="#FFDF00" />
+      <circle cx="350" cy="245" r="90" fill="#002776" />
+      <path d="M 270 245 A 100 100 0 0 1 430 245" stroke="#fff" strokeWidth="6" fill="none" />
+    </svg>
+  );
+}
+
+/** Bandeira do México — representando espanhol latino-americano */
+function FlagMX({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={(size * 7) / 10} viewBox="0 0 700 490" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="233" height="490" fill="#006847" />
+      <rect x="233" width="234" height="490" fill="#ffffff" />
+      <rect x="467" width="233" height="490" fill="#ce1126" />
+      <circle cx="350" cy="245" r="34" fill="#8b6914" opacity="0.85" />
+    </svg>
+  );
+}
 
 interface ProfileScreenProps {
   onClose: () => void;
@@ -10,6 +35,7 @@ interface ProfileScreenProps {
 
 export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) {
   const { user, updateProfile, logout } = useApp();
+  const { language, setLanguage, t } = useLanguage();
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [specialty, setSpecialty] = useState(user?.specialty || '');
@@ -56,19 +82,19 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
         <div className="flex items-center justify-between">
           <button onClick={onClose}
             className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-all active:scale-95"
-            title="Voltar"
+            title={t('Voltar')}
           >
             <ArrowLeft size={16} strokeWidth={2.5} />
           </button>
           <div className="text-center">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Conta</p>
-            <h1 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Perfil</h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Conta')}</p>
+            <h1 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">{t('Perfil')}</h1>
           </div>
           <button onClick={handleSave}
             className="px-3 h-9 rounded-full bg-blue-600 text-white text-[12px] font-bold hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-1 shadow-sm shadow-blue-600/20"
-            title="Salvar alterações"
+            title={t('Salvar alterações')}
           >
-            <Check size={13} strokeWidth={3} /> Salvar
+            <Check size={13} strokeWidth={3} /> {t('Salvar')}
           </button>
         </div>
       </header>
@@ -83,7 +109,7 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
           <div className="min-w-0">
             <p className="text-[18px] font-bold text-slate-900 truncate leading-tight">{user?.name || 'Usuário'}</p>
             <p className="text-[12px] text-slate-500 truncate">{user?.email || '—'}</p>
-            <p className="text-[11px] text-blue-600 font-semibold mt-0.5 uppercase tracking-wider">{user?.subscription_plan === 'free' ? 'Plano Free' : user?.subscription_plan === 'pro' ? 'Plano Pro' : 'Premium'}</p>
+            <p className="text-[11px] text-blue-600 font-semibold mt-0.5 uppercase tracking-wider">{user?.subscription_plan === 'free' ? t('Plano Free') : user?.subscription_plan === 'pro' ? t('Plano Pro') : t('Premium')}</p>
           </div>
         </div>
 
@@ -91,16 +117,16 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
           {/* Dados pessoais */}
           <section>
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <UserIcon size={11} strokeWidth={2.5} /> Dados pessoais
+              <UserIcon size={11} strokeWidth={2.5} /> {t('Dados pessoais')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-3 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-              <Field label="Nome completo">
+              <Field label={t('Nome completo')}>
                 <input
                   type="text" value={name} onChange={e => setName(e.target.value)}
                   className="profile-input"
                 />
               </Field>
-              <Field label="E-mail">
+              <Field label={t('E-mail')}>
                 <input
                   type="email" value={email} onChange={e => setEmail(e.target.value)}
                   className="profile-input"
@@ -119,17 +145,17 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
           {/* Atuação */}
           <section>
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Briefcase size={11} strokeWidth={2.5} /> Atuação profissional
+              <Briefcase size={11} strokeWidth={2.5} /> {t('Atuação profissional')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-3 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-              <Field label="Especialidade">
+              <Field label={t('Especialidade')}>
                 <input
                   type="text" value={specialty} onChange={e => setSpecialty(e.target.value)}
-                  placeholder="Ex: Medicina de Urgência"
+                  placeholder={t('Ex: Medicina de Urgência')}
                   className="profile-input"
                 />
               </Field>
-              <Field label="Tipo de profissional">
+              <Field label={t('Tipo de profissional')}>
                 <div className="grid grid-cols-2 gap-1.5">
                   {(Object.entries(PROFILE_TYPE_LABELS) as [ProfileType, string][]).map(([key, label]) => (
                     <button
@@ -141,7 +167,7 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
                           : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      {label}
+                      {t(label)}
                     </button>
                   ))}
                 </div>
@@ -152,49 +178,74 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
           {/* Tributário */}
           <section>
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Calculator size={11} strokeWidth={2.5} /> Tributário
+              <Calculator size={11} strokeWidth={2.5} /> {t('Tributário')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-3 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-              <Field label="Regime tributário">
+              <Field label={t('Regime tributário')}>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {(['MEI', 'Simples Nacional', 'Lucro Presumido', 'PF'] as const).map(t => (
+                  {(['MEI', 'Simples Nacional', 'Lucro Presumido', 'PF'] as const).map(regime => (
                     <button
-                      key={t}
-                      onClick={() => setTaxRegime(t)}
+                      key={regime}
+                      onClick={() => setTaxRegime(regime)}
                       className={`px-2 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95 ${
-                        taxRegime === t
+                        taxRegime === regime
                           ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
                           : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      {t}
+                      {regime}
                     </button>
                   ))}
                 </div>
               </Field>
               <div className="grid grid-cols-3 gap-2">
-                <Field label="Alíquota (%)" className="col-span-1">
+                <Field label={t('Alíquota (%)')} className="col-span-1">
                   <input
                     type="number" inputMode="decimal" step="0.5" value={taxRate}
                     onChange={e => setTaxRate(e.target.value)}
                     className="profile-input"
                   />
                 </Field>
-                <Field label="Razão social" className="col-span-2">
+                <Field label={t('Razão social')} className="col-span-2">
                   <input
                     type="text" value={companyName} onChange={e => setCompanyName(e.target.value)}
-                    placeholder="Opcional"
+                    placeholder={t('Opcional')}
                     className="profile-input"
                   />
                 </Field>
               </div>
-              <Field label="CNPJ">
+              <Field label={t('CNPJ')}>
                 <input
                   type="text" value={cnpj} onChange={e => setCnpj(e.target.value)}
                   placeholder="00.000.000/0000-00"
                   className="profile-input"
                 />
               </Field>
+            </div>
+          </section>
+
+          {/* Idioma */}
+          <section>
+            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Languages size={11} strokeWidth={2.5} /> {t('Idioma')}
+            </h2>
+            <div className="bg-white rounded-2xl border border-slate-100 p-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+              <div className="grid grid-cols-2 gap-1.5">
+                <LanguageButton
+                  active={language === 'pt-BR'}
+                  onClick={() => setLanguage('pt-BR')}
+                  flag={<FlagBR size={20} />}
+                  label="Português"
+                  sub="Brasil"
+                />
+                <LanguageButton
+                  active={language === 'es-LATAM'}
+                  onClick={() => setLanguage('es-LATAM')}
+                  flag={<FlagMX size={20} />}
+                  label="Español"
+                  sub="Latinoamérica"
+                />
+              </div>
             </div>
           </section>
 
@@ -210,11 +261,11 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
             className="w-full mt-2 py-3 rounded-2xl bg-white border border-red-100 text-red-600 text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-red-50 transition active:scale-[0.98]"
           >
             <LogOut size={14} strokeWidth={2.5} />
-            Sair da conta
+            {t('Sair da conta')}
           </button>
 
           <p className="text-center text-[10px] text-slate-400 mt-2">
-            Plantãozinho Plus · v1.0
+            Plantão Pro · v1.0
           </p>
         </div>
       </main>
@@ -253,5 +304,35 @@ function Field({ label, children, className = '' }: { label: string; children: R
       <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{label}</p>
       {children}
     </div>
+  );
+}
+
+function LanguageButton({ active, onClick, flag, label, sub }: {
+  active: boolean;
+  onClick: () => void;
+  flag: React.ReactNode;
+  label: string;
+  sub: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all active:scale-95 text-left ${
+        active
+          ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+      }`}
+    >
+      <div className="rounded-[4px] overflow-hidden shrink-0 ring-1 ring-black/5 leading-none">
+        {flag}
+      </div>
+      <div className="flex-1 min-w-0 leading-tight">
+        <p className={`text-[12px] font-bold truncate ${active ? 'text-white' : 'text-slate-800'}`}>{label}</p>
+        <p className={`text-[10px] ${active ? 'text-blue-100' : 'text-slate-400'} truncate`}>{sub}</p>
+      </div>
+      {active && (
+        <Check size={13} strokeWidth={3} className="text-white shrink-0" />
+      )}
+    </button>
   );
 }

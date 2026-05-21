@@ -10,6 +10,7 @@ import {
   ChevronLeft, Calendar as CalendarIcon, DollarSign, MapPin, CalendarRange, Edit3
 } from 'lucide-react';
 import EditShiftSheet from '../components/EditShiftSheet';
+import { useLanguage } from '../hooks/useLanguage';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -35,6 +36,7 @@ function CompactTooltip({ active, payload, label }: any) {
 
 export default function GanhosScreen() {
   const { user, workplaces, shifts, refreshShifts } = useApp();
+  const { t } = useLanguage();
   
   // States
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -156,7 +158,7 @@ export default function GanhosScreen() {
       <header className="bg-white px-5 pt-7 pb-2 shrink-0">
         <div className="flex items-center justify-between">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Visão Financeira</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Visão Financeira')}</p>
             <button onClick={() => { setModalYear(selectedMonth.getFullYear()); setShowMonthModal(true); }}
               className="flex items-center gap-1.5 active:opacity-70 transition text-left group">
               <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight capitalize">
@@ -164,7 +166,7 @@ export default function GanhosScreen() {
               </h1>
               <ChevronDown size={14} strokeWidth={2.5} className="text-slate-400 group-hover:text-blue-600 transition" />
             </button>
-            <p className="text-[12px] text-slate-500 mt-0.5">{isCurrentMonth ? 'Mês atual em curso.' : 'Período histórico selecionado.'}</p>
+            <p className="text-[12px] text-slate-500 mt-0.5">{isCurrentMonth ? t('Mês atual em curso.') : t('Período histórico selecionado.')}</p>
           </div>
           {!isCurrentMonth && (
             <button
@@ -181,15 +183,15 @@ export default function GanhosScreen() {
       {/* TABS (Visão Geral vs Por Plantão) */}
       <div className="px-5 mt-2.5 mb-1">
         <div className="flex bg-slate-200/50 rounded-xl p-0.5">
-          {(['visao', 'lista'] as const).map(t => (
-            <button key={t} onClick={() => setActiveTab(t)}
+          {(['visao', 'lista'] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
               className="flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-all shadow-sm"
-              style={{ 
-                background: activeTab === t ? 'white' : 'transparent', 
-                color: activeTab === t ? '#0f172a' : '#64748b',
-                boxShadow: activeTab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+              style={{
+                background: activeTab === tab ? 'white' : 'transparent',
+                color: activeTab === tab ? '#0f172a' : '#64748b',
+                boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
               }}>
-              {t === 'visao' ? 'Painel' : 'Extrato'}
+              {tab === 'visao' ? t('Painel') : t('Extrato')}
             </button>
           ))}
         </div>
@@ -209,7 +211,7 @@ export default function GanhosScreen() {
                       <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
                         <DollarSign size={13} strokeWidth={2.5} />
                       </div>
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Realizado</span>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{t('Realizado')}</span>
                     </div>
                     <span className="text-[10px] text-slate-400">{monthShifts.filter(s=>s.status==='recebido').length} pagos</span>
                   </div>
@@ -222,7 +224,7 @@ export default function GanhosScreen() {
                     <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold">
                       <TrendingUp size={13} strokeWidth={2.5} />
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">A Receber</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{t('A Receber')}</span>
                   </div>
                   <h2 className="text-[15px] font-bold text-slate-900 truncate tracking-tight">{fmtCur(stats?.pending || 0)}</h2>
                 </div>
@@ -239,7 +241,7 @@ export default function GanhosScreen() {
                     </div>
                     <span className={`text-[10px] font-bold uppercase tracking-wide ${
                       (stats?.overdue || 0) > 0 ? 'text-red-600' : 'text-slate-500'
-                    }`}>Atrasados</span>
+                    }`}>{t('Atrasados')}</span>
                   </div>
                   <h2 className={`text-[15px] font-bold truncate tracking-tight ${
                     (stats?.overdue || 0) > 0 ? 'text-red-600' : 'text-slate-900'
@@ -255,7 +257,7 @@ export default function GanhosScreen() {
               {/* Gráfico */}
               <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold text-slate-800 text-[13px]">Evolução de Ganhos</h3>
+                  <h3 className="font-semibold text-slate-800 text-[13px]">{t('Evolução de Ganhos')}</h3>
                   <div className="flex bg-slate-100 p-0.5 rounded-lg gap-0.5">
                     {([
                       { key: '3m',  label: '3m' },
@@ -327,9 +329,9 @@ export default function GanhosScreen() {
                 className="w-full text-left bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100 active:scale-[0.99] transition-all hover:border-blue-100 hover:shadow-[0_2px_12px_rgba(24,119,242,0.07)] group"
               >
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold text-slate-800 text-[13px]">Meta do Mês</h3>
+                  <h3 className="font-semibold text-slate-800 text-[13px]">{t('Meta do Mês')}</h3>
                   <span className="text-[11px] text-slate-400 group-hover:text-blue-500 transition flex items-center gap-1">
-                    Toque para editar
+                    {t('Toque para editar')}
                     <ChevronRight size={11} strokeWidth={2.5} />
                   </span>
                 </div>
@@ -353,7 +355,7 @@ export default function GanhosScreen() {
                           </Pie>
                         </PieChart>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-[9px] text-slate-400 leading-none">Meta</span>
+                          <span className="text-[9px] text-slate-400 leading-none">{t('Meta')}</span>
                           <span className="text-[11px] font-bold text-slate-800 leading-none mt-0.5">{fmtShortCur(monthGoal)}</span>
                         </div>
                       </div>
@@ -362,7 +364,7 @@ export default function GanhosScreen() {
                           <div key={i} className="flex justify-between items-center gap-2">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <div className="w-2 h-2 rounded-full shrink-0" style={{ background: entry.color }} />
-                              <span className="text-[11px] font-medium text-slate-700 truncate">{entry.label}</span>
+                              <span className="text-[11px] font-medium text-slate-700 truncate">{t(entry.label)}</span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               <span className="text-[10px] text-slate-400">{entry.pct}%</span>
@@ -383,7 +385,7 @@ export default function GanhosScreen() {
               {/* Rentabilidade por Local (compacto) */}
               {workplaceBreakdown.length > 0 && (
                 <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
-                  <h3 className="font-semibold text-slate-800 text-[13px] mb-2">Rentabilidade por Local</h3>
+                  <h3 className="font-semibold text-slate-800 text-[13px] mb-2">{t('Rentabilidade por Local')}</h3>
                   <div className="flex items-center gap-3">
                     <div className="h-24 w-24 shrink-0 relative">
                       <PieChart width={96} height={96} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
@@ -395,7 +397,7 @@ export default function GanhosScreen() {
                         </Pie>
                       </PieChart>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-[9px] text-slate-400 leading-none">Total</span>
+                        <span className="text-[9px] text-slate-400 leading-none">{t('Total')}</span>
                         <span className="text-[11px] font-bold text-slate-800 leading-none mt-0.5">{fmtShortCur(stats?.expected || 0)}</span>
                       </div>
                     </div>
