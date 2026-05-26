@@ -77,9 +77,23 @@ export default function RelatoriosScreen() {
 
   // Tax constants
   const isMei = user?.tax_regime === 'MEI';
-  const taxRate = isMei ? 0 : (user?.tax_rate ?? 6) / 100;
+  const userRate = user?.tax_rate ?? 6;
+  // Para MEI com alíquota 0 (default), usa o valor fixo padrão (R$ 75,60).
+  // Caso o usuário tenha definido uma alíquota > 0 para MEI, usa o cálculo baseado em alíquota.
+  const useFixedMei = isMei && userRate === 0;
+  const taxRate = useFixedMei ? 0 : userRate / 100;
   const taxBase = stats?.expected || 0;
-  const taxAmount = isMei ? 75.60 : taxBase * taxRate;
+  const taxAmount = useFixedMei ? 75.60 : taxBase * taxRate;
+
+  // Rótulo do imposto principal conforme o regime tributário
+  const taxLabel = (() => {
+    const r = user?.tax_regime || 'Simples Nacional';
+    if (r === 'MEI') return 'Contribuição DAS MEI';
+    if (r === 'Simples Nacional') return 'Provisão DAS (Simples Nacional)';
+    if (r === 'Lucro Presumido') return 'Provisão de Impostos (Lucro Presumido)';
+    if (r === 'PF') return 'Carnê-Leão Estimado (PF)';
+    return 'Provisão de Imposto';
+  })();
 
   function handleWhatsApp() {
     const msg = encodeURIComponent(
@@ -194,7 +208,7 @@ export default function RelatoriosScreen() {
         ['Razão Social:', user?.company_name || `${user?.name || ''} Serviços Médicos LTDA`],
         ['CNPJ:', fmtCNPJ(user?.cnpj)],
         ['Responsável Técnico:', `Dr(a). ${user?.name || ''}`],
-        ['Regime Tributário:', `${user?.tax_regime || 'Simples Nacional'}${!isMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`],
+        ['Regime Tributário:', `${user?.tax_regime || 'Simples Nacional'}${!useFixedMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`],
       ];
       pjLines.forEach(([k, v]) => {
         ensureSpace(5);
@@ -224,7 +238,7 @@ export default function RelatoriosScreen() {
           ['Faturamento Bruto (Competência):', fmtCur(stats?.expected || 0), true],
           ['Total Efetivamente Recebido (Caixa):', fmtCur(stats?.received || 0), false],
           ['Total Pendente / A Receber:', fmtCur(stats?.pending || 0), false],
-          [`Provisão Estimada de Imposto (DAS${isMei ? ' MEI' : ` - ${(taxRate * 100).toFixed(1)}%`}):`, fmtCur(taxAmount), true],
+          [`${taxLabel}${!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}:`, fmtCur(taxAmount), true],
         ];
         let sy = y + 5;
         sumLines.forEach(([k, v, bold]) => {
@@ -345,7 +359,7 @@ export default function RelatoriosScreen() {
     } finally {
       setPdfLoading(false);
     }
-  }, [pdfLoading, selectedMonth, user, isMei, taxRate, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle]);
+  }, [pdfLoading, selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle]);
 
   const handleExportCSV = useCallback(() => {
     const lines: string[][] = [];
@@ -360,7 +374,7 @@ export default function RelatoriosScreen() {
     lines.push(['Razão Social', user?.company_name || `${user?.name || ''} Serviços Médicos LTDA`]);
     lines.push(['CNPJ', fmtCNPJ(user?.cnpj)]);
     lines.push(['Responsável Técnico', `Dr(a). ${user?.name || ''}`]);
-    lines.push(['Regime Tributário', `${user?.tax_regime || 'Simples Nacional'}${!isMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`]);
+    lines.push(['Regime Tributário', `${user?.tax_regime || 'Simples Nacional'}${!useFixedMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`]);
     lines.push(sep);
 
     if (!isPendentes) {
@@ -368,7 +382,7 @@ export default function RelatoriosScreen() {
       lines.push(['Faturamento Bruto', (stats?.expected || 0).toFixed(2).replace('.', ',')]);
       lines.push(['Total Recebido', (stats?.received || 0).toFixed(2).replace('.', ',')]);
       lines.push(['Total Pendente', (stats?.pending || 0).toFixed(2).replace('.', ',')]);
-      lines.push([`Provisão de Imposto (DAS${isMei ? ' MEI' : ` ${(taxRate * 100).toFixed(1)}%`})`, taxAmount.toFixed(2).replace('.', ',')]);
+      lines.push([`${taxLabel}${!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}`, taxAmount.toFixed(2).replace('.', ',')]);
       lines.push(sep);
 
       if (Object.keys(wpBreakdown).length > 0) {
@@ -415,7 +429,7 @@ export default function RelatoriosScreen() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [selectedMonth, user, isMei, taxRate, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel]);
+  }, [selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel]);
 
   return (
     <div className="page-content bg-white relative overflow-hidden h-full min-h-screen">
@@ -519,28 +533,28 @@ export default function RelatoriosScreen() {
               </div>
               
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                {!isMei ? (
+                {!useFixedMei ? (
                   <>
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm text-slate-600">Alíquota Estimada</span>
+                      <span className="text-sm text-slate-600">{t('Alíquota Estimada')}</span>
                       <span className="text-sm font-bold text-slate-800">{(taxRate * 100).toFixed(2)}%</span>
                     </div>
                     <div className="flex justify-between items-center mb-3">
-                      <span className="text-xs text-slate-400">Base de cálculo: {fmtCur(taxBase)}</span>
+                      <span className="text-xs text-slate-400">{t('Base de cálculo:')} {fmtCur(taxBase)}</span>
                     </div>
                   </>
                 ) : (
                   <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm text-slate-600">Contribuição Mensal (DAS MEI)</span>
-                    <span className="text-sm font-bold text-slate-800">Valor Fixo</span>
+                    <span className="text-sm text-slate-600">{t('Contribuição Mensal (DAS MEI)')}</span>
+                    <span className="text-sm font-bold text-slate-800">{t('Valor Fixo')}</span>
                   </div>
                 )}
-                
+
                 <div className="border-t border-slate-200 pt-3 flex justify-between items-center">
-                  <span className="text-sm font-semibold text-slate-800">Provisão para Imposto (DAS)</span>
+                  <span className="text-sm font-semibold text-slate-800">{t(taxLabel)}</span>
                   <span className="text-lg font-bold text-red-500">{fmtCur(taxAmount)}</span>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-2 text-center">*Valores para planejamento. Consulte seu contador para emissão da guia oficial.</p>
+                <p className="text-[10px] text-slate-400 mt-2 text-center">{t('*Valores para planejamento. Consulte seu contador para emissão da guia oficial.')}</p>
               </div>
             </div>
 
@@ -661,7 +675,7 @@ export default function RelatoriosScreen() {
                 <p><span className="font-semibold">Razão Social:</span> {user?.company_name || `${user?.name || ''} Serviços Médicos LTDA`}</p>
                 <p><span className="font-semibold">CNPJ:</span> {user?.cnpj ? user.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : 'Não informado'}</p>
                 <p><span className="font-semibold">Responsável Técnico:</span> Dr(a). {user?.name}</p>
-                <p><span className="font-semibold">Regime Tributário:</span> {user?.tax_regime || 'Simples Nacional'}{!isMei && ` (${(taxRate * 100).toFixed(2)}%)`}</p>
+                <p><span className="font-semibold">Regime Tributário:</span> {user?.tax_regime || 'Simples Nacional'}{!useFixedMei && ` (${(taxRate * 100).toFixed(2)}%)`}</p>
               </div>
             </div>
 
@@ -683,7 +697,7 @@ export default function RelatoriosScreen() {
                     <span className="font-medium text-slate-700">{fmtCur(stats?.pending || 0)}</span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-2 text-[11px]">
-                    <span className="italic text-slate-600">Provisão Estimada de Imposto (DAS{isMei ? ' MEI' : ` - ${(taxRate * 100).toFixed(1)}%`}):</span>
+                    <span className="italic text-slate-600">{taxLabel}{!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}:</span>
                     <span className="font-bold text-slate-900">{fmtCur(taxAmount)}</span>
                   </div>
                 </div>
@@ -899,45 +913,64 @@ export default function RelatoriosScreen() {
             
             <div className="p-5 space-y-4 overflow-y-auto flex-1 hide-scrollbar">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Regime Tributário</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setSettingsData(p => ({ ...p, tax_regime: 'MEI' }))}
-                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition border ${
-                      settingsData.tax_regime === 'MEI' 
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    MEI
-                  </button>
-                  <button
-                    onClick={() => setSettingsData(p => ({ ...p, tax_regime: 'Simples Nacional' }))}
-                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition border ${
-                      settingsData.tax_regime === 'Simples Nacional' 
-                        ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    Simples Nacional
-                  </button>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">{t('Regime Tributário')}</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(['MEI', 'Simples Nacional', 'Lucro Presumido', 'PF'] as const).map(regime => {
+                    const isSel = settingsData.tax_regime === regime;
+                    // Valor de alíquota recomendado para cada regime (ponto inicial sugerido)
+                    const recommendedRate: Record<typeof regime, number> = {
+                      'MEI': 0,
+                      'Simples Nacional': 6,
+                      'Lucro Presumido': 13.33,
+                      'PF': 27.5,
+                    };
+                    return (
+                      <button
+                        key={regime}
+                        onClick={() => setSettingsData(p => ({
+                          ...p,
+                          tax_regime: regime,
+                          tax_rate: recommendedRate[regime],
+                        }))}
+                        className={`py-2.5 rounded-xl text-sm font-semibold transition active:scale-[0.98] ${
+                          isSel
+                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                        }`}
+                      >
+                        {regime}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {settingsData.tax_regime === 'Simples Nacional' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Alíquota (%)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={settingsData.tax_rate}
-                    onChange={(e) => setSettingsData(p => ({ ...p, tax_rate: parseFloat(e.target.value) || 0 }))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                    placeholder="Ex: 6.0"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">Geralmente 6% no Anexo III (sujeito ao Fator R).</p>
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">{t('Alíquota (%)')}</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
+                  value={String(settingsData.tax_rate).replace('.', ',')}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9.,]/g, '');
+                    const normalized = raw.replace(',', '.');
+                    const parsed = parseFloat(normalized);
+                    setSettingsData(p => ({ ...p, tax_rate: isNaN(parsed) ? 0 : parsed }));
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  placeholder="6,0"
+                />
+                <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                  {settingsData.tax_regime === 'MEI'
+                    ? 'Geralmente R$ 75,60/mês fixo. Defina uma alíquota personalizada se necessário.'
+                    : settingsData.tax_regime === 'Simples Nacional'
+                      ? 'A partir de 6% (Anexo III) ou 15,5% (Anexo V).'
+                      : settingsData.tax_regime === 'Lucro Presumido'
+                        ? 'Entre 13,33% e 16,33% (IRPJ + CSLL + PIS + COFINS + ISS).'
+                        : 'Até 27,5% (IRPF) + 20% (INSS) + 2% a 5% (ISS).'}
+                </p>
+              </div>
 
               <hr className="border-slate-100 my-2" />
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTheme } from '../hooks/useTheme';
 import { useLanguage } from '../hooks/useLanguage';
 import { ChevronRight, ChevronLeft, Calendar, Wallet, RefreshCw, Stethoscope, Eye, EyeOff, Check, X, Lock, UserCircle2 } from 'lucide-react';
@@ -111,14 +111,17 @@ export default function OnboardingScreen() {
     return { label: 'Muito forte', color: '#10b981', percent: 100 };
   }, [passwordChecks]);
 
-  function handleNext() {
-    if (step < slides.length - 1) setStep(s => s + 1);
-    else setMode('register');
-  }
+  // Auto-rotação do carrossel de slides (15s por slide × 3 slides = 45s total, ciclo infinito)
+  useEffect(() => {
+    if (mode !== 'onboarding') return;
+    const timer = setInterval(() => {
+      setStep(s => (s + 1) % slides.length);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [mode]);
 
-  function handleBack() {
-    if (step > 0) setStep(s => s - 1);
-    else if (mode !== 'onboarding') setMode('onboarding');
+  function handleNext() {
+    setMode('register');
   }
 
   function toggleGoal(g: string) {
@@ -471,87 +474,76 @@ export default function OnboardingScreen() {
     );
   }
 
-  // ONBOARDING SLIDES — layout compacto e equilibrado
+  // ONBOARDING — uma única tela com carrossel auto-rotativo (3s por slide, 9s total)
   const slide = slides[step];
   return (
     <div className="app-container flex flex-col min-h-screen bg-white">
-      {/* Top bar: discrete language toggle (only on first screen) */}
-      {step === 0 && (
-        <div className="absolute top-0 right-0 left-0 z-10 flex justify-end px-4 pt-4">
-          <button
-            onClick={() => setLanguage(language === 'pt-BR' ? 'es-LATAM' : 'pt-BR')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200 hover:bg-slate-100 transition active:scale-95 shadow-sm"
-            title={language === 'pt-BR' ? 'Cambiar a español' : 'Mudar para português'}
-          >
-            <span className="rounded-[3px] overflow-hidden leading-none ring-1 ring-black/5">
-              {language === 'pt-BR' ? <MiniFlagBR /> : <MiniFlagMX />}
-            </span>
-            <span className="text-[11px] font-semibold text-slate-700 leading-none">
-              {language === 'pt-BR' ? 'PT' : 'ES'}
-            </span>
-          </button>
-        </div>
-      )}
+      {/* Top bar: language toggle */}
+      <div className="absolute top-0 right-0 left-0 z-10 flex justify-end px-4 pt-4">
+        <button
+          onClick={() => setLanguage(language === 'pt-BR' ? 'es-LATAM' : 'pt-BR')}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200 hover:bg-slate-100 transition active:scale-95 shadow-sm"
+          title={language === 'pt-BR' ? 'Cambiar a español' : 'Mudar para português'}
+        >
+          <span className="rounded-[3px] overflow-hidden leading-none ring-1 ring-black/5">
+            {language === 'pt-BR' ? <MiniFlagBR /> : <MiniFlagMX />}
+          </span>
+          <span className="text-[11px] font-semibold text-slate-700 leading-none">
+            {language === 'pt-BR' ? 'PT' : 'ES'}
+          </span>
+        </button>
+      </div>
 
       <div className="flex-1 flex flex-col items-center px-5 pt-10">
-        {/* Progress dots */}
+        {/* Progress dots clicáveis */}
         <div className="flex gap-1.5 mb-8">
           {slides.map((_, i) => (
-            <div key={i} className="rounded-full transition-all duration-300"
+            <button
+              key={i}
+              onClick={() => setStep(i)}
+              className="rounded-full transition-all duration-300 active:scale-90"
               style={{
                 width: i === step ? 22 : 6,
                 height: 3,
                 background: '#1877F2',
                 opacity: i === step ? 1 : 0.25,
               }}
+              aria-label={`Slide ${i + 1}`}
             />
           ))}
         </div>
 
-        {/* Hero block — centralizado verticalmente no espaço disponível */}
+        {/* Hero carrossel — auto-rotação a cada 3s, centralizado verticalmente */}
         <div className="flex-1 flex flex-col items-center justify-center text-center max-w-xs pb-4">
-          {/* Icon */}
-          <div className="w-[68px] h-[68px] rounded-[20px] flex items-center justify-center mb-5 shadow-lg"
-            style={{ background: slide.iconBg, boxShadow: `0 10px 24px -8px ${slide.iconBg}55` }}>
-            {slide.icon}
+          {/* key forçando re-mount → re-dispara animação fade-in em cada troca */}
+          <div key={step} className="flex flex-col items-center animate-fade-in">
+            <div className="w-[68px] h-[68px] rounded-[20px] flex items-center justify-center mb-5 shadow-lg transition-all duration-500"
+              style={{ background: slide.iconBg, boxShadow: `0 10px 24px -8px ${slide.iconBg}55` }}>
+              {slide.icon}
+            </div>
+            <h1 className="text-[22px] font-black text-slate-900 leading-tight tracking-tight whitespace-pre-line mb-3">
+              {t(slide.title)}
+            </h1>
+            <p className="text-slate-500 text-[13.5px] leading-relaxed">
+              {t(slide.subtitle)}
+            </p>
           </div>
-
-          {/* Text */}
-          <h1 className="text-[22px] font-black text-slate-900 leading-tight tracking-tight whitespace-pre-line mb-3">
-            {t(slide.title)}
-          </h1>
-          <p className="text-slate-500 text-[13.5px] leading-relaxed">
-            {t(slide.subtitle)}
-          </p>
         </div>
       </div>
 
-      {/* Buttons */}
-      <div className="px-5 pb-8 pt-3" style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}>
-        {step === 0 ? (
-          <div className="space-y-2">
-            <button onClick={handleNext} className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
-              {t('Continuar')} <ChevronRight size={16} />
-            </button>
-            <button onClick={() => setMode('login')} className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition active:scale-[0.98]">
-              {t('Já tenho conta — Entrar')}
-            </button>
-            <button onClick={handleGuestLogin}
-              className="w-full flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-slate-800 transition text-[12.5px] font-medium">
-              <UserCircle2 size={14} />
-              {t('Entrar como visitante')}
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <button onClick={handleBack} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-              {t('Voltar')}
-            </button>
-            <button onClick={handleNext} className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
-              {step === slides.length - 1 ? t('Começar') : t('Continuar')} <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
+      {/* Buttons — sempre visíveis */}
+      <div className="px-5 pb-8 pt-3 space-y-2" style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}>
+        <button onClick={handleNext} className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
+          {t('Continuar')} <ChevronRight size={16} />
+        </button>
+        <button onClick={() => setMode('login')} className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition active:scale-[0.98]">
+          {t('Já tenho conta — Entrar')}
+        </button>
+        <button onClick={handleGuestLogin}
+          className="w-full flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-slate-800 transition text-[12.5px] font-medium">
+          <UserCircle2 size={14} />
+          {t('Entrar como visitante')}
+        </button>
       </div>
     </div>
   );
