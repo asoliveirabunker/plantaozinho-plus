@@ -158,6 +158,21 @@ export default function RelatoriosScreen() {
     ? cnpj.replace(/\D/g, '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
     : 'Não informado';
 
+  // Formata CPF ou CNPJ dependendo do regime do usuário (apenas para o usuário, não para workplaces)
+  const fmtUserDoc = (doc?: string) => {
+    if (!doc) return 'Não informado';
+    const digits = doc.replace(/\D/g, '');
+    if (user?.tax_regime === 'PF') {
+      return digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+    }
+    return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  };
+  const userDocLabel = user?.tax_regime === 'PF' ? 'CPF:' : 'CNPJ:';
+  const profileSectionTitle = user?.tax_regime === 'PF'
+    ? '1. DADOS DO PROFISSIONAL (PF)'
+    : '1. DADOS DO PROFISSIONAL (PJ)';
+  const userNameOrRazao = user?.tax_regime === 'PF' ? 'Nome:' : 'Razão Social:';
+
   const handleDownloadPDF = useCallback(async () => {
     if (pdfLoading) return;
     setPdfLoading(true);
@@ -199,15 +214,16 @@ export default function RelatoriosScreen() {
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(10);
       pdf.setTextColor(15, 23, 42);
-      pdf.text('1. DADOS DO PROFISSIONAL (PJ)', ml, y);
+      pdf.text(profileSectionTitle, ml, y);
       y += 5;
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(9);
       pdf.setTextColor(51, 65, 85);
-      const pjLines = [
-        ['Razão Social:', user?.company_name || `${user?.name || ''} Serviços Médicos LTDA`],
-        ['CNPJ:', fmtCNPJ(user?.cnpj)],
+      const pjLines: [string, string][] = [
+        [userNameOrRazao, user?.company_name || `${user?.name || ''}${user?.tax_regime === 'PF' ? '' : ' Serviços Médicos LTDA'}`],
+        [userDocLabel, fmtUserDoc(user?.cnpj)],
         ['Responsável Técnico:', `Dr(a). ${user?.name || ''}`],
+        ...(user?.crm ? [['CRM:', user.crm] as [string, string]] : []),
         ['Regime Tributário:', `${user?.tax_regime || 'Simples Nacional'}${!useFixedMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`],
       ];
       pjLines.forEach(([k, v]) => {
@@ -359,7 +375,7 @@ export default function RelatoriosScreen() {
     } finally {
       setPdfLoading(false);
     }
-  }, [pdfLoading, selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle]);
+  }, [pdfLoading, selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle]);
 
   const handleExportCSV = useCallback(() => {
     const lines: string[][] = [];
@@ -370,10 +386,11 @@ export default function RelatoriosScreen() {
     lines.push([`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`]);
     lines.push(sep);
 
-    lines.push(['1. DADOS DO PROFISSIONAL (PJ)']);
-    lines.push(['Razão Social', user?.company_name || `${user?.name || ''} Serviços Médicos LTDA`]);
-    lines.push(['CNPJ', fmtCNPJ(user?.cnpj)]);
+    lines.push([profileSectionTitle]);
+    lines.push([user?.tax_regime === 'PF' ? 'Nome' : 'Razão Social', user?.company_name || `${user?.name || ''}${user?.tax_regime === 'PF' ? '' : ' Serviços Médicos LTDA'}`]);
+    lines.push([user?.tax_regime === 'PF' ? 'CPF' : 'CNPJ', fmtUserDoc(user?.cnpj)]);
     lines.push(['Responsável Técnico', `Dr(a). ${user?.name || ''}`]);
+    if (user?.crm) lines.push(['CRM', user.crm]);
     lines.push(['Regime Tributário', `${user?.tax_regime || 'Simples Nacional'}${!useFixedMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`]);
     lines.push(sep);
 
@@ -429,7 +446,7 @@ export default function RelatoriosScreen() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel]);
+  }, [selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel]);
 
   return (
     <div className="page-content bg-white relative overflow-hidden h-full min-h-screen">
@@ -668,13 +685,23 @@ export default function RelatoriosScreen() {
 
             <hr className="border-slate-200 mb-4" />
 
-            {/* 1. Dados da PJ */}
+            {/* 1. Dados do Profissional */}
             <div className="mb-5">
-              <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">1. Dados do Profissional (PJ)</h3>
+              <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">
+                1. {user?.tax_regime === 'PF' ? 'Dados do Profissional (PF)' : 'Dados do Profissional (PJ)'}
+              </h3>
               <div className="grid grid-cols-1 gap-1 pl-2">
-                <p><span className="font-semibold">Razão Social:</span> {user?.company_name || `${user?.name || ''} Serviços Médicos LTDA`}</p>
-                <p><span className="font-semibold">CNPJ:</span> {user?.cnpj ? user.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : 'Não informado'}</p>
+                <p><span className="font-semibold">{user?.tax_regime === 'PF' ? 'Nome:' : 'Razão Social:'}</span> {user?.company_name || `${user?.name || ''}${user?.tax_regime === 'PF' ? '' : ' Serviços Médicos LTDA'}`}</p>
+                <p>
+                  <span className="font-semibold">{user?.tax_regime === 'PF' ? 'CPF:' : 'CNPJ:'}</span>{' '}
+                  {user?.cnpj
+                    ? (user.tax_regime === 'PF'
+                        ? user.cnpj.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')
+                        : user.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5'))
+                    : 'Não informado'}
+                </p>
                 <p><span className="font-semibold">Responsável Técnico:</span> Dr(a). {user?.name}</p>
+                {user?.crm && <p><span className="font-semibold">CRM:</span> {user.crm}</p>}
                 <p><span className="font-semibold">Regime Tributário:</span> {user?.tax_regime || 'Simples Nacional'}{!useFixedMei && ` (${(taxRate * 100).toFixed(2)}%)`}</p>
               </div>
             </div>
@@ -988,25 +1015,44 @@ export default function RelatoriosScreen() {
                       placeholder="Ex: Dr. João Serviços Médicos"
                     />
                   </div>
-                  <div>
-                    <span className="block text-xs text-slate-500 mb-1">CNPJ</span>
-                    <input
-                      type="text"
-                      value={settingsData.cnpj}
-                      onChange={(e) => {
-                        let val = e.target.value.replace(/\D/g, '');
-                        if (val.length > 14) val = val.slice(0, 14);
-                        let formatted = val;
-                        if (val.length > 12) formatted = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, '$1.$2.$3/$4-$5');
-                        else if (val.length > 8) formatted = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4}).*/, '$1.$2.$3/$4');
-                        else if (val.length > 5) formatted = val.replace(/^(\d{2})(\d{3})(\d{0,3}).*/, '$1.$2.$3');
-                        else if (val.length > 2) formatted = val.replace(/^(\d{2})(\d{0,3}).*/, '$1.$2');
-                        setSettingsData(p => ({ ...p, cnpj: formatted }));
-                      }}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                      placeholder="00.000.000/0001-00"
-                    />
-                  </div>
+
+                  {/* CNPJ ou CPF — depende do regime tributário selecionado */}
+                  {(() => {
+                    const isPF = settingsData.tax_regime === 'PF';
+                    const label = isPF ? 'CPF' : 'CNPJ';
+                    const placeholder = isPF ? '000.000.000-00' : '00.000.000/0001-00';
+                    const maxLen = isPF ? 11 : 14;
+                    return (
+                      <div>
+                        <span className="block text-xs text-slate-500 mb-1">{label}</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={settingsData.cnpj}
+                          onChange={(e) => {
+                            let val = e.target.value.replace(/\D/g, '');
+                            if (val.length > maxLen) val = val.slice(0, maxLen);
+                            let formatted = val;
+                            if (isPF) {
+                              // CPF: 000.000.000-00
+                              if (val.length > 9) formatted = val.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2}).*/, '$1.$2.$3-$4');
+                              else if (val.length > 6) formatted = val.replace(/^(\d{3})(\d{3})(\d{0,3}).*/, '$1.$2.$3');
+                              else if (val.length > 3) formatted = val.replace(/^(\d{3})(\d{0,3}).*/, '$1.$2');
+                            } else {
+                              // CNPJ: 00.000.000/0001-00
+                              if (val.length > 12) formatted = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, '$1.$2.$3/$4-$5');
+                              else if (val.length > 8) formatted = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4}).*/, '$1.$2.$3/$4');
+                              else if (val.length > 5) formatted = val.replace(/^(\d{2})(\d{3})(\d{0,3}).*/, '$1.$2.$3');
+                              else if (val.length > 2) formatted = val.replace(/^(\d{2})(\d{0,3}).*/, '$1.$2');
+                            }
+                            setSettingsData(p => ({ ...p, cnpj: formatted }));
+                          }}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                          placeholder={placeholder}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
