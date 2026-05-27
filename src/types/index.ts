@@ -21,6 +21,7 @@ export interface User {
   tax_rate?: number;
   company_name?: string;
   cnpj?: string;
+  crm?: string;
 }
 
 export type WorkplaceType = 'hospital' | 'clinica' | 'upa' | 'pronto_socorro' | 'maternidade' | 'home_care' | 'outro';

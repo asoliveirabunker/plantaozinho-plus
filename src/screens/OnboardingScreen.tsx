@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTheme } from '../hooks/useTheme';
 import { useLanguage } from '../hooks/useLanguage';
 import { ChevronRight, ChevronLeft, Calendar, Wallet, RefreshCw, Stethoscope, Eye, EyeOff, Check, X, Lock, UserCircle2 } from 'lucide-react';
@@ -88,6 +88,8 @@ export default function OnboardingScreen() {
   const [whatsapp, setWhatsapp] = useState('');
   const [goals, setGoals] = useState<string[]>([]);
   const [withDemo, setWithDemo] = useState(false);
+  const [crm, setCrm] = useState('');
+  const [registerStep, setRegisterStep] = useState<0 | 1>(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Login form
@@ -120,6 +122,34 @@ export default function OnboardingScreen() {
     return () => clearInterval(timer);
   }, [mode]);
 
+  // Swipe para navegar entre slides
+  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const end = e.changedTouches[0];
+    const dx = end.clientX - start.x;
+    const dy = end.clientY - start.y;
+    const dt = Date.now() - start.t;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+      if (dx < 0) goNextSlide(); else goPrevSlide();
+    }
+  }
+
+  function goNextSlide() {
+    setStep(s => (s + 1) % slides.length);
+  }
+  function goPrevSlide() {
+    setStep(s => (s - 1 + slides.length) % slides.length);
+  }
+
   function handleNext() {
     setMode('register');
   }
@@ -130,31 +160,61 @@ export default function OnboardingScreen() {
     );
   }
 
-  function validateRegister() {
+  function validateStep1() {
     const errs: Record<string, string> = {};
     if (!name.trim()) errs.name = 'Nome obrigatório';
     if (!email.trim() || !email.includes('@')) errs.email = 'E-mail inválido';
-    if (!specialty.trim()) errs.specialty = 'Especialidade obrigatória';
     if (!allPasswordChecksPassed) errs.password = 'A senha não atende todos os requisitos';
     if (password !== confirmPassword) errs.confirmPassword = 'As senhas não coincidem';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
 
-  function handleRegister() {
-    if (!validateRegister()) return;
-    const user = registerUser({
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      password,
-      specialty,
-      profile_type: profile,
-      subscription_plan: 'free',
-      whatsapp,
-      goals,
-      onboarding_completed: true,
-    });
-    login(user, withDemo);
+  function validateStep2() {
+    const errs: Record<string, string> = {};
+    if (!specialty.trim()) errs.specialty = 'Especialidade obrigatória';
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  function handleRegisterNext() {
+    if (registerStep === 0) {
+      if (validateStep1()) {
+        setRegisterStep(1);
+        // scroll to top do form ao avançar
+        requestAnimationFrame(() => {
+          const scroller = document.querySelector('.app-container .overflow-y-auto');
+          scroller?.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      }
+    } else {
+      if (!validateStep2()) return;
+      const user = registerUser({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        specialty,
+        profile_type: profile,
+        subscription_plan: 'free',
+        whatsapp,
+        goals,
+        crm: crm.trim() || undefined,
+        onboarding_completed: true,
+      });
+      login(user, withDemo);
+    }
+  }
+
+  function handleRegisterBack() {
+    if (registerStep === 1) {
+      setRegisterStep(0);
+      requestAnimationFrame(() => {
+        const scroller = document.querySelector('.app-container .overflow-y-auto');
+        scroller?.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    } else {
+      setMode('onboarding');
+    }
   }
 
   function handleLogin() {
@@ -282,13 +342,16 @@ export default function OnboardingScreen() {
             </div>
           </div>
 
-          {/* Progress */}
-          <div className="flex gap-1 mb-4">
-            {[0,1,2,3].map(i => (
+          {/* Progress — 2 etapas */}
+          <div className="flex gap-1.5 mb-4">
+            {[0, 1].map(i => (
               <div key={i} className="h-1 rounded-full transition-all duration-300 flex-1"
-                style={{ background: '#1877F2', opacity: i <= 3 ? 1 : 0.2 }} />
+                style={{ background: '#1877F2', opacity: i <= registerStep ? 1 : 0.2 }} />
             ))}
           </div>
+
+          {/* ============ ETAPA 1 — Identificação + Senha ============ */}
+          {registerStep === 0 && (<>
 
           {/* SEÇÃO: IDENTIFICAÇÃO */}
           <section className="mb-3">
@@ -378,6 +441,11 @@ export default function OnboardingScreen() {
             </div>
           </section>
 
+          </>)}
+
+          {/* ============ ETAPA 2 — Atuação + Objetivos + CRM + Demo ============ */}
+          {registerStep === 1 && (<>
+
           {/* SEÇÃO: ATUAÇÃO PROFISSIONAL */}
           <section className="mb-3">
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
@@ -440,6 +508,21 @@ export default function OnboardingScreen() {
             </div>
           </section>
 
+          {/* SEÇÃO: CRM */}
+          <section className="mb-3">
+            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Stethoscope size={11} strokeWidth={2.5} /> CRM
+              <span className="text-slate-400 font-normal normal-case tracking-normal text-[10px] ml-auto">{t('(opcional)')}</span>
+            </h2>
+            <div className="bg-white rounded-2xl border border-slate-100 p-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+              <input value={crm} onChange={e => setCrm(e.target.value)} placeholder="Ex: 123456 / SP"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              <p className="text-[10px] text-slate-400 mt-1.5 ml-0.5 leading-snug">
+                Número de registro profissional. Aparecerá nos relatórios gerados.
+              </p>
+            </div>
+          </section>
+
           {/* TOGGLE DEMO */}
           <button onClick={() => setWithDemo(v => !v)}
             className="w-full text-left px-3 py-2.5 rounded-2xl transition-all flex items-center justify-between gap-2 mb-2"
@@ -459,15 +542,17 @@ export default function OnboardingScreen() {
               <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
             </div>
           </button>
+
+          </>)}
         </div>
 
         {/* Footer sticky */}
         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-6 pt-3 bg-white border-t border-slate-100 flex gap-2 z-[51]" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
-          <button onClick={() => setMode('onboarding')} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+          <button onClick={handleRegisterBack} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
             {t('Voltar')}
           </button>
-          <button onClick={handleRegister} className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20">
-            {t('Começar')}
+          <button onClick={handleRegisterNext} className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20">
+            {registerStep === 0 ? t('Continuar') : t('Começar')}
           </button>
         </div>
       </div>
@@ -494,7 +579,12 @@ export default function OnboardingScreen() {
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col items-center px-5 pt-10">
+      <div
+        className="flex-1 flex flex-col items-center px-5 pt-10 select-none relative"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{ touchAction: 'pan-y' }}
+      >
         {/* Progress dots clicáveis */}
         <div className="flex gap-1.5 mb-8">
           {slides.map((_, i) => (
@@ -513,9 +603,8 @@ export default function OnboardingScreen() {
           ))}
         </div>
 
-        {/* Hero carrossel — auto-rotação a cada 3s, centralizado verticalmente */}
-        <div className="flex-1 flex flex-col items-center justify-center text-center max-w-xs pb-4">
-          {/* key forçando re-mount → re-dispara animação fade-in em cada troca */}
+        {/* Hero carrossel — auto-rotação + swipe */}
+        <div className="flex-1 flex flex-col items-center justify-center text-center max-w-xs pb-4 w-full">
           <div key={step} className="flex flex-col items-center animate-fade-in">
             <div className="w-[68px] h-[68px] rounded-[20px] flex items-center justify-center mb-5 shadow-lg transition-all duration-500"
               style={{ background: slide.iconBg, boxShadow: `0 10px 24px -8px ${slide.iconBg}55` }}>
@@ -529,6 +618,22 @@ export default function OnboardingScreen() {
             </p>
           </div>
         </div>
+
+        {/* Setas de navegação — posicionadas nas bordas, fora do texto, centralizadas verticalmente */}
+        <button
+          onClick={goPrevSlide}
+          aria-label="Slide anterior"
+          className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.06)] hover:bg-white hover:border-slate-300 hover:text-blue-600 hover:scale-105 active:scale-95 transition-all duration-200"
+        >
+          <ChevronLeft size={18} strokeWidth={2.5} />
+        </button>
+        <button
+          onClick={goNextSlide}
+          aria-label="Próximo slide"
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.06)] hover:bg-white hover:border-slate-300 hover:text-blue-600 hover:scale-105 active:scale-95 transition-all duration-200"
+        >
+          <ChevronRight size={18} strokeWidth={2.5} />
+        </button>
       </div>
 
       {/* Buttons — sempre visíveis */}
