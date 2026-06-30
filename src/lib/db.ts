@@ -4,6 +4,7 @@ import type {
   User, Workplace, Shift, ShiftTemplate, RecurrenceRule, PaymentBatch, Report,
   MonthlyStats, WorkplaceStats, ShiftStatus
 } from '../types';
+import * as cloud from './cloudSync';
 
 const PREFIX = 'plantos_';
 
@@ -24,7 +25,9 @@ function set<T>(key: string, data: T[]): void {
 }
 
 function generateId(): string {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  // UUID v4 — compatível com as colunas uuid do Supabase (write-through).
+  try { return crypto.randomUUID(); }
+  catch { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 }
 
 // ============================================================
@@ -67,6 +70,37 @@ export function registerUser(data: Omit<User, 'id' | 'created_at'>): User {
   return user;
 }
 
+/**
+ * Garante que contas pré-provisionadas existam na base local (idempotente).
+ * Como o app roda em localStorage (sem backend ativo), contas "de fábrica"
+ * precisam ser semeadas para poderem fazer login em qualquer instalação.
+ * Só insere se o e-mail ainda não existir — nunca sobrescreve dados.
+ */
+const SEED_USERS: Array<Omit<User, 'id' | 'created_at'>> = [
+  {
+    name: 'AS Oliveira',
+    email: 'asoliveira20065@gmail.com',
+    password: 'Mh200306@',
+    specialty: '',
+    profile_type: 'plantonista',
+    subscription_plan: 'max',
+    onboarding_completed: true,
+  },
+];
+
+export function ensureSeededUsers(): void {
+  const users = getUsers();
+  let changed = false;
+  for (const seed of SEED_USERS) {
+    const exists = users.some(u => u.email.toLowerCase() === seed.email.toLowerCase());
+    if (!exists) {
+      users.push({ ...seed, id: generateId(), created_at: new Date().toISOString() });
+      changed = true;
+    }
+  }
+  if (changed) set('users', users);
+}
+
 export function loginUser(email: string, password?: string): User | null {
   const users = getUsers();
   const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
@@ -106,6 +140,7 @@ export function createWorkplace(data: Omit<Workplace, 'id' | 'created_at'>): Wor
   const wp: Workplace = { ...data, id: generateId(), created_at: new Date().toISOString() };
   wps.push(wp);
   set('workplaces', wps);
+  cloud.mirrorWorkplace(wp);
   return wp;
 }
 
@@ -115,13 +150,14 @@ export function updateWorkplace(id: string, data: Partial<Workplace>): Workplace
   if (idx < 0) throw new Error('Workplace not found');
   wps[idx] = { ...wps[idx], ...data };
   set('workplaces', wps);
+  cloud.mirrorWorkplace(wps[idx]);
   return wps[idx];
 }
 
 export function deleteWorkplace(id: string): void {
   const wps = get<Workplace>('workplaces');
   const idx = wps.findIndex(w => w.id === id);
-  if (idx >= 0) { wps[idx].active = false; set('workplaces', wps); }
+  if (idx >= 0) { wps[idx].active = false; set('workplaces', wps); cloud.mirrorDeleteWorkplace(id); }
 }
 
 // ============================================================
@@ -139,6 +175,7 @@ export function createShiftTemplate(data: Omit<ShiftTemplate, 'id'>): ShiftTempl
   const t: ShiftTemplate = { ...data, id: generateId() };
   templates.push(t);
   set('templates', templates);
+  cloud.mirrorTemplate(t);
   return t;
 }
 
@@ -148,12 +185,14 @@ export function updateShiftTemplate(id: string, data: Partial<ShiftTemplate>): S
   if (idx < 0) throw new Error('Template not found');
   templates[idx] = { ...templates[idx], ...data };
   set('templates', templates);
+  cloud.mirrorTemplate(templates[idx]);
   return templates[idx];
 }
 
 export function deleteShiftTemplate(id: string): void {
   const templates = get<ShiftTemplate>('templates').filter(t => t.id !== id);
   set('templates', templates);
+  cloud.mirrorDeleteTemplate(id);
 }
 
 // ============================================================
@@ -209,6 +248,7 @@ export function createShift(data: Omit<Shift, 'id' | 'created_at' | 'updated_at'
   const shift: Shift = { ...data, id: generateId(), created_at: now, updated_at: now };
   shifts.push(shift);
   set('shifts', shifts);
+  cloud.mirrorShift(shift);
   return shift;
 }
 
@@ -218,6 +258,7 @@ export function updateShift(id: string, data: Partial<Shift>): Shift {
   if (idx < 0) throw new Error('Shift not found');
   shifts[idx] = { ...shifts[idx], ...data, updated_at: new Date().toISOString() };
   set('shifts', shifts);
+  cloud.mirrorShift(shifts[idx]);
   return shifts[idx];
 }
 
@@ -225,8 +266,10 @@ export function deleteShift(id: string, deleteAll = false, recurrenceId?: string
   let shifts = get<Shift>('shifts');
   if (deleteAll && recurrenceId) {
     shifts = shifts.filter(s => s.recurrence_id !== recurrenceId);
+    cloud.mirrorDeleteShift({ recurrenceId });
   } else {
     shifts = shifts.filter(s => s.id !== id);
+    cloud.mirrorDeleteShift({ id });
   }
   set('shifts', shifts);
 }
@@ -349,6 +392,8 @@ export function createRecurrenceShifts(
   }
 
   set('shifts', existingShifts);
+  cloud.mirrorRecurrence(recRule);
+  cloud.mirrorShifts(createdShifts);
   return createdShifts;
 }
 

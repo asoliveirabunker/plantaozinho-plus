@@ -2,8 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { User, Workplace, Shift, ShiftTemplate } from '../types';
 import {
   getCurrentUser, getWorkplaces, getShifts, getShiftTemplates,
-  setCurrentUser, logout as dbLogout, seedDemoData
+  setCurrentUser, logout as dbLogout, seedDemoData, ensureSeededUsers
 } from '../lib/db';
+import { isSupabaseConfigured } from '../lib/supabase';
+import {
+  getSession, onAuthChange, getCurrentProfile, signOut as sbSignOut,
+  mapProfileToUser, updateMyProfile,
+} from '../lib/supabaseAuth';
+import { hydrateUserFromCloud } from '../lib/cloudSync';
 
 interface AppContextType {
   user: User | null;
@@ -35,12 +41,66 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const u = getCurrentUser();
-    if (u) {
-      setUser(u);
-      loadData(u);
+    // ---- Modo localStorage (Supabase não configurado) ----
+    if (!isSupabaseConfigured) {
+      ensureSeededUsers();
+      const u = getCurrentUser();
+      if (u) {
+        setUser(u);
+        loadData(u);
+      }
+      setIsLoading(false);
+      return;
     }
-    setIsLoading(false);
+
+    // ---- Modo Supabase ----
+    let active = true;
+
+    const applyAuthUser = async () => {
+      const profile = await getCurrentProfile();
+      if (!active) return;
+      if (profile) {
+        const u = mapProfileToUser(profile);
+        setCurrentUser(u); // espelha no localStorage p/ a camada de dados atual
+        // Hidrata o cache local com os dados da nuvem antes de renderizar a UI.
+        await hydrateUserFromCloud(u.id);
+        if (!active) return;
+        setUser(u);
+        loadData(u);
+      }
+    };
+
+    // Visitante (demo) vive só no localStorage, mesmo com Supabase ligado.
+    const keepGuestIfAny = () => {
+      const cur = getCurrentUser();
+      if (cur?.is_guest) { setUser(cur); loadData(cur); return true; }
+      return false;
+    };
+
+    (async () => {
+      const { session } = await getSession();
+      if (!active) return;
+      if (session?.user) {
+        await applyAuthUser();
+      } else if (!keepGuestIfAny()) {
+        setUser(null);
+      }
+      if (active) setIsLoading(false);
+    })();
+
+    const unsub = onAuthChange(async (userId) => {
+      if (!active) return;
+      if (userId) {
+        await applyAuthUser();
+      } else if (!keepGuestIfAny()) {
+        setUser(null);
+        setWorkplaces([]);
+        setShifts([]);
+        setTemplates([]);
+      }
+    });
+
+    return () => { active = false; unsub(); };
   }, [loadData]);
 
   const login = useCallback((u: User, withDemo = false) => {
@@ -56,12 +116,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [loadData]);
 
   const logout = useCallback(() => {
+    // Em modo Supabase, encerra a sessão real (o listener limpa o estado).
+    if (isSupabaseConfigured && user && !user.is_guest) {
+      sbSignOut().catch(e => console.error('[auth] signOut falhou', e));
+    }
     dbLogout();
     setUser(null);
     setWorkplaces([]);
     setShifts([]);
     setTemplates([]);
-  }, []);
+  }, [user]);
 
   const refresh = useCallback(() => {
     if (user) loadData(user);
@@ -81,8 +145,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = useCallback((updates: Partial<User>) => {
     if (!user) return;
     const updated = { ...user, ...updates };
-    setCurrentUser(updated);
+    setCurrentUser(updated); // atualização otimista (local)
     setUser(updated);
+    // Persiste no banco quando for usuário real do Supabase (visitante fica só local).
+    if (isSupabaseConfigured && !user.is_guest) {
+      updateMyProfile(updates).catch(e => console.error('[profile] update falhou', e));
+    }
   }, [user]);
 
   return (

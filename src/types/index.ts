@@ -3,7 +3,7 @@
 // ============================================================
 
 export type ProfileType = 'residente' | 'plantonista' | 'especialista' | 'anestesista' | 'cirurgiao' | 'intensivista' | 'urgencista' | 'outro';
-export type SubscriptionPlan = 'free' | 'pro' | 'premium';
+export type SubscriptionPlan = 'free' | 'pro' | 'max';
 
 export interface User {
   id: string;
@@ -22,6 +22,16 @@ export interface User {
   company_name?: string;
   cnpj?: string;
   crm?: string;
+  /** True quando o usuário entrou via "Entrar como visitante" (modo demo). */
+  is_guest?: boolean;
+  /** Timestamp (ms) de início da sessão do visitante — usado para expirar a sessão. */
+  guest_session_started_at?: number;
+}
+
+/** Identifica se um usuário é o visitante de demo (pelo flag ou pelo e-mail legado). */
+export function isGuestUser(user: Pick<User, 'is_guest' | 'email'> | null | undefined): boolean {
+  if (!user) return false;
+  return user.is_guest === true || user.email === 'visitante@plantaopro.app';
 }
 
 export type WorkplaceType = 'hospital' | 'clinica' | 'upa' | 'pronto_socorro' | 'maternidade' | 'home_care' | 'outro';
@@ -45,6 +55,27 @@ export interface Workplace {
   notes?: string;
   active: boolean;
   created_at: string;
+  /** Natureza fiscal padrão deste local (default aplicado aos plantões dele). */
+  fiscal_nature?: FiscalNature;
+}
+
+/**
+ * Resolve a natureza fiscal de um plantão na seguinte ordem:
+ *   1) campo explícito do plantão  2) padrão do local  3) deriva do método de pagamento do local.
+ */
+export function resolveFiscalNature(
+  shift: Pick<Shift, 'fiscal_nature'>,
+  workplace: Pick<Workplace, 'fiscal_nature' | 'payment_method'> | null | undefined,
+): FiscalNature {
+  if (shift.fiscal_nature) return shift.fiscal_nature;
+  if (workplace?.fiscal_nature) return workplace.fiscal_nature;
+  switch (workplace?.payment_method) {
+    case 'PJ': return 'PJ';
+    case 'RPA':
+    case 'PF':
+    case 'cooperativa': return 'AUTONOMO';
+    default: return 'AUTONOMO';
+  }
 }
 
 export type ShiftType = 'dia' | 'noite' | '24h' | 'sobreaviso' | 'sala_vermelha' | 'UTI' | 'anestesia' | 'cirurgia' | 'ambulatorio' | 'outro';
@@ -64,6 +95,14 @@ export interface ShiftTemplate {
 
 export type ShiftStatus = 'previsto' | 'realizado' | 'recebido' | 'atrasado' | 'cancelado';
 
+/** Forma de recebimento de um plantão — usada no relatório do contador (Plano Max). */
+export type FiscalNature = 'PJ' | 'AUTONOMO';
+
+export const FISCAL_NATURE_LABELS: Record<FiscalNature, string> = {
+  PJ: 'PJ',
+  AUTONOMO: 'Autônomo (RPA)',
+};
+
 export interface Shift {
   id: string;
   user_id: string;
@@ -81,6 +120,15 @@ export interface Shift {
   payment_received_date?: string;
   recurrence_id?: string;
   notes?: string;
+  // --- Campos fiscais (opcionais) — alimentam o relatório por regime (Max) ---
+  fiscal_nature?: FiscalNature;   // sobrepõe a natureza derivada do local
+  nf_number?: string;             // número da nota fiscal (PJ)
+  iss_retido?: number;            // PJ
+  pis?: number;                   // PJ
+  cofins?: number;                // PJ
+  inss_retido?: number;           // Autônomo (RPA)
+  irrf_retido?: number;           // Autônomo (RPA)
+  descontos?: number;             // (legado — não utilizado)
   created_at: string;
   updated_at: string;
 }

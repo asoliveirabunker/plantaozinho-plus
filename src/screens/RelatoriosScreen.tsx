@@ -4,12 +4,33 @@ import { getMonthlyStats } from '../lib/db';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  FileText, Download, Mail, Settings, ChevronLeft, ChevronDown, X, Loader2
+  FileText, Download, Mail, Settings, ChevronLeft, ChevronDown, X, Loader2, Crown, HelpCircle, BarChart2
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { useLanguage } from '../hooks/useLanguage';
+import { usePlan } from '../contexts/PlanContext';
+import { useGuest } from '../hooks/useGuest';
+import ScreenHelpSheet from '../components/ScreenHelpSheet';
+import { Layers } from 'lucide-react';
+import { resolveFiscalNature, FISCAL_NATURE_LABELS, type FiscalNature, type Shift } from '../types';
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+/** Como o relatório separa os ganhos. */
+type GroupBy = 'none' | 'forma' | 'local';
+const GROUP_LABELS: Record<GroupBy, string> = {
+  none: 'Consolidado',
+  forma: 'Forma de recebimento',
+  local: 'Por local',
+};
+const FORMA_ORDER: FiscalNature[] = ['PJ', 'AUTONOMO'];
+
+/** Deduções/retenções de um plantão conforme a forma de recebimento.
+ *  PJ → ISS + PIS + COFINS · Autônomo (RPA) → INSS + IRRF. Campos vazios contam 0. */
+function deducoesOfShift(s: Shift, forma: FiscalNature): number {
+  if (forma === 'PJ') return (s.iss_retido || 0) + (s.pis || 0) + (s.cofins || 0);
+  return (s.inss_retido || 0) + (s.irrf_retido || 0); // AUTONOMO
+}
 
 function WhatsAppIcon({ size = 16, className = '' }: { size?: number; className?: string }) {
   return (
@@ -24,15 +45,28 @@ type PreviewFormat = 'completo' | 'resumido' | 'pendentes';
 export default function RelatoriosScreen() {
   const { user, workplaces, shifts, updateProfile } = useApp();
   const { t } = useLanguage();
+  const { gate, can } = usePlan();
+  const { requireSignup, isGuest } = useGuest();
+
+  // O relatório fiscal unificado é exclusivo do plano Max — liberado no modo
+  // visitante (demonstração). Bloqueado para contas Free e Pro.
+  const canFiscalReport = can('mixed_fiscal_report') || isGuest;
+  function openReport() {
+    if (isGuest) { setShowPreview(true); return; }
+    gate('mixed_fiscal_report', () => setShowPreview(true));
+  }
   const [activeTab, setActiveTab] = useState<'mes' | 'ano'>('mes');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  
+
   // Modal & Preview state
   const [showPreview, setShowPreview] = useState(false);
   const [showFormatModal, setShowFormatModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [previewFormat, setPreviewFormat] = useState<PreviewFormat>('completo');
+  const [groupBy, setGroupBy] = useState<GroupBy>('forma');
 
   const [settingsData, setSettingsData] = useState({
     tax_regime: user?.tax_regime || 'Simples Nacional',
@@ -144,6 +178,51 @@ export default function RelatoriosScreen() {
     pendentes: 'Cobrança',
   };
 
+  // ---- Separação dos ganhos (Consolidado / Forma de recebimento / Local) ----
+  const wpById = useMemo(() => new Map(workplaces.map(w => [w.id, w])), [workplaces]);
+  const formaOf = useCallback((s: Shift) => resolveFiscalNature(s, wpById.get(s.workplace_id)), [wpById]);
+  const deducoesOf = useCallback((s: Shift) => deducoesOfShift(s, formaOf(s)), [formaOf]);
+
+  // Totais de deduções/retenções e líquido do mês (sobre o faturamento bruto)
+  const totalDeducoes = useMemo(() => monthShifts.reduce((a, s) => a + deducoesOf(s), 0), [monthShifts, deducoesOf]);
+  const totalLiquido = (stats?.expected || 0) - totalDeducoes;
+
+  // Resumo conforme a separação escolhida (sempre sobre o mês inteiro)
+  const groupSummary = useMemo(() => {
+    type Row = { key: string; label: string; count: number; bruto: number; received: number; deducoes: number; liquido: number };
+    const rows: Row[] = [];
+    const push = (key: string, label: string, sh: Shift[]) => {
+      if (!sh.length) return;
+      const bruto = sh.reduce((a, b) => a + b.expected_value, 0);
+      const deducoes = sh.reduce((a, b) => a + deducoesOf(b), 0);
+      const received = sh.filter(s => s.status === 'recebido').reduce((a, b) => a + (b.received_value || b.expected_value), 0);
+      rows.push({ key, label, count: sh.length, bruto, received, deducoes, liquido: bruto - deducoes });
+    };
+    if (groupBy === 'forma') {
+      FORMA_ORDER.forEach(n => push(n, FISCAL_NATURE_LABELS[n], monthShifts.filter(s => formaOf(s) === n)));
+    } else {
+      const byId = new Map<string, Shift[]>();
+      monthShifts.forEach(s => { const arr = byId.get(s.workplace_id) || []; arr.push(s); byId.set(s.workplace_id, arr); });
+      byId.forEach((sh, id) => { const wp = wpById.get(id); if (wp) push(id, wp.name, sh); });
+    }
+    return rows;
+  }, [groupBy, monthShifts, wpById, formaOf, deducoesOf]);
+
+  const groupSummaryTitle = groupBy === 'forma' ? 'Resumo por Forma de Recebimento' : 'Faturamento por Fonte Pagadora';
+
+  // Detalhe (extrato) agrupado conforme a separação
+  const detailGroups = useMemo(() => {
+    if (groupBy === 'none') return [{ key: 'all', label: '', shifts: shiftsToShow }];
+    if (groupBy === 'forma') {
+      return FORMA_ORDER
+        .map(n => ({ key: n as string, label: FISCAL_NATURE_LABELS[n], shifts: shiftsToShow.filter(s => formaOf(s) === n) }))
+        .filter(g => g.shifts.length > 0);
+    }
+    const map = new Map<string, Shift[]>();
+    shiftsToShow.forEach(s => { const arr = map.get(s.workplace_id) || []; arr.push(s); map.set(s.workplace_id, arr); });
+    return [...map.entries()].map(([id, sh]) => ({ key: id, label: wpById.get(id)?.name || 'Local', shifts: sh }));
+  }, [groupBy, shiftsToShow, formaOf, wpById]);
+
   const [pdfLoading, setPdfLoading] = useState(false);
 
   const statusLabel: Record<string, string> = {
@@ -244,18 +323,24 @@ export default function RelatoriosScreen() {
         pdf.setTextColor(15, 23, 42);
         pdf.text('2. RESUMO FINANCEIRO', ml, y);
         y += 5;
-        pdf.setFillColor(248, 250, 252);
-        pdf.setDrawColor(226, 232, 240);
-        pdf.roundedRect(ml, y, contentW, 28, 1.5, 1.5, 'FD');
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(9);
-        pdf.setTextColor(51, 65, 85);
         const sumLines: [string, string, boolean][] = [
           ['Faturamento Bruto (Competência):', fmtCur(stats?.expected || 0), true],
           ['Total Efetivamente Recebido (Caixa):', fmtCur(stats?.received || 0), false],
           ['Total Pendente / A Receber:', fmtCur(stats?.pending || 0), false],
-          [`${taxLabel}${!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}:`, fmtCur(taxAmount), true],
         ];
+        if (totalDeducoes > 0) {
+          sumLines.push(['Deduções / Retenções (ISS, INSS, IRRF...):', '- ' + fmtCur(totalDeducoes), false]);
+          sumLines.push(['Líquido após retenções:', fmtCur(totalLiquido), true]);
+        }
+        sumLines.push([`${taxLabel}${!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}:`, fmtCur(taxAmount), true]);
+        const boxH = sumLines.length * 5.5 + 3;
+        ensureSpace(boxH + 4);
+        pdf.setFillColor(248, 250, 252);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.roundedRect(ml, y, contentW, boxH, 1.5, 1.5, 'FD');
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(51, 65, 85);
         let sy = y + 5;
         sumLines.forEach(([k, v, bold]) => {
           pdf.setFont('helvetica', bold ? 'bold' : 'normal');
@@ -263,40 +348,48 @@ export default function RelatoriosScreen() {
           pdf.text(v, pageW - mr - 3, sy, { align: 'right' });
           sy += 5.5;
         });
-        y += 32;
+        y += boxH + 4;
       }
 
-      // 3. Faturamento por Fonte Pagadora
-      if (!isPendentes && Object.keys(wpBreakdown).length > 0) {
+      // 3. Resumo por separação (Forma de recebimento OU Fonte pagadora)
+      if (!isPendentes && groupSummary.length > 0) {
         ensureSpace(15);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(10);
         pdf.setTextColor(15, 23, 42);
-        pdf.text('3. FATURAMENTO POR FONTE PAGADORA', ml, y);
+        pdf.text(`3. ${groupSummaryTitle.toUpperCase()}`, ml, y);
         y += 5;
-        Object.entries(wpBreakdown).forEach(([wpId, data]) => {
-          const wp = workplaces.find(w => w.id === wpId);
-          if (!wp) return;
+        groupSummary.forEach(g => {
           ensureSpace(10);
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(9);
           pdf.setTextColor(30, 41, 59);
-          pdf.text(wp.name, ml + 2, y);
-          pdf.setFont('helvetica', 'normal');
-          pdf.setTextColor(100, 116, 139);
-          pdf.text(`(CNPJ: ${fmtCNPJ(wp.cnpj)})`, ml + 2 + pdf.getTextWidth(wp.name) + 2, y);
+          pdf.text(g.label, ml + 2, y);
+          if (groupBy !== 'forma') {
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(100, 116, 139);
+            pdf.text(`(CNPJ: ${fmtCNPJ(wpById.get(g.key)?.cnpj)})`, ml + 2 + pdf.getTextWidth(g.label) + 2, y);
+          }
           y += 4.5;
+          pdf.setFont('helvetica', 'normal');
           pdf.setTextColor(71, 85, 105);
-          pdf.text(`Composição: ${data.shifts} ${data.shifts !== 1 ? 'plantões' : 'plantão'}`, ml + 2, y);
+          pdf.text(`Composição: ${g.count} ${g.count !== 1 ? 'plantões' : 'plantão'}`, ml + 2, y);
           pdf.setFont('helvetica', 'bold');
           pdf.setTextColor(15, 23, 42);
-          pdf.text(fmtCur(data.total), pageW - mr - 2, y, { align: 'right' });
-          y += 6;
+          pdf.text(`Bruto ${fmtCur(g.bruto)}`, pageW - mr - 2, y, { align: 'right' });
+          y += 4.5;
+          if (g.deducoes > 0) {
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(71, 85, 105);
+            pdf.text(`Deduções - ${fmtCur(g.deducoes)} · Líquido ${fmtCur(g.liquido)}`, pageW - mr - 2, y, { align: 'right' });
+            y += 4.5;
+          }
+          y += 1.5;
         });
         y += 2;
       }
 
-      // 4. Tabela de Plantões
+      // 4. Tabela de Plantões (agrupada conforme a separação)
       if (!isResumido) {
         ensureSpace(20);
         pdf.setFont('helvetica', 'bold');
@@ -321,25 +414,45 @@ export default function RelatoriosScreen() {
         pdf.line(ml, y, pageW - mr, y);
         y += 4;
 
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(8);
-        shiftsToShow.forEach(s => {
-          ensureSpace(6);
-          const wp = workplaces.find(w => w.id === s.workplace_id);
-          const isPending = s.status !== 'recebido';
-          pdf.setTextColor(51, 65, 85);
-          pdf.text(format(new Date(s.date), 'dd/MM'), cols[0].x, y);
-          const wpName = (wp?.name || '').slice(0, 38);
-          pdf.text(wpName, cols[1].x, y);
-          if (isPending) pdf.setTextColor(220, 38, 38); else pdf.setTextColor(30, 41, 59);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(fmtCur(s.expected_value), cols[2].x, y, { align: 'right' });
+        detailGroups.forEach(group => {
+          if (groupBy !== 'none') {
+            ensureSpace(7);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(8.5);
+            pdf.setTextColor(37, 99, 235);
+            pdf.text(group.label, cols[0].x, y);
+            y += 4.5;
+          }
           pdf.setFont('helvetica', 'normal');
-          if (isPending) pdf.setTextColor(239, 68, 68); else pdf.setTextColor(5, 150, 105);
-          pdf.text(isPending ? 'Pendente' : 'Pago', cols[3].x, y, { align: 'right' });
-          y += 4.5;
-          pdf.setDrawColor(241, 245, 249);
-          pdf.line(ml, y - 1, pageW - mr, y - 1);
+          pdf.setFontSize(8);
+          group.shifts.forEach(s => {
+            ensureSpace(6);
+            const wp = workplaces.find(w => w.id === s.workplace_id);
+            const isPending = s.status !== 'recebido';
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(51, 65, 85);
+            pdf.text(format(new Date(s.date), 'dd/MM'), cols[0].x, y);
+            const wpName = (wp?.name || '').slice(0, 38);
+            pdf.text(wpName, cols[1].x, y);
+            if (isPending) pdf.setTextColor(220, 38, 38); else pdf.setTextColor(30, 41, 59);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(fmtCur(s.expected_value), cols[2].x, y, { align: 'right' });
+            pdf.setFont('helvetica', 'normal');
+            if (isPending) pdf.setTextColor(239, 68, 68); else pdf.setTextColor(5, 150, 105);
+            pdf.text(isPending ? 'Pendente' : 'Pago', cols[3].x, y, { align: 'right' });
+            y += 4.5;
+            pdf.setDrawColor(241, 245, 249);
+            pdf.line(ml, y - 1, pageW - mr, y - 1);
+          });
+          if (groupBy !== 'none') {
+            const sub = group.shifts.reduce((a, b) => a + b.expected_value, 0);
+            ensureSpace(6);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(8);
+            pdf.setTextColor(71, 85, 105);
+            pdf.text(`Subtotal ${group.label}: ${fmtCur(sub)}`, pageW - mr - 2, y, { align: 'right' });
+            y += 6;
+          }
         });
 
         if (shiftsToShow.length === 0) {
@@ -375,7 +488,7 @@ export default function RelatoriosScreen() {
     } finally {
       setPdfLoading(false);
     }
-  }, [pdfLoading, selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle]);
+  }, [pdfLoading, selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle, groupBy, groupSummary, groupSummaryTitle, detailGroups, wpById, totalDeducoes, totalLiquido]);
 
   const handleExportCSV = useCallback(() => {
     const lines: string[][] = [];
@@ -395,45 +508,62 @@ export default function RelatoriosScreen() {
     lines.push(sep);
 
     if (!isPendentes) {
+      const brl = (v: number) => v.toFixed(2).replace('.', ',');
       lines.push(['2. RESUMO FINANCEIRO']);
-      lines.push(['Faturamento Bruto', (stats?.expected || 0).toFixed(2).replace('.', ',')]);
-      lines.push(['Total Recebido', (stats?.received || 0).toFixed(2).replace('.', ',')]);
-      lines.push(['Total Pendente', (stats?.pending || 0).toFixed(2).replace('.', ',')]);
-      lines.push([`${taxLabel}${!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}`, taxAmount.toFixed(2).replace('.', ',')]);
+      lines.push(['Faturamento Bruto', brl(stats?.expected || 0)]);
+      lines.push(['Total Recebido', brl(stats?.received || 0)]);
+      lines.push(['Total Pendente', brl(stats?.pending || 0)]);
+      if (totalDeducoes > 0) {
+        lines.push(['Deduções / Retenções', brl(totalDeducoes)]);
+        lines.push(['Líquido após retenções', brl(totalLiquido)]);
+      }
+      lines.push([`${taxLabel}${!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}`, brl(taxAmount)]);
       lines.push(sep);
 
-      if (Object.keys(wpBreakdown).length > 0) {
-        lines.push(['3. FATURAMENTO POR FONTE PAGADORA']);
-        lines.push(['Local', 'CNPJ', 'Plantões', 'Valor Total (R$)']);
-        Object.entries(wpBreakdown).forEach(([wpId, data]) => {
-          const wp = workplaces.find(w => w.id === wpId);
-          if (!wp) return;
-          lines.push([wp.name, fmtCNPJ(wp.cnpj), String(data.shifts), data.total.toFixed(2).replace('.', ',')]);
-        });
+      if (groupSummary.length > 0) {
+        lines.push([`3. ${groupSummaryTitle.toUpperCase()}`]);
+        if (groupBy === 'forma') {
+          lines.push(['Forma de Recebimento', 'Plantões', 'Bruto (R$)', 'Deduções (R$)', 'Líquido (R$)', 'Recebido (R$)']);
+          groupSummary.forEach(g => lines.push([g.label, String(g.count), brl(g.bruto), brl(g.deducoes), brl(g.liquido), brl(g.received)]));
+        } else {
+          lines.push(['Local', 'CNPJ', 'Plantões', 'Bruto (R$)', 'Deduções (R$)', 'Líquido (R$)']);
+          groupSummary.forEach(g => lines.push([g.label, fmtCNPJ(wpById.get(g.key)?.cnpj), String(g.count), brl(g.bruto), brl(g.deducoes), brl(g.liquido)]));
+        }
         lines.push(sep);
       }
     }
 
+    const brl2 = (v: number) => v.toFixed(2).replace('.', ',');
     lines.push([isPendentes ? '2. PLANTÕES PENDENTES DE PAGAMENTO' : '4. EXTRATO DETALHADO DE PLANTÕES']);
-    lines.push(['Data', 'Local', 'CNPJ', 'Tipo', 'Início', 'Fim', 'Horas', 'Valor Esperado (R$)', 'Valor Recebido (R$)', 'Status']);
-    shiftsToShow.forEach(s => {
-      const wp = workplaces.find(w => w.id === s.workplace_id);
-      lines.push([
-        format(new Date(s.date), 'dd/MM/yyyy'),
-        wp?.name || '',
-        fmtCNPJ(wp?.cnpj),
-        s.type || '',
-        s.start_time || '',
-        s.end_time || '',
-        String(s.hours || ''),
-        s.expected_value.toFixed(2).replace('.', ','),
-        s.received_value != null ? Number(s.received_value).toFixed(2).replace('.', ',') : '',
-        statusLabel[s.status] || s.status,
-      ]);
+    lines.push(['Data', 'Local', 'CNPJ', 'Forma Recebimento', 'Horas', 'Bruto (R$)', 'Deduções (R$)', 'Líquido (R$)', 'Recebido (R$)', 'Status']);
+    detailGroups.forEach(group => {
+      if (groupBy !== 'none') lines.push([`— ${group.label} —`]);
+      group.shifts.forEach(s => {
+        const wp = workplaces.find(w => w.id === s.workplace_id);
+        const ded = deducoesOf(s);
+        lines.push([
+          format(new Date(s.date), 'dd/MM/yyyy'),
+          wp?.name || '',
+          fmtCNPJ(wp?.cnpj),
+          FISCAL_NATURE_LABELS[formaOf(s)],
+          String(s.duration_hours ?? ''),
+          brl2(s.expected_value),
+          brl2(ded),
+          brl2(s.expected_value - ded),
+          s.received_value != null ? brl2(Number(s.received_value)) : '',
+          statusLabel[s.status] || s.status,
+        ]);
+      });
+      if (groupBy !== 'none') {
+        const subBruto = group.shifts.reduce((a, b) => a + b.expected_value, 0);
+        const subDed = group.shifts.reduce((a, b) => a + deducoesOf(b), 0);
+        lines.push(['', '', '', `Subtotal ${group.label}`, '', brl2(subBruto), brl2(subDed), brl2(subBruto - subDed), '', '']);
+      }
     });
     const totalExpected = shiftsToShow.reduce((a, b) => a + b.expected_value, 0);
     const totalReceived = shiftsToShow.reduce((a, b) => a + (b.received_value || 0), 0);
-    lines.push(['', '', '', '', '', '', 'TOTAL', totalExpected.toFixed(2).replace('.', ','), totalReceived.toFixed(2).replace('.', ','), '']);
+    const totalDed = shiftsToShow.reduce((a, b) => a + deducoesOf(b), 0);
+    lines.push(['', '', '', 'TOTAL', '', brl2(totalExpected), brl2(totalDed), brl2(totalExpected - totalDed), brl2(totalReceived), '']);
 
     const bom = '﻿';
     const csv = bom + lines.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
@@ -446,7 +576,7 @@ export default function RelatoriosScreen() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel]);
+  }, [selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel, groupBy, groupSummary, groupSummaryTitle, detailGroups, wpById, formaOf, deducoesOf, totalDeducoes, totalLiquido]);
 
   return (
     <div className="page-content bg-white relative overflow-hidden h-full min-h-screen">
@@ -459,11 +589,18 @@ export default function RelatoriosScreen() {
             <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Relatórios')}</h1>
             <p className="text-[12px] text-slate-500 mt-0.5">{t('Exporte para o contador em segundos.')}</p>
           </div>
-          <button onClick={() => setShowSettingsModal(true)}
-            className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-95 shrink-0 ml-3"
-            title="Configurações">
-            <Settings size={16} />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0 ml-3">
+            <button onClick={() => setShowHelp(true)}
+              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-95"
+              title="Sobre esta tela">
+              <HelpCircle size={16} strokeWidth={2.5} />
+            </button>
+            <button onClick={() => setShowSettingsModal(true)}
+              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-95"
+              title="Configurações">
+              <Settings size={16} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -477,9 +614,10 @@ export default function RelatoriosScreen() {
             {t('Mês')}
           </button>
           <button
-            onClick={() => setActiveTab('ano')}
-            className={`flex-1 font-semibold text-sm py-2 rounded-lg transition-all ${activeTab === 'ano' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+            onClick={() => gate('annual_reports', () => setActiveTab('ano'))}
+            className={`flex-1 font-semibold text-sm py-2 rounded-lg transition-all flex items-center justify-center gap-1 ${activeTab === 'ano' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             {t('Ano')}
+            {!can('annual_reports') && <Crown size={11} className="text-amber-400" strokeWidth={2.5} />}
           </button>
         </div>
 
@@ -493,26 +631,25 @@ export default function RelatoriosScreen() {
                     <FileText size={12} />
                     Extrato Fiscal
                   </p>
-                  <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 relative cursor-pointer">
                     <h2 className="text-2xl font-bold capitalize">
                       {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
                     </h2>
-                    <select 
-                      value={`${year}-${month}`} 
+                    <ChevronDown size={18} className="text-blue-300" />
+                    {/* input type="month" → ativa o picker nativo do smartphone (iOS/Android) */}
+                    <input
+                      type="month"
+                      value={`${year}-${String(month).padStart(2, '0')}`}
+                      max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
                       onChange={e => {
+                        if (!e.target.value) return;
                         const [y, m] = e.target.value.split('-').map(Number);
-                        setSelectedMonth(new Date(y, m - 1, 1));
-                      }} 
-                      className="opacity-0 absolute w-32 h-8 cursor-pointer"
-                    >
-                      {Array.from({ length: 12 }, (_, i) => {
-                        const d = subMonths(new Date(), i);
-                        const val = `${d.getFullYear()}-${d.getMonth()+1}`;
-                        return <option key={val} value={val}>{format(d, 'MMM/yyyy', { locale: ptBR })}</option>;
-                      })}
-                    </select>
-                    <ChevronDown size={18} className="text-blue-300 pointer-events-none" />
-                  </div>
+                        if (!isNaN(y) && !isNaN(m)) setSelectedMonth(new Date(y, m - 1, 1));
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      aria-label="Selecionar mês de competência"
+                    />
+                  </label>
                 </div>
               </div>
 
@@ -575,26 +712,50 @@ export default function RelatoriosScreen() {
               </div>
             </div>
 
-            {/* Central de Exportação */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
+            {/* ====== RELATÓRIO PARA O CONTADOR (unificado · Max) ====== */}
+            <div className="mb-6">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">{t('Relatórios')}</h3>
               <button
-                onClick={() => setShowPreview(true)}
-                className="col-span-2 bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
-                <FileText size={16} className="text-blue-500" />
-                {t('Gerar PDF para Contador')}
+                onClick={openReport}
+                className="w-full text-left bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:border-violet-200 hover:shadow-[0_2px_12px_rgba(139,92,246,0.08)] transition active:scale-[0.99] flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #a855f7, #8b5cf6)' }}>
+                  <FileText size={20} className="text-white" strokeWidth={2.2} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="font-bold text-slate-900 text-sm">{t('Relatório para o contador')}</h4>
+                    {!canFiscalReport && (
+                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-500">
+                        <Crown size={10} strokeWidth={2.5} /> MAX
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11.5px] text-slate-500 leading-snug mt-0.5">
+                    {t('PDF e planilha do mês, com separação por forma de recebimento (PJ/Autônomo) ou local.')}
+                  </p>
+                </div>
+                <ChevronLeft size={16} className="text-slate-300 rotate-180 shrink-0" />
               </button>
-              <button
-                onClick={handleWhatsApp}
-                className="bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
-                <WhatsAppIcon size={16} className="text-emerald-500" />
-                WhatsApp
-              </button>
-              <button 
-                onClick={handleEmail}
-                className="bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
-                <Mail size={16} className="text-slate-500" />
-                E-mail
-              </button>
+            </div>
+
+            {/* ====== COMPARTILHAR ====== */}
+            <div className="mb-6">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">{t('Compartilhar')}</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => gate('whatsapp_accountant', () => requireSignup('Compartilhar via WhatsApp', handleWhatsApp))}
+                  className="bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
+                  <WhatsAppIcon size={16} className="text-emerald-500" />
+                  WhatsApp
+                  {!can('whatsapp_accountant') && <Crown size={12} className="text-amber-400" strokeWidth={2.5} />}
+                </button>
+                <button
+                  onClick={() => requireSignup('Enviar por e-mail', handleEmail)}
+                  className="bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
+                  <Mail size={16} className="text-slate-500" />
+                  E-mail
+                </button>
+              </div>
             </div>
 
             {/* Fontes Pagadoras (Hospitais) */}
@@ -640,11 +801,12 @@ export default function RelatoriosScreen() {
       {/* TELA DE PRÉ-VISUALIZAÇÃO (INTEGRADA E DESLIZANTE)         */}
       {/* ========================================================= */}
       <div
-        className="fixed inset-0 z-50 bg-[#0f172a] flex flex-col transform transition-transform duration-300 ease-in-out"
-        style={{ transform: showPreview ? 'translateX(0)' : 'translateX(100%)' }}
+        className="fixed inset-0 z-50 flex justify-center transform transition-transform duration-300 ease-in-out"
+        style={{ transform: showPreview ? 'translateX(0)' : 'translateX(100%)', background: 'var(--color-bg)' }}
       >
+       <div className="w-full max-w-[430px] h-full bg-slate-100 flex flex-col relative shadow-xl overflow-hidden">
         {/* Header do Preview */}
-        <header className="bg-white px-4 pt-12 pb-4 shadow-sm z-20 shrink-0 flex items-center gap-3 md:pt-6">
+        <header className="bg-white px-4 pt-7 pb-4 shadow-sm z-20 shrink-0 flex items-center gap-3">
           <button 
             onClick={() => setShowPreview(false)} 
             className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 transition active:scale-95"
@@ -659,8 +821,8 @@ export default function RelatoriosScreen() {
 
         {/* Barra de Filtros */}
         <div className="bg-white border-b border-slate-200 px-4 py-3 z-10 shrink-0 flex gap-3 overflow-x-auto hide-scrollbar">
-          <button 
-            onClick={() => setShowFormatModal(true)} 
+          <button
+            onClick={() => setShowFormatModal(true)}
             className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shrink-0 hover:bg-slate-100 transition active:scale-95"
           >
             <FileText size={16} className="text-emerald-600" />
@@ -670,12 +832,23 @@ export default function RelatoriosScreen() {
             </div>
             <ChevronDown size={14} className="text-slate-400 ml-1" />
           </button>
+          <button
+            onClick={() => setShowGroupModal(true)}
+            className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shrink-0 hover:bg-slate-100 transition active:scale-95"
+          >
+            <Layers size={16} className="text-violet-600" />
+            <div className="text-left">
+              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">Separar por</span>
+              <span className="block text-xs font-semibold text-slate-800 leading-none">{GROUP_LABELS[groupBy]}</span>
+            </div>
+            <ChevronDown size={14} className="text-slate-400 ml-1" />
+          </button>
         </div>
 
         {/* Área de Rolagem do Documento */}
         <main className="flex-1 overflow-y-auto bg-slate-100 hide-scrollbar">
           {/* Documento (Folha "A4") — sem flex-1 para acompanhar o tamanho real do conteúdo */}
-          <div className="bg-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] m-4 p-5 rounded-md text-[0.75rem] leading-[1.4] text-slate-700 md:max-w-[800px] md:mx-auto md:my-8 md:p-12 md:text-sm">
+          <div className="bg-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] m-4 p-5 rounded-md text-[0.75rem] leading-[1.4] text-slate-700">
             
             <div className="text-center mb-6">
               <h2 className="font-bold text-sm uppercase tracking-wider text-slate-900">{docTitle}</h2>
@@ -719,10 +892,22 @@ export default function RelatoriosScreen() {
                     <span className="text-slate-600">Total Efetivamente Recebido (Caixa):</span>
                     <span className="font-medium text-slate-700">{fmtCur(stats?.received || 0)}</span>
                   </div>
-                  <div className="flex justify-between mb-3">
+                  <div className="flex justify-between mb-1">
                     <span className="text-slate-600">Total Pendente / A Receber:</span>
                     <span className="font-medium text-slate-700">{fmtCur(stats?.pending || 0)}</span>
                   </div>
+                  {totalDeducoes > 0 && (
+                    <>
+                      <div className="flex justify-between mb-1">
+                        <span className="text-slate-600">Deduções / Retenções (ISS, INSS, IRRF…):</span>
+                        <span className="font-medium text-red-600">− {fmtCur(totalDeducoes)}</span>
+                      </div>
+                      <div className="flex justify-between mb-3">
+                        <span className="font-semibold">Líquido após retenções:</span>
+                        <span className="font-bold text-emerald-700">{fmtCur(totalLiquido)}</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between border-t border-slate-200 pt-2 text-[11px]">
                     <span className="italic text-slate-600">{taxLabel}{!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}:</span>
                     <span className="font-bold text-slate-900">{fmtCur(taxAmount)}</span>
@@ -731,27 +916,34 @@ export default function RelatoriosScreen() {
               </div>
             )}
 
-            {/* 3. Relação por Hospital (oculto se Extrato de Cobrança) */}
-            {!isPendentes && (
+            {/* 3. Resumo conforme a separação (oculto se Extrato de Cobrança) */}
+            {!isPendentes && groupSummary.length > 0 && (
               <div className="mb-5 transition-all">
-                <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">3. Faturamento por Fonte Pagadora</h3>
-                {Object.entries(wpBreakdown).map(([wpId, data]) => {
-                  const wp = workplaces.find(w => w.id === wpId);
-                  if (!wp) return null;
-                  return (
-                    <div key={wpId} className="mb-3 pl-2">
-                      <p className="font-bold text-slate-800">{wp.name} <span className="font-normal text-slate-500">(CNPJ: {wp.cnpj || 'Não informado'})</span></p>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Composição: {data.shifts} {data.shifts !== 1 ? 'plantões' : 'plantão'}</span>
-                        <span className="font-semibold">{fmtCur(data.total)}</span>
-                      </div>
+                <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">3. {groupSummaryTitle}</h3>
+                {groupSummary.map(g => (
+                  <div key={g.key} className="mb-3 pl-2">
+                    <p className="font-bold text-slate-800">
+                      {g.label}
+                      {groupBy !== 'forma' && (
+                        <span className="font-normal text-slate-500"> (CNPJ: {wpById.get(g.key)?.cnpj || 'Não informado'})</span>
+                      )}
+                    </p>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Composição: {g.count} {g.count !== 1 ? 'plantões' : 'plantão'}</span>
+                      <span className="font-semibold">{fmtCur(g.bruto)}</span>
                     </div>
-                  );
-                })}
+                    {g.deducoes > 0 && (
+                      <div className="flex justify-between text-[11px] text-slate-500">
+                        <span>Deduções − {fmtCur(g.deducoes)}</span>
+                        <span className="font-semibold text-emerald-700">Líquido {fmtCur(g.liquido)}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* 4. Tabela de Plantões (oculta se Resumido) */}
+            {/* 4. Tabela de Plantões (agrupada conforme a separação; oculta se Resumido) */}
             {!isResumido && (
               <div className="mb-2 transition-all duration-300">
                 <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">
@@ -768,28 +960,47 @@ export default function RelatoriosScreen() {
                       </tr>
                     </thead>
                     <tbody>
-                      {shiftsToShow.map(s => {
-                        const wp = workplaces.find(w => w.id === s.workplace_id);
-                        const isPending = s.status !== 'recebido';
-                        return (
-                          <tr key={s.id} className={`border-b border-slate-100 ${isPendentes || isPending ? 'bg-red-50/20' : ''}`}>
-                            <td className="py-1.5 pl-1">{format(new Date(s.date), 'dd/MM')}</td>
-                            <td className="py-1.5 truncate max-w-[100px] text-slate-700">{wp?.name}</td>
-                            <td className={`py-1.5 text-right font-medium ${isPending ? 'text-red-600' : 'text-slate-800'}`}>
-                              {fmtCur(s.expected_value)}
-                            </td>
-                            <td className={`py-1.5 text-right pr-1 font-medium ${isPending ? 'text-red-500' : 'text-emerald-600'}`}>
-                              {isPending ? 'Pendente' : 'Pago'}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {detailGroups.map(group => (
+                        <React.Fragment key={group.key}>
+                          {groupBy !== 'none' && (
+                            <tr>
+                              <td colSpan={4} className="pt-3 pb-1 font-bold text-[11px] uppercase tracking-wide text-violet-700">{group.label}</td>
+                            </tr>
+                          )}
+                          {group.shifts.map(s => {
+                            const wp = workplaces.find(w => w.id === s.workplace_id);
+                            const isPending = s.status !== 'recebido';
+                            return (
+                              <tr key={s.id} className={`border-b border-slate-100 ${isPendentes || isPending ? 'bg-red-50/20' : ''}`}>
+                                <td className="py-1.5 pl-1">{format(new Date(s.date), 'dd/MM')}</td>
+                                <td className="py-1.5 truncate max-w-[100px] text-slate-700">{wp?.name}</td>
+                                <td className="py-1.5 text-right">
+                                  <span className={`font-medium ${isPending ? 'text-red-600' : 'text-slate-800'}`}>{fmtCur(s.expected_value)}</span>
+                                  {deducoesOf(s) > 0 && (
+                                    <span className="block text-[9px] text-slate-400 leading-none mt-0.5">líq {fmtCur(s.expected_value - deducoesOf(s))}</span>
+                                  )}
+                                </td>
+                                <td className={`py-1.5 text-right pr-1 font-medium ${isPending ? 'text-red-500' : 'text-emerald-600'}`}>
+                                  {isPending ? 'Pendente' : 'Pago'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {groupBy !== 'none' && (
+                            <tr>
+                              <td colSpan={2} className="py-1 text-right text-slate-500 text-[11px]">Subtotal {group.label}</td>
+                              <td className="py-1 text-right font-semibold text-[11px] text-slate-700">{fmtCur(group.shifts.reduce((a, b) => a + b.expected_value, 0))}</td>
+                              <td></td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
                       {shiftsToShow.length === 0 && (
                         <tr>
                           <td colSpan={4} className="py-4 text-center text-slate-400">Nenhum plantão encontrado.</td>
                         </tr>
                       )}
-                      
+
                       {/* Linha final / Total */}
                       <tr className="bg-slate-50">
                         <td colSpan={2} className="py-2 font-bold text-right border-t border-slate-200">TOTAL:</td>
@@ -818,7 +1029,7 @@ export default function RelatoriosScreen() {
           >
             <div className="flex gap-3">
               <button
-                onClick={handleDownloadPDF}
+                onClick={() => requireSignup('Baixar PDF', handleDownloadPDF)}
                 disabled={pdfLoading}
                 className="flex-1 bg-blue-600 text-white font-semibold py-3.5 rounded-xl shadow-sm hover:bg-blue-700 transition active:scale-95 flex justify-center items-center gap-2 text-sm disabled:opacity-60"
               >
@@ -826,7 +1037,7 @@ export default function RelatoriosScreen() {
                 {pdfLoading ? t('Gerando...') : t('Baixar PDF')}
               </button>
               <button
-                onClick={handleExportCSV}
+                onClick={() => requireSignup('Exportar CSV', handleExportCSV)}
                 className="flex-1 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
               >
                 <FileText size={18} className="text-emerald-500" />
@@ -842,6 +1053,7 @@ export default function RelatoriosScreen() {
             </button>
           </div>
         </main>
+       </div>
       </div>
 
       {/* ========================================================= */}
@@ -914,6 +1126,53 @@ export default function RelatoriosScreen() {
                   </div>
                 </div>
               </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: SEPARAR OS GANHOS POR                                */}
+      {/* ========================================================= */}
+      {showGroupModal && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-start justify-center p-4 pt-[15vh] transition-opacity">
+          <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-slate-900">Separar os ganhos</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Como o relatório agrupa os plantões</p>
+              </div>
+              <button
+                onClick={() => setShowGroupModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-500 hover:bg-slate-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {([
+                { key: 'forma' as GroupBy, title: 'Por forma de recebimento', desc: 'Separa por PJ e Autônomo (RPA) — ideal quando o regime varia por local.' },
+                { key: 'local' as GroupBy, title: 'Por local', desc: 'Agrupa os plantões por hospital / fonte pagadora.' },
+                { key: 'none' as GroupBy, title: 'Consolidado', desc: 'Lista única, sem separação.' },
+              ]).map(opt => (
+                <label key={opt.key} className="flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="groupby"
+                      value={opt.key}
+                      checked={groupBy === opt.key}
+                      onChange={() => { setGroupBy(opt.key); setShowGroupModal(false); }}
+                      className="w-4 h-4 text-violet-600 focus:ring-violet-500 border-gray-300"
+                    />
+                    <div>
+                      <span className="block text-sm font-bold text-slate-700">{opt.title}</span>
+                      <span className="block text-xs text-slate-500">{opt.desc}</span>
+                    </div>
+                  </div>
+                </label>
+              ))}
             </div>
           </div>
         </div>
@@ -1095,9 +1354,14 @@ export default function RelatoriosScreen() {
             </div>
 
             <div className="p-5 space-y-2">
-              {/* WhatsApp */}
+              {/* WhatsApp — envio ao contador é recurso Max */}
               <button
-                onClick={() => { handleWhatsApp(); setShowShareModal(false); }}
+                onClick={() => {
+                  if (!gate('whatsapp_accountant')) { setShowShareModal(false); return; }
+                  if (!requireSignup('Compartilhar via WhatsApp', () => { handleWhatsApp(); setShowShareModal(false); })) {
+                    setShowShareModal(false);
+                  }
+                }}
                 disabled={!user?.whatsapp}
                 className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-[0.98] text-left disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1115,7 +1379,11 @@ export default function RelatoriosScreen() {
 
               {/* E-mail */}
               <button
-                onClick={() => { handleEmail(); setShowShareModal(false); }}
+                onClick={() => {
+                  if (!requireSignup('Enviar por e-mail', () => { handleEmail(); setShowShareModal(false); })) {
+                    setShowShareModal(false);
+                  }
+                }}
                 disabled={!user?.email}
                 className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-[0.98] text-left disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1138,6 +1406,23 @@ export default function RelatoriosScreen() {
           </div>
         </div>
       )}
+
+      {/* DRILLDOWN: SOBRE A TELA RELATÓRIOS */}
+      <ScreenHelpSheet
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
+        icon={<BarChart2 size={20} className="text-blue-600" />}
+        pretitle="Relatórios"
+        title="O que tem aqui"
+        items={[
+          { title: 'Extrato fiscal', desc: 'Resumo do faturamento bruto, pagos e pendentes do mês.' },
+          { title: 'Previsão tributária', desc: 'Estimativa do imposto conforme seu regime (MEI, Simples, PF...).' },
+          { title: 'Gerar PDF e CSV', desc: 'Documento pronto para enviar ao seu contador em segundos.' },
+          { title: 'Compartilhar', desc: 'Envie o relatório por WhatsApp ou e-mail direto do app.' },
+        ]}
+        proPitch="No Max você gera o relatório completo para o contador, com PDF e planilha e separação por forma de recebimento."
+        proFeature="mixed_fiscal_report"
+      />
 
     </div>
   );

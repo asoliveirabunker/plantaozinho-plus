@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { ArrowLeft, Check, User as UserIcon, Briefcase, LogOut, Calculator, Languages } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Check, User as UserIcon, Briefcase, LogOut, Calculator, Languages, UploadCloud, Loader2 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { PROFILE_TYPE_LABELS, type ProfileType } from '../types';
+import { PROFILE_TYPE_LABELS, type ProfileType, isGuestUser } from '../types';
 import { useLanguage, type Language } from '../hooks/useLanguage';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { countLegacyLocalData, importLegacyLocalToCloud } from '../lib/cloudSync';
 
 /** Bandeira do Brasil — SVG inline */
 function FlagBR({ size = 20 }: { size?: number }) {
@@ -34,8 +36,37 @@ interface ProfileScreenProps {
 }
 
 export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) {
-  const { user, updateProfile, logout } = useApp();
+  const { user, updateProfile, logout, refresh } = useApp();
   const { language, setLanguage, t } = useLanguage();
+
+  // --- Importação de dados locais para a nuvem (Supabase) ---
+  const cloudEligible = isSupabaseConfigured && !!user && !isGuestUser(user);
+  const [legacyCount, setLegacyCount] = useState(0);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
+
+  useEffect(() => {
+    if (cloudEligible && user) setLegacyCount(countLegacyLocalData(user.id));
+  }, [cloudEligible, user]);
+
+  async function handleImportLocal() {
+    if (!user || importing) return;
+    setImporting(true);
+    setImportMsg('');
+    try {
+      const r = await importLegacyLocalToCloud(user.id);
+      const total = r.workplaces + r.templates + r.shifts;
+      setImportMsg(total > 0
+        ? `Importado: ${r.workplaces} locais, ${r.shifts} plantões, ${r.templates} modelos.`
+        : 'Nenhum dado local para importar.');
+      setLegacyCount(countLegacyLocalData(user.id));
+      refresh();
+    } catch (e) {
+      setImportMsg('Falha ao importar: ' + ((e as Error).message || 'erro desconhecido'));
+    } finally {
+      setImporting(false);
+    }
+  }
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [specialty, setSpecialty] = useState(user?.specialty || '');
@@ -109,7 +140,7 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
           <div className="min-w-0">
             <p className="text-[18px] font-bold text-slate-900 truncate leading-tight">{user?.name || 'Usuário'}</p>
             <p className="text-[12px] text-slate-500 truncate">{user?.email || '—'}</p>
-            <p className="text-[11px] text-blue-600 font-semibold mt-0.5 uppercase tracking-wider">{user?.subscription_plan === 'free' ? t('Plano Free') : user?.subscription_plan === 'pro' ? t('Plano Pro') : t('Premium')}</p>
+            <p className="text-[11px] text-blue-600 font-semibold mt-0.5 uppercase tracking-wider">{user?.subscription_plan === 'free' ? t('Plano Free') : user?.subscription_plan === 'pro' ? t('Plano Pro') : t('Plano Max')}</p>
           </div>
         </div>
 
@@ -252,6 +283,36 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
           {error && (
             <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
               {error}
+            </div>
+          )}
+
+          {/* Sincronização com a nuvem (Supabase) */}
+          {cloudEligible && (
+            <div className="mt-2 bg-white border border-slate-100 rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
+                  <UploadCloud size={16} className="text-violet-600" strokeWidth={2.2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-slate-900 leading-tight">{t('Dados na nuvem')}</p>
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    {legacyCount > 0
+                      ? `${legacyCount} ${legacyCount === 1 ? 'registro local' : 'registros locais'} ainda não enviados.`
+                      : 'Seus dados estão sincronizados com a nuvem.'}
+                  </p>
+                </div>
+              </div>
+              {legacyCount > 0 && (
+                <button
+                  onClick={handleImportLocal}
+                  disabled={importing}
+                  className="w-full mt-2 py-2.5 rounded-xl bg-violet-600 text-white text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-violet-700 transition active:scale-[0.98] disabled:opacity-60"
+                >
+                  {importing ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} strokeWidth={2.5} />}
+                  {importing ? t('Importando...') : t('Importar dados locais para a nuvem')}
+                </button>
+              )}
+              {importMsg && <p className="text-[11px] text-slate-500 mt-2 text-center">{importMsg}</p>}
             </div>
           )}
 

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, LogOut, ChevronRight, DollarSign, Calendar as CalendarIcon, Pencil, Sun, Moon } from 'lucide-react';
+import { Bell, AlertCircle, Clock, Plus, RefreshCw, List, Check, X, LogOut, ChevronRight, DollarSign, Calendar as CalendarIcon, Pencil, Sun, Moon, HelpCircle, Home } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { getMonthlyStats, getWorkplace, markShiftReceived, createShift, updateShift } from '../lib/db';
 import { format, parseISO, addDays, differenceInDays } from 'date-fns';
@@ -7,6 +7,7 @@ import { ptBR } from 'date-fns/locale';
 import { useTheme } from '../hooks/useTheme';
 import { useLanguage } from '../hooks/useLanguage';
 import ProfileScreen from './ProfileScreen';
+import ScreenHelpSheet from '../components/ScreenHelpSheet';
 import type { Shift } from '../types';
 
 interface TodayScreenProps {
@@ -100,6 +101,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
   const [showOverdueSheet, setShowOverdueSheet] = useState(false);
   const [showPendingSheet, setShowPendingSheet] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
   useEffect(() => {
@@ -229,6 +231,13 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
               </p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0 ml-3">
+              <button
+                onClick={() => setShowHelp(true)}
+                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-95"
+                title="Sobre esta tela"
+              >
+                <HelpCircle size={16} strokeWidth={2.5} />
+              </button>
               <button
                 onClick={toggleTheme}
                 className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95"
@@ -754,6 +763,23 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
           onSaved={() => showToast('Perfil atualizado com sucesso!')}
         />
       )}
+
+      {/* DRILLDOWN: SOBRE A TELA HOJE */}
+      <ScreenHelpSheet
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
+        icon={<Home size={20} className="text-blue-600" />}
+        pretitle="Hoje"
+        title="O que tem aqui"
+        items={[
+          { title: 'Próximo plantão', desc: 'Veja seu plantão mais próximo com horário e valor em destaque.' },
+          { title: 'Resumo do mês', desc: 'Acompanhe previsto, recebido, a receber e atrasado num relance.' },
+          { title: 'Alertas de pagamento', desc: 'Toque para ver plantões a receber e pagamentos atrasados.' },
+          { title: 'Atalhos rápidos', desc: 'Adicione, repita, marque como pago ou abra a agenda em 1 toque.' },
+        ]}
+        proPitch="No Pro você desbloqueia gráficos de evolução, metas, alertas de atraso e relatórios fiscais completos."
+        proFeature="charts"
+      />
 
       {/* Toast Notification */}
       <div className={`absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2.5 rounded-full shadow-lg text-xs font-medium flex items-center gap-2 z-[60] pointer-events-none whitespace-nowrap transition-all duration-300 ${toastMsg ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>

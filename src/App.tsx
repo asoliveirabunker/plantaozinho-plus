@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { LanguageProvider } from './hooks/useLanguage';
+import { PlanProvider } from './contexts/PlanContext';
+import { GuestProvider } from './hooks/useGuest';
 import OnboardingScreen from './screens/OnboardingScreen';
 import TodayScreen from './screens/TodayScreen';
 import CalendarScreen from './screens/CalendarScreen';
@@ -9,6 +11,9 @@ import LocaisScreen from './screens/LocaisScreen';
 import RelatoriosScreen from './screens/RelatoriosScreen';
 import BottomNav from './components/BottomNav';
 import AddShiftModal from './components/AddShiftModal';
+import UpgradeModal from './components/UpgradeModal';
+import GuestBanner from './components/GuestBanner';
+import GuestSignupPrompt from './components/GuestSignupPrompt';
 
 type Tab = 'hoje' | 'calendario' | 'ganhos' | 'locais' | 'relatorios';
 
@@ -64,6 +69,8 @@ function AppContent() {
 
   return (
     <div className="app-container">
+      {/* Banner persistente durante sessão de visitante */}
+      <GuestBanner />
       {/* Tab content with directional animation */}
       <div className={animClass} key={activeTab} style={{ minHeight: '100%' }}>
         {activeTab === 'hoje' && (
@@ -94,6 +101,11 @@ function AppContent() {
           initialDate={addShiftDate}
         />
       )}
+
+      {/* Upgrade Modal — disparado por qualquer gate de plano */}
+      <UpgradeModal />
+      {/* Guest Signup Prompt — bloqueia exports/compartilhamento no modo visitante */}
+      <GuestSignupPrompt />
     </div>
   );
 }
@@ -102,7 +114,11 @@ export default function App() {
   return (
     <LanguageProvider>
       <AppProvider>
-        <AppContent />
+        <GuestProvider>
+          <PlanProvider>
+            <AppContent />
+          </PlanProvider>
+        </GuestProvider>
       </AppProvider>
     </LanguageProvider>
   );

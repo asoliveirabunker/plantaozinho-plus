@@ -1,11 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Check, RefreshCw, Zap, SlidersHorizontal, Repeat2, Clock, Calendar } from 'lucide-react';
+import { X, Check, RefreshCw, Zap, SlidersHorizontal, Repeat2, Clock, Calendar, Crown } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { createShift, createRecurrenceShifts } from '../lib/db';
-import type { ShiftStatus, RecurrenceFrequency } from '../types';
-import { STATUS_LABELS } from '../types';
+import type { ShiftStatus, RecurrenceFrequency, FiscalNature } from '../types';
+import { STATUS_LABELS, FISCAL_NATURE_LABELS, resolveFiscalNature } from '../types';
 import { format, addDays, addMonths } from 'date-fns';
 import { useLanguage } from '../hooks/useLanguage';
+import { usePlan } from '../contexts/PlanContext';
+import { useGuest } from '../hooks/useGuest';
 
 interface AddShiftModalProps {
   onClose: () => void;
@@ -51,8 +53,12 @@ function calcDuration(start: string, end: string) {
 }
 
 export default function AddShiftModal({ onClose, initialDate }: AddShiftModalProps) {
-  const { user, workplaces, templates, refreshShifts } = useApp();
+  const { user, workplaces, templates, refreshShifts, shifts } = useApp();
   const { t } = useLanguage();
+  const { limits, gate, requireUpgrade, can } = usePlan();
+  const { isGuest } = useGuest();
+  const canRecurrence = can('recurrence');
+  const showFiscal = can('mixed_fiscal_report') || isGuest;
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const [mode, setMode] = useState<Mode>('quick');
@@ -67,6 +73,8 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
   const [notes, setNotes] = useState('');
   const [paymentDueDate, setPaymentDueDate] = useState('');
   const [title, setTitle] = useState('');
+
+  const [fiscalNature, setFiscalNature] = useState<FiscalNature>('PJ');
 
   const [recOption, setRecOption] = useState<RecOption>('none');
   const [recWeekdays, setRecWeekdays] = useState<number[]>([]);
@@ -103,6 +111,12 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
       setPaymentDueDate(format(due, 'yyyy-MM-dd'));
     }
   }, [selectedWp, workplaceId]);
+
+  // Natureza fiscal padrão = regime do local selecionado (pode ser ajustada manualmente)
+  useEffect(() => {
+    if (selectedWp) setFiscalNature(resolveFiscalNature({ fiscal_nature: undefined }, selectedWp));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workplaceId]);
 
   useEffect(() => {
     if (recOption === 'none' || !date) { setPreview(null); return; }
@@ -163,11 +177,25 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
       status,
       payment_due_date: payDue,
       notes,
+      ...(showFiscal ? { fiscal_nature: fiscalNature } : {}),
     };
   }
 
   async function handleSave() {
     if (!validate() || !user) return;
+
+    // Gate de limite mensal (Free = 10 plantões/mês)
+    if (limits.maxShiftsPerMonth !== null) {
+      const monthPrefix = date.slice(0, 7); // 'YYYY-MM' do plantão sendo criado
+      const countThisMonth = shifts.filter(
+        s => s.date.startsWith(monthPrefix) && s.status !== 'cancelado'
+      ).length;
+      if (countThisMonth >= limits.maxShiftsPerMonth) {
+        requireUpgrade('unlimited_shifts');
+        return;
+      }
+    }
+
     setSaving(true);
     const shiftData = buildShiftData();
     const wp = workplaces.find(w => w.id === workplaceId);
@@ -209,21 +237,16 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm flex items-end justify-center"
+      className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-[430px] rounded-t-[28px] shadow-2xl animate-slide-up flex flex-col"
-        style={{ maxHeight: '92vh' }}
+        className="bg-white w-full max-w-[400px] rounded-[24px] shadow-2xl animate-scale-in flex flex-col"
+        style={{ maxHeight: '86vh' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
-        </div>
-
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-1 pb-3 shrink-0">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
           <h2 className="font-bold text-[17px] text-slate-900">{t('Adicionar Plantão')}</h2>
           <button
             onClick={onClose}
@@ -244,8 +267,12 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
               return (
                 <button
                   key={m}
-                  onClick={() => setMode(m)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[10px] text-xs font-semibold transition-all"
+                  onClick={() => {
+                    // Recorrência é recurso Pro — gate antes de trocar de aba
+                    if (m === 'recurrence') { gate('recurrence', () => setMode(m)); return; }
+                    setMode(m);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[10px] text-xs font-semibold transition-all relative"
                   style={{
                     background: active ? 'white' : 'transparent',
                     color: active ? c : '#9ca3af',
@@ -254,6 +281,9 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
                 >
                   <Icon size={13} />
                   {label}
+                  {m === 'recurrence' && !canRecurrence && (
+                    <Crown size={9} className="text-amber-400 absolute top-1 right-1.5" strokeWidth={2.5} />
+                  )}
                 </button>
               );
             })}
@@ -416,6 +446,34 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
             </div>
             {errors.value && <p className="text-red-500 text-[11px] mt-1">{errors.value}</p>}
           </div>
+
+          {/* Regime fiscal — alimenta o Relatório por Regime Fiscal (Max) */}
+          {showFiscal && (
+            <div className="mb-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Forma de recebimento')}</p>
+              <div className="flex gap-1.5">
+                {(['PJ', 'AUTONOMO'] as FiscalNature[]).map(nat => {
+                  const active = fiscalNature === nat;
+                  return (
+                    <button
+                      key={nat}
+                      type="button"
+                      onClick={() => setFiscalNature(nat)}
+                      className="flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95"
+                      style={{
+                        background: active ? tabColor : '#f9fafb',
+                        color: active ? 'white' : '#64748b',
+                        border: active ? `1.5px solid ${tabColor}` : '1.5px solid #f0f0f0',
+                      }}
+                    >
+                      {FISCAL_NATURE_LABELS[nat]}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1.5 px-1">{t('Padrão herdado do local. Detalhe impostos depois ao editar o plantão.')}</p>
+            </div>
+          )}
 
           {/* MANUAL: extra fields */}
           {mode === 'manual' && (

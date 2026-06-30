@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, X, Check, Building2, MapPin, ChevronRight, Pencil } from 'lucide-react';
+import { Plus, Trash2, X, Check, Building2, MapPin, ChevronRight, Pencil, HelpCircle, Zap, Sparkles } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { createWorkplace, deleteWorkplace, createShiftTemplate, deleteShiftTemplate, getShiftTemplates, updateWorkplace, updateShiftTemplate } from '../lib/db';
-import type { Workplace, WorkplaceType, PaymentMethod, ShiftType, ShiftTemplate } from '../types';
-import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS } from '../types';
+import type { Workplace, WorkplaceType, PaymentMethod, ShiftType, ShiftTemplate, FiscalNature } from '../types';
+import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS, FISCAL_NATURE_LABELS } from '../types';
 import { format } from 'date-fns';
 import { useLanguage } from '../hooks/useLanguage';
+import { usePlan } from '../contexts/PlanContext';
+import { PLAN_META } from '../lib/plans';
 
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
@@ -13,6 +15,17 @@ function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency
 export default function LocaisScreen() {
   const { user, workplaces, shifts, refreshWorkplaces, refreshShifts } = useApp();
   const { t } = useLanguage();
+  const { limits, requireUpgrade, plan } = usePlan();
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Porteiro de criação de local: respeita o limite do plano (Free = 1).
+  function handleNewWorkplace() {
+    if (limits.maxWorkplaces !== null && workplaces.length >= limits.maxWorkplaces) {
+      requireUpgrade('unlimited_workplaces');
+      return;
+    }
+    setView('new');
+  }
   const [view, setView] = useState<'list' | 'detail' | 'new' | 'newTemplate'>('list');
   const [selectedWp, setSelectedWp] = useState<Workplace | null>(null);
   const [editWpSheet, setEditWpSheet] = useState<Workplace | null>(null);
@@ -24,6 +37,7 @@ export default function LocaisScreen() {
     name: '', type: 'hospital' as WorkplaceType, color: WORKPLACE_COLORS[0],
     default_shift_value: '', default_duration_hours: '12',
     payment_day: '10', payment_method: 'PJ' as PaymentMethod,
+    fiscal_nature: 'PJ' as FiscalNature,
     contact_name: '', contact_phone: '', cnpj: '', address: '',
   });
 
@@ -52,6 +66,7 @@ export default function LocaisScreen() {
       default_duration_hours: parseFloat(form.default_duration_hours) || 12,
       payment_day: parseInt(form.payment_day) || 10,
       payment_method: form.payment_method,
+      fiscal_nature: form.fiscal_nature,
       contact_name: form.contact_name,
       contact_phone: form.contact_phone,
       cnpj: form.cnpj,
@@ -60,7 +75,7 @@ export default function LocaisScreen() {
     });
     refreshWorkplaces();
     setView('list');
-    setForm({ name:'', type:'hospital', color:WORKPLACE_COLORS[0], default_shift_value:'', default_duration_hours:'12', payment_day:'10', payment_method:'PJ', contact_name:'', contact_phone:'', cnpj:'', address:'' });
+    setForm({ name:'', type:'hospital', color:WORKPLACE_COLORS[0], default_shift_value:'', default_duration_hours:'12', payment_day:'10', payment_method:'PJ', fiscal_nature:'PJ', contact_name:'', contact_phone:'', cnpj:'', address:'' });
   }
 
   function handleDeleteWp(id: string) {
@@ -314,6 +329,14 @@ export default function LocaisScreen() {
                   {(['PJ','PF','RPA','cooperativa','outro'] as PaymentMethod[]).map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
+              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
+                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Recebimento</span>
+                <select value={form.fiscal_nature}
+                  onChange={e => setForm(f => ({ ...f, fiscal_nature: e.target.value as FiscalNature }))}
+                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none">
+                  {(['PJ','AUTONOMO'] as FiscalNature[]).map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
+                </select>
+              </div>
               <div className="flex items-center gap-3 px-3 py-2.5">
                 <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">CNPJ/CPF</span>
                 <input value={form.cnpj}
@@ -524,11 +547,18 @@ export default function LocaisScreen() {
             <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Locais de Plantão')}</h1>
             <p className="text-[12px] text-slate-500 mt-0.5">{workplaces.length} {workplaces.length !== 1 ? t('locais cadastrados') : t('local cadastrado')}.</p>
           </div>
-          <button onClick={() => setView('new')}
-            className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shrink-0 ml-3"
-            title="Novo local">
-            <Plus size={16} strokeWidth={2.5} />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0 ml-3">
+            <button onClick={() => setShowHelp(true)}
+              className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-all active:scale-95"
+              title="Como usar">
+              <HelpCircle size={16} strokeWidth={2.5} />
+            </button>
+            <button onClick={handleNewWorkplace}
+              className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95"
+              title="Novo local">
+              <Plus size={16} strokeWidth={2.5} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -540,8 +570,8 @@ export default function LocaisScreen() {
             </div>
             <p className="font-semibold text-slate-900 text-sm mb-1">{t('Nenhum local cadastrado')}</p>
             <p className="text-slate-500 text-[12px] mb-3 px-6">{t('Adicione hospitais, UPAs e clínicas onde você faz plantões.')}</p>
-            <button onClick={() => setView('new')} className="bg-blue-600 text-white text-[12px] font-bold px-4 py-2 rounded-lg active:scale-95 transition">
-              Adicionar primeiro local
+            <button onClick={handleNewWorkplace} className="bg-blue-600 text-white text-[12px] font-bold px-4 py-2 rounded-lg active:scale-95 transition">
+              {t('Adicionar primeiro local')}
             </button>
           </div>
         ) : (
@@ -598,6 +628,85 @@ export default function LocaisScreen() {
           })
         )}
       </div>
+
+      {/* ============================================================ */}
+      {/* DRILLDOWN: COMO USAR + UPSELL PRO                            */}
+      {/* ============================================================ */}
+      {showHelp && (
+        <div className="bottom-sheet-overlay" onClick={() => setShowHelp(false)}>
+          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+            <div className="sheet-handle" />
+
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
+                  <Building2 size={20} className="text-blue-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Locais de Plantão</p>
+                  <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Como usar</h3>
+                </div>
+              </div>
+              <button onClick={() => setShowHelp(false)}
+                className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Passos de uso */}
+            <div className="space-y-2.5 mb-4">
+              {[
+                { n: '1', title: 'Cadastre seu local', desc: 'Hospital, UPA ou clínica — com cor, valor padrão e dia de pagamento.' },
+                { n: '2', title: 'Crie modelos de plantão', desc: 'Salve horários e valores recorrentes para lançar plantões em 1 toque.' },
+                { n: '3', title: 'Acompanhe por local', desc: 'Veja quantos plantões e quanto faturou em cada lugar no mês.' },
+              ].map(step => (
+                <div key={step.n} className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 text-[11px] font-bold">
+                    {step.n}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-slate-900 leading-tight">{step.title}</p>
+                    <p className="text-[12px] text-slate-500 leading-snug mt-0.5">{step.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Aviso explícito: Pro permite múltiplos locais */}
+            {plan === 'free' && (
+              <div className="rounded-2xl p-4 mb-3" style={{ background: PLAN_META.pro.gradient }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                    <Zap size={15} className="text-white" strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/80 leading-none mb-0.5">Plano Pro</p>
+                    <p className="text-[15px] font-black text-white leading-none">Mais de um local</p>
+                  </div>
+                </div>
+                <p className="text-[12.5px] text-white/90 leading-snug mb-3">
+                  No plano <strong>Free</strong> você cadastra <strong>1 local</strong>. Com o <strong>Pro</strong>, cadastre
+                  hospitais, UPAs e clínicas <strong>ilimitados</strong> e gerencie toda a sua escala em um só lugar.
+                </p>
+                <button
+                  onClick={() => { setShowHelp(false); requireUpgrade('unlimited_workplaces'); }}
+                  className="w-full py-2.5 rounded-xl bg-white text-[13px] font-bold transition active:scale-[0.98] flex items-center justify-center gap-1.5"
+                  style={{ color: PLAN_META.pro.color }}
+                >
+                  <Sparkles size={14} strokeWidth={2.5} />
+                  Conhecer o Plano Pro
+                </button>
+              </div>
+            )}
+
+            <button onClick={() => setShowHelp(false)}
+              className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -617,6 +726,7 @@ function EditWorkplaceSheet({ workplace, onClose, onSaved }: {
   const [defaultDuration, setDefaultDuration] = useState(String(workplace.default_duration_hours));
   const [paymentDay, setPaymentDay] = useState(String(workplace.payment_day));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(workplace.payment_method);
+  const [fiscalNature, setFiscalNature] = useState<FiscalNature>(workplace.fiscal_nature || 'PJ');
   const [cnpj, setCnpj] = useState(workplace.cnpj || '');
   const [address, setAddress] = useState(workplace.address || '');
   const [contactName, setContactName] = useState(workplace.contact_name || '');
@@ -641,6 +751,7 @@ function EditWorkplaceSheet({ workplace, onClose, onSaved }: {
       default_duration_hours: dh,
       payment_day: pd,
       payment_method: paymentMethod,
+      fiscal_nature: fiscalNature,
       cnpj: cnpj || undefined,
       address: address || undefined,
       contact_name: contactName || undefined,
@@ -742,6 +853,13 @@ function EditWorkplaceSheet({ workplace, onClose, onSaved }: {
                   {(['PJ', 'PF', 'RPA', 'cooperativa', 'outro'] as PaymentMethod[]).map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
+            </div>
+            <div className="mt-2">
+              <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Forma de recebimento (relatório do contador)</p>
+              <select value={fiscalNature} onChange={e => setFiscalNature(e.target.value as FiscalNature)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
+                {(['PJ', 'AUTONOMO'] as FiscalNature[]).map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
+              </select>
             </div>
             <input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="CNPJ/CPF (opcional)"
               className="w-full mt-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />

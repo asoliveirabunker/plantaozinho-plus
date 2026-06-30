@@ -8,7 +8,9 @@
       "PowerShell(Test-Path \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\"; Test-Path \"C:\\\\Program Files \\(x86\\)\\\\GitHub CLI\\\\gh.exe\"; Test-Path \"$env:LOCALAPPDATA\\\\Programs\\\\GitHub CLI\\\\gh.exe\"; Test-Path \"$env:USERPROFILE\\\\scoop\\\\shims\\\\gh.exe\")",
       "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" auth login --hostname github.com --git-protocol https --web 2>&1)",
       "mcp__Claude_in_Chrome__tabs_context_mcp",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(awk 'NR>=375 && NR<=440' src/screens/GanhosScreen.tsx)",
+      "Bash(grep -n \"proFeature=\\\\\"fiscal_report\\\\\"\\\\|/>$\" src/screens/RelatoriosScreen.tsx)"
     ]
   }
 }

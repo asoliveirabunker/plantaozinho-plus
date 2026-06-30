@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Edit3, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Edit3, Check, HelpCircle, CalendarDays } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { getWorkplace, updateShift, deleteShift, createShift } from '../lib/db';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
@@ -8,6 +8,8 @@ import type { Shift } from '../types';
 import { STATUS_LABELS } from '../types';
 import EditShiftSheet from '../components/EditShiftSheet';
 import { useLanguage } from '../hooks/useLanguage';
+import ScreenHelpSheet from '../components/ScreenHelpSheet';
+import GoogleCalendarSync from '../components/GoogleCalendarSync';
 
 /** Abbreviate workplace names: "Hospital São Paulo" → "H.São Paulo" */
 function abbreviateWorkplace(name: string): string {
@@ -44,6 +46,8 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
   const [sheetShift, setSheetShift] = useState<Shift | null>(null);
   const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
   const [panelMode, setPanelMode] = useState<'day' | 'month'>('day');
+  const [showHelp, setShowHelp] = useState(false);
+  const [showGoogleSync, setShowGoogleSync] = useState(false);
   const [panelHighlight, setPanelHighlight] = useState(false);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -268,11 +272,18 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
             <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Calendário')}</h1>
             <p className="text-[12px] text-slate-500 mt-0.5">{t('Toque em um dia para ver os plantões.')}</p>
           </div>
-          <button onClick={() => onAddShift(selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined)}
-            className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shrink-0 ml-3"
-            title="Novo plantão">
-            <Plus size={16} strokeWidth={2.5} />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0 ml-3">
+            <button onClick={() => setShowHelp(true)}
+              className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-all active:scale-95"
+              title="Sobre esta tela">
+              <HelpCircle size={16} strokeWidth={2.5} />
+            </button>
+            <button onClick={() => onAddShift(selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined)}
+              className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95"
+              title="Novo plantão">
+              <Plus size={16} strokeWidth={2.5} />
+            </button>
+          </div>
         </div>
 
         {/* Filter — multi-select, flex wrap */}
@@ -290,6 +301,20 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
             />
           ))}
         </div>
+
+        {/* Conectar Google Agendas */}
+        <button
+          onClick={() => setShowGoogleSync(true)}
+          className="w-full mt-2.5 flex items-center justify-center gap-2 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-[12px] font-semibold hover:bg-slate-100 transition active:scale-[0.99]"
+        >
+          <svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/>
+            <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/>
+            <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34A21.99 21.99 0 0 0 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"/>
+            <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
+          </svg>
+          Conectar Google Agendas
+        </button>
       </div>
 
       {/* Month navigation */}
@@ -502,6 +527,31 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
           onSaved={() => { refreshShifts(); setSheetShift(null); }}
           onDelete={() => handleDelete(sheetShift.id)}
           onDuplicate={() => handleDuplicate(sheetShift)}
+        />
+      )}
+
+      {/* DRILLDOWN: SOBRE A TELA CALENDÁRIO */}
+      <ScreenHelpSheet
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
+        icon={<CalendarDays size={20} className="text-blue-600" />}
+        pretitle="Calendário"
+        title="O que tem aqui"
+        items={[
+          { title: 'Visão Dia e Mês', desc: 'Alterne entre ver os plantões de um dia ou de todo o mês.' },
+          { title: 'Navegação rápida', desc: 'Deslize para os lados ou use as setas para trocar de mês.' },
+          { title: 'Filtro por local', desc: 'Toque nos chips para ver só os plantões de locais específicos.' },
+          { title: 'Editar plantão', desc: 'Toque em um plantão para ajustar data, valor, status e mais.' },
+        ]}
+        proPitch="No Pro você cria escalas recorrentes (12x36, 24x72), cadastra locais ilimitados e nunca mais lança plantão a plantão."
+        proFeature="recurrence"
+      />
+
+      {/* Integração Google Agendas */}
+      {showGoogleSync && (
+        <GoogleCalendarSync
+          onClose={() => setShowGoogleSync(false)}
+          onImported={() => refreshShifts()}
         />
       )}
     </div>

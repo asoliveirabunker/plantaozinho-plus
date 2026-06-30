@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { X, Check, Copy, Trash2, Clock, DollarSign, CalendarDays, FileText, AlertCircle } from 'lucide-react';
+import { X, Check, Copy, Trash2, Clock, DollarSign, CalendarDays, FileText, AlertCircle, Layers } from 'lucide-react';
 import { getWorkplace, updateShift } from '../lib/db';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { Shift, ShiftStatus } from '../types';
-import { STATUS_LABELS } from '../types';
+import type { Shift, ShiftStatus, FiscalNature } from '../types';
+import { STATUS_LABELS, FISCAL_NATURE_LABELS, resolveFiscalNature } from '../types';
 import { useLanguage } from '../hooks/useLanguage';
+import { usePlan } from '../contexts/PlanContext';
+import { useGuest } from '../hooks/useGuest';
 
 function formatCurrency(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -47,6 +49,8 @@ interface EditShiftSheetProps {
 export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDuplicate }: EditShiftSheetProps) {
   const wp = getWorkplace(shift.workplace_id);
   const { t } = useLanguage();
+  const { can } = usePlan();
+  const { isGuest } = useGuest();
 
   const [status, setStatus] = useState<ShiftStatus>(shift.status);
   const [date, setDate] = useState(shift.date);
@@ -59,6 +63,17 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
   const [notes, setNotes] = useState(shift.notes || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
+
+  // --- Campos fiscais (recurso Max) ---
+  const showFiscal = can('mixed_fiscal_report') || isGuest;
+  const [fiscalNature, setFiscalNature] = useState<FiscalNature>(resolveFiscalNature(shift, wp));
+  const [nfNumber, setNfNumber] = useState(shift.nf_number || '');
+  const numToStr = (v?: number) => (v != null ? String(v) : '');
+  const [issRetido, setIssRetido] = useState(numToStr(shift.iss_retido));
+  const [pis, setPis] = useState(numToStr(shift.pis));
+  const [cofins, setCofins] = useState(numToStr(shift.cofins));
+  const [inssRetido, setInssRetido] = useState(numToStr(shift.inss_retido));
+  const [irrfRetido, setIrrfRetido] = useState(numToStr(shift.irrf_retido));
 
   const isReceivedFlow = status === 'recebido';
 
@@ -96,6 +111,7 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
     const durationHours = (new Date(endIso).getTime() - new Date(startIso).getTime()) / (1000 * 60 * 60);
 
     const receivedNum = receivedValue.trim() ? parseFloat(receivedValue.replace(',', '.')) : undefined;
+    const num = (s: string) => { const n = parseFloat(s.replace(',', '.')); return isNaN(n) ? undefined : n; };
 
     updateShift(shift.id, {
       date,
@@ -108,6 +124,16 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
       payment_received_date: paymentReceived ? new Date(paymentReceived + 'T12:00:00').toISOString() : undefined,
       status,
       notes: notes.trim() || undefined,
+      // Fiscal (só persiste se o recurso estiver disponível)
+      ...(showFiscal ? {
+        fiscal_nature: fiscalNature,
+        nf_number: nfNumber.trim() || undefined,
+        iss_retido: num(issRetido),
+        pis: num(pis),
+        cofins: num(cofins),
+        inss_retido: num(inssRetido),
+        irrf_retido: num(irrfRetido),
+      } : {}),
     });
     onSaved();
   }
@@ -236,6 +262,54 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
               </div>
             </div>
           </div>
+
+          {/* Fiscal (recurso Max) — alimenta o Relatório por Regime Fiscal */}
+          {showFiscal && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                <Layers size={11} strokeWidth={2.5} /> {t('Forma de recebimento')}
+              </label>
+              {/* forma de recebimento */}
+              <div className="flex gap-1.5 mb-2">
+                {(['PJ', 'AUTONOMO'] as FiscalNature[]).map(nat => (
+                  <button key={nat} type="button" onClick={() => setFiscalNature(nat)}
+                    className={`flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95 ${
+                      fiscalNature === nat ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}>
+                    {FISCAL_NATURE_LABELS[nat]}
+                  </button>
+                ))}
+              </div>
+              {/* campos por natureza */}
+              {fiscalNature === 'PJ' && (
+                <div className="space-y-2">
+                  <input value={nfNumber} onChange={e => setNfNumber(e.target.value)} placeholder="Nº da Nota Fiscal"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+                  <div className="grid grid-cols-3 gap-2">
+                    {([['ISS', issRetido, setIssRetido], ['PIS', pis, setPis], ['COFINS', cofins, setCofins]] as const).map(([label, val, set]) => (
+                      <div key={label}>
+                        <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{label} (R$)</p>
+                        <input type="text" inputMode="decimal" value={val} onChange={e => set(e.target.value.replace(/[^0-9.,]/g, ''))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {fiscalNature === 'AUTONOMO' && (
+                <div className="grid grid-cols-2 gap-2">
+                  {([['INSS retido', inssRetido, setInssRetido], ['IRRF', irrfRetido, setIrrfRetido]] as const).map(([label, val, set]) => (
+                    <div key={label}>
+                      <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{label} (R$)</p>
+                      <input type="text" inputMode="decimal" value={val} onChange={e => set(e.target.value.replace(/[^0-9.,]/g, ''))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-slate-400 mt-1.5 ml-0.5">Usado no Relatório por Forma de Recebimento. Deixe em branco para considerar zero.</p>
+            </div>
+          )}
 
           {/* Observações */}
           <div>

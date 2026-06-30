@@ -10,7 +10,10 @@ import {
   ChevronLeft, Calendar as CalendarIcon, DollarSign, MapPin, CalendarRange, Edit3
 } from 'lucide-react';
 import EditShiftSheet from '../components/EditShiftSheet';
+import ScreenHelpSheet from '../components/ScreenHelpSheet';
 import { useLanguage } from '../hooks/useLanguage';
+import { usePlan } from '../contexts/PlanContext';
+import { Lock, Crown, HelpCircle } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -18,6 +21,21 @@ import {
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function fmtShortCur(v: number) { return 'R$ ' + (v / 1000).toFixed(1).replace('.0', '') + 'k'; }
+
+/** Overlay de bloqueio Pro — desfoca o conteúdo e mostra CTA de upgrade. */
+function ProLockOverlay({ label, onUnlock }: { label: string; onUnlock: () => void }) {
+  return (
+    <button
+      onClick={onUnlock}
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/60 backdrop-blur-[3px] transition active:scale-[0.99]"
+    >
+      <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/30">
+        <Lock size={15} strokeWidth={2.5} />
+      </div>
+      <span className="text-[11px] font-bold text-slate-700">{label}</span>
+    </button>
+  );
+}
 
 function CompactTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -37,6 +55,9 @@ function CompactTooltip({ active, payload, label }: any) {
 export default function GanhosScreen() {
   const { user, workplaces, shifts, refreshShifts } = useApp();
   const { t } = useLanguage();
+  const { can, gate } = usePlan();
+  const canCharts = can('charts');
+  const canGoals = can('goals');
   
   // States
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -49,7 +70,8 @@ export default function GanhosScreen() {
   const [receiveModal, setReceiveModal] = useState<Shift | null>(null);
   const [receiveValue, setReceiveValue] = useState('');
   const [editSheetShift, setEditSheetShift] = useState<Shift | null>(null);
-  
+  const [showHelp, setShowHelp] = useState(false);
+
   // Goals
   const [monthGoal, setMonthGoal] = useState<number | null>(25000); // Exemplo default
   const [editGoal, setEditGoal] = useState(false);
@@ -168,15 +190,24 @@ export default function GanhosScreen() {
             </button>
             <p className="text-[12px] text-slate-500 mt-0.5">{isCurrentMonth ? t('Mês atual em curso.') : t('Período histórico selecionado.')}</p>
           </div>
-          {!isCurrentMonth && (
+          <div className="flex items-center gap-1.5 shrink-0 ml-3">
+            {!isCurrentMonth && (
+              <button
+                onClick={() => setSelectedMonth(new Date())}
+                className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95"
+                title="Voltar para hoje"
+              >
+                <CalendarIcon size={15} strokeWidth={2.5} />
+              </button>
+            )}
             <button
-              onClick={() => setSelectedMonth(new Date())}
-              className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shrink-0 ml-3"
-              title="Voltar para hoje"
+              onClick={() => setShowHelp(true)}
+              className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-all active:scale-95"
+              title="Sobre esta tela"
             >
-              <CalendarIcon size={15} strokeWidth={2.5} />
+              <HelpCircle size={16} strokeWidth={2.5} />
             </button>
-          )}
+          </div>
         </div>
       </header>
 
@@ -184,14 +215,20 @@ export default function GanhosScreen() {
       <div className="px-5 mt-2.5 mb-1">
         <div className="flex bg-slate-200/50 rounded-xl p-0.5">
           {(['visao', 'lista'] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className="flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-all shadow-sm"
+            <button key={tab}
+              onClick={() => {
+                // Extrato (detalhamento + atrasos) é recurso Pro
+                if (tab === 'lista') { gate('overdue_alerts', () => setActiveTab(tab)); return; }
+                setActiveTab(tab);
+              }}
+              className="flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-all shadow-sm flex items-center justify-center gap-1"
               style={{
                 background: activeTab === tab ? 'white' : 'transparent',
                 color: activeTab === tab ? '#0f172a' : '#64748b',
                 boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
               }}>
               {tab === 'visao' ? t('Painel') : t('Extrato')}
+              {tab === 'lista' && !can('overdue_alerts') && <Crown size={10} className="text-amber-400" strokeWidth={2.5} />}
             </button>
           ))}
         </div>
@@ -255,9 +292,16 @@ export default function GanhosScreen() {
             <div className="px-5 mt-2 mb-4 flex flex-col gap-2">
 
               {/* Gráfico */}
-              <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
+              <div className="relative bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold text-slate-800 text-[13px]">{t('Evolução de Ganhos')}</h3>
+                  <h3 className="font-semibold text-slate-800 text-[13px] flex items-center gap-1.5">
+                    {t('Evolução de ganhos')}
+                    {!canCharts && (
+                      <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-500">
+                        <Crown size={11} strokeWidth={2.5} /> Pro
+                      </span>
+                    )}
+                  </h3>
                   <div className="flex bg-slate-100 p-0.5 rounded-lg gap-0.5">
                     {([
                       { key: '3m',  label: '3m' },
@@ -290,6 +334,7 @@ export default function GanhosScreen() {
                     WebkitTapHighlightColor: 'transparent',
                   }}
                 >
+                  {!canCharts && <ProLockOverlay label={t('Recurso Pro')} onUnlock={() => gate('charts')} />}
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -325,16 +370,31 @@ export default function GanhosScreen() {
 
               {/* Meta Mensal — card inteiro clicável (drill-down) */}
               <button
-                onClick={() => { setGoalInput(monthGoal?.toString() || ''); setEditGoal(true); }}
-                className="w-full text-left bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100 active:scale-[0.99] transition-all hover:border-blue-100 hover:shadow-[0_2px_12px_rgba(24,119,242,0.07)] group"
+                onClick={() => {
+                  if (!gate('goals')) return;
+                  setGoalInput(monthGoal?.toString() || ''); setEditGoal(true);
+                }}
+                className="relative w-full text-left bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100 active:scale-[0.99] transition-all hover:border-blue-100 hover:shadow-[0_2px_12px_rgba(24,119,242,0.07)] group overflow-hidden"
               >
                 <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold text-slate-800 text-[13px]">{t('Meta do Mês')}</h3>
-                  <span className="text-[11px] text-slate-400 group-hover:text-blue-500 transition flex items-center gap-1">
-                    {t('Toque para editar')}
-                    <ChevronRight size={11} strokeWidth={2.5} />
-                  </span>
+                  <h3 className="font-semibold text-slate-800 text-[13px] flex items-center gap-1.5">
+                    {t('Meta do mês')}
+                    {!canGoals && (
+                      <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-500">
+                        <Crown size={11} strokeWidth={2.5} /> Pro
+                      </span>
+                    )}
+                  </h3>
+                  {canGoals && (
+                    <span className="text-[11px] text-slate-400 group-hover:text-blue-500 transition flex items-center gap-1">
+                      {t('Toque para editar')}
+                      <ChevronRight size={11} strokeWidth={2.5} />
+                    </span>
+                  )}
                 </div>
+                <div className="relative">
+                {!canGoals && <ProLockOverlay label={t('Recurso Pro')} onUnlock={() => gate('goals')} />}
+                <div className={!canGoals ? 'blur-[3px] pointer-events-none select-none' : ''}>
 
                 {monthGoal ? (() => {
                   const received = stats?.received || 0;
@@ -377,15 +437,17 @@ export default function GanhosScreen() {
                   );
                 })() : (
                   <div className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-[12px] font-medium text-center">
-                    Toque para definir uma meta financeira
+                    {t('Toque para definir uma meta financeira')}
                   </div>
                 )}
+                </div>
+                </div>
               </button>
 
               {/* Rentabilidade por Local (compacto) */}
               {workplaceBreakdown.length > 0 && (
                 <div className="bg-white rounded-2xl p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100">
-                  <h3 className="font-semibold text-slate-800 text-[13px] mb-2">{t('Rentabilidade por Local')}</h3>
+                  <h3 className="font-semibold text-slate-800 text-[13px] mb-2">{t('Rentabilidade por local')}</h3>
                   <div className="flex items-center gap-3">
                     <div className="h-24 w-24 shrink-0 relative">
                       <PieChart width={96} height={96} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
@@ -908,7 +970,7 @@ export default function GanhosScreen() {
       {editGoal && (
         <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setEditGoal(false)}>
           <div className="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-slate-900 text-lg mb-1">Meta do Mês</h3>
+            <h3 className="font-bold text-slate-900 text-lg mb-1">{t('Meta do mês')}</h3>
             <p className="text-slate-500 text-xs mb-4">Defina quanto deseja faturar neste mês.</p>
             <input 
               type="number" 
@@ -973,6 +1035,23 @@ export default function GanhosScreen() {
           onDelete={() => handleDeleteShift(editSheetShift.id)}
         />
       )}
+
+      {/* DRILLDOWN: SOBRE A TELA GANHOS */}
+      <ScreenHelpSheet
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
+        icon={<DollarSign size={20} className="text-blue-600" />}
+        pretitle="Ganhos"
+        title="O que tem aqui"
+        items={[
+          { title: 'Painel financeiro', desc: 'Veja realizado, a receber e atrasado do mês selecionado.' },
+          { title: 'Extrato detalhado', desc: 'Liste plantão a plantão por status, com filtros de local e período.' },
+          { title: 'Evolução e meta', desc: 'Acompanhe o gráfico de ganhos e defina sua meta mensal.' },
+          { title: 'Rentabilidade por local', desc: 'Descubra quais locais mais contribuem para o seu faturamento.' },
+        ]}
+        proPitch="No Pro você desbloqueia o gráfico de evolução, metas financeiras e os alertas de pagamentos atrasados."
+        proFeature="charts"
+      />
 
     </div>
   );

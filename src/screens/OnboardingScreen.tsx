@@ -6,6 +6,8 @@ import type { ProfileType } from '../types';
 import { PROFILE_TYPE_LABELS } from '../types';
 import { registerUser, loginUser, getUsers } from '../lib/db';
 import { useApp } from '../contexts/AppContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { signUp as sbSignUp, signIn as sbSignIn } from '../lib/supabaseAuth';
 
 /** Bandeira BR mini para o seletor de idioma */
 function MiniFlagBR() {
@@ -97,6 +99,8 @@ export default function OnboardingScreen() {
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [signupMsg, setSignupMsg] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
 
   // Password strength
   const passwordChecks = useMemo(() =>
@@ -189,6 +193,40 @@ export default function OnboardingScreen() {
       }
     } else {
       if (!validateStep2()) return;
+
+      // ---- Modo Supabase: cadastro real (o AppContext detecta a sessão e entra) ----
+      if (isSupabaseConfigured) {
+        if (authBusy) return;
+        setSignupMsg(null);
+        setAuthBusy(true);
+        sbSignUp({
+          email: email.trim().toLowerCase(),
+          password,
+          name: name.trim(),
+          specialty,
+          profile_type: profile,
+          whatsapp,
+          goals,
+          crm: crm.trim() || undefined,
+        }).then(({ data, error }) => {
+          if (error) {
+            const msg = /already registered|already exists/i.test(error.message)
+              ? 'Este e-mail já tem conta. Volte e faça login.'
+              : error.message;
+            setSignupMsg({ type: 'error', text: msg });
+            return;
+          }
+          if (!data.session) {
+            // Sem Auto Confirm: precisa confirmar o e-mail antes de logar.
+            setSignupMsg({ type: 'info', text: 'Conta criada! Enviamos um e-mail de confirmação — confirme para acessar.' });
+          }
+          // Com sessão, o listener do AppContext carrega o usuário automaticamente.
+        }).catch((e) => setSignupMsg({ type: 'error', text: (e as Error).message }))
+          .finally(() => setAuthBusy(false));
+        return;
+      }
+
+      // ---- Modo localStorage (fallback) ----
       const user = registerUser({
         name: name.trim(),
         email: email.trim().toLowerCase(),
@@ -220,6 +258,18 @@ export default function OnboardingScreen() {
   function handleLogin() {
     if (!loginEmail.trim()) { setLoginError('Informe seu e-mail'); return; }
     if (!loginPassword.trim()) { setLoginError('Informe sua senha'); return; }
+
+    // ---- Modo Supabase: login real (o AppContext detecta a sessão e entra) ----
+    if (isSupabaseConfigured) {
+      setLoginError('');
+      sbSignIn(loginEmail.trim(), loginPassword).then(({ error }) => {
+        if (error) setLoginError('E-mail ou senha incorretos.');
+        // Em caso de sucesso, o listener do AppContext carrega o usuário.
+      }).catch(() => setLoginError('Falha ao entrar. Tente novamente.'));
+      return;
+    }
+
+    // ---- Modo localStorage (fallback) ----
     const user = loginUser(loginEmail.trim(), loginPassword);
     if (user) {
       login(user, false);
@@ -229,10 +279,14 @@ export default function OnboardingScreen() {
   }
 
   function handleGuestLogin() {
-    // Reuse an existing guest if it already exists (keeps demo data between sessions)
+    // Sessão de visitante: dados sempre limpos e elevados ao plano max para experimentar tudo.
+    // Bloqueios contra abuso são aplicados em runtime (banner, expiração 60min, exports bloqueados).
+    const now = Date.now();
     const existing = getUsers().find(u => u.email === 'visitante@plantaopro.app');
     if (existing) {
-      login(existing, false);
+      // Reseta timestamp ao reentrar
+      const refreshed = { ...existing, is_guest: true as const, guest_session_started_at: now, subscription_plan: 'max' as const };
+      login(refreshed, false);
       return;
     }
     const guest = registerUser({
@@ -241,12 +295,14 @@ export default function OnboardingScreen() {
       password: '',
       specialty: 'Medicina de Urgência',
       profile_type: 'plantonista',
-      subscription_plan: 'free',
+      subscription_plan: 'max', // visitante experimenta todas as features
       whatsapp: '',
       goals: ['Organizar minha escala', 'Controlar pagamentos'],
       onboarding_completed: true,
       tax_regime: 'Simples Nacional',
       tax_rate: 6,
+      is_guest: true,
+      guest_session_started_at: now,
     });
     login(guest, true);
   }
@@ -547,13 +603,25 @@ export default function OnboardingScreen() {
         </div>
 
         {/* Footer sticky */}
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-6 pt-3 bg-white border-t border-slate-100 flex gap-2 z-[51]" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
-          <button onClick={handleRegisterBack} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-            {t('Voltar')}
-          </button>
-          <button onClick={handleRegisterNext} className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20">
-            {registerStep === 0 ? t('Continuar') : t('Começar')}
-          </button>
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-6 pt-3 bg-white border-t border-slate-100 z-[51]" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+          {signupMsg && (
+            <div className={`mb-2.5 text-[12px] rounded-xl px-3 py-2 border ${
+              signupMsg.type === 'error'
+                ? 'text-red-600 bg-red-50 border-red-100'
+                : 'text-emerald-700 bg-emerald-50 border-emerald-100'
+            }`}>
+              {signupMsg.text}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button onClick={handleRegisterBack} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+              {t('Voltar')}
+            </button>
+            <button onClick={handleRegisterNext} disabled={authBusy}
+              className="flex-[2] py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 disabled:opacity-60">
+              {authBusy ? t('Criando conta...') : (registerStep === 0 ? t('Continuar') : t('Começar'))}
+            </button>
+          </div>
         </div>
       </div>
     );
