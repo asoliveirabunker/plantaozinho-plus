@@ -3,7 +3,7 @@ import { X, Check, RefreshCw, Zap, SlidersHorizontal, Repeat2, Clock, Calendar, 
 import { useApp } from '../contexts/AppContext';
 import { createShift, createRecurrenceShifts } from '../lib/db';
 import type { ShiftStatus, RecurrenceFrequency, FiscalNature } from '../types';
-import { STATUS_LABELS, FISCAL_NATURE_LABELS, resolveFiscalNature } from '../types';
+import { STATUS_LABELS, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER, resolveFiscalNature } from '../types';
 import { format, addDays, addMonths } from 'date-fns';
 import { useLanguage } from '../hooks/useLanguage';
 import { usePlan } from '../contexts/PlanContext';
@@ -451,15 +451,15 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
           {showFiscal && (
             <div className="mb-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Forma de recebimento')}</p>
-              <div className="flex gap-1.5">
-                {(['PJ', 'AUTONOMO'] as FiscalNature[]).map(nat => {
+              <div className="flex flex-wrap gap-1.5">
+                {FISCAL_NATURE_ORDER.map(nat => {
                   const active = fiscalNature === nat;
                   return (
                     <button
                       key={nat}
                       type="button"
                       onClick={() => setFiscalNature(nat)}
-                      className="flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95"
+                      className="px-3 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95"
                       style={{
                         background: active ? tabColor : '#f9fafb',
                         color: active ? 'white' : '#64748b',

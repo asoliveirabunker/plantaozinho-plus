@@ -38,57 +38,117 @@ function clean<T extends Record<string, unknown>>(obj: T, drop: string[] = []): 
   return out;
 }
 
-// --- Locais ---
-export function mirrorWorkplace(w: Workplace): void {
-  if (!cloudActive()) return;
-  supabase.from('workplaces').upsert(clean(w, ['updated_at']) as never)
-    .then(({ error }) => { if (error) log('upsert workplace', error); });
+// ============================================================================
+// Fila de sincronização (offline-safe): cada escrita vira uma operação
+// persistida em localStorage; é enviada ao Supabase e só removida da fila em
+// caso de sucesso. Reenviada na reconexão e antes da hidratação no login.
+// ============================================================================
+type SyncOp =
+  | { k: 'upsert'; table: string; row: Record<string, unknown>; key: string }
+  | { k: 'delete'; table: string; match: Record<string, unknown>; key: string };
+
+const QUEUE_KEY = 'sync_queue';
+
+function readQueue(): SyncOp[] {
+  try { return JSON.parse(localStorage.getItem(PREFIX + QUEUE_KEY) || '[]'); } catch { return []; }
 }
-export function mirrorDeleteWorkplace(id: string): void {
+function writeQueue(q: SyncOp[]): void {
+  localStorage.setItem(PREFIX + QUEUE_KEY, JSON.stringify(q));
+}
+
+/** Enfileira uma operação (dedupe por `key`: última operação por entidade vence). */
+function enqueue(op: SyncOp): void {
   if (!cloudActive()) return;
-  supabase.from('workplaces').update({ active: false } as never).eq('id', id)
-    .then(({ error }) => { if (error) log('delete workplace', error); });
+  const q = readQueue().filter(o => o.key !== op.key);
+  q.push(op);
+  writeQueue(q);
+  void flushQueue();
+}
+
+async function execOp(op: SyncOp): Promise<void> {
+  if (op.k === 'upsert') {
+    const { error } = await supabase.from(op.table).upsert(op.row as never);
+    if (error) throw error;
+  } else {
+    let q = supabase.from(op.table).delete();
+    for (const [k, v] of Object.entries(op.match)) q = q.eq(k, v as never);
+    const { error } = await q;
+    if (error) throw error;
+  }
+}
+
+let flushing = false;
+/** Envia a fila em ordem (FIFO). Para no primeiro erro para preservar a ordem/FK. */
+export async function flushQueue(): Promise<boolean> {
+  if (!cloudActive() || flushing) return false;
+  flushing = true;
+  try {
+    let q = readQueue();
+    while (q.length) {
+      try { await execOp(q[0]); }
+      catch (e) { log('flush', e); break; }
+      q = q.slice(1);
+      writeQueue(q);
+    }
+    return readQueue().length === 0;
+  } finally { flushing = false; }
+}
+
+/** Quantidade de operações ainda pendentes de envio à nuvem. */
+export function pendingSyncCount(): number { return readQueue().length; }
+
+// --- Locais (delete = upsert com active:false, preservado no offline) ---
+export function mirrorWorkplace(w: Workplace): void {
+  enqueue({ k: 'upsert', table: 'workplaces', row: clean(w, ['updated_at']), key: `workplaces:${w.id}` });
 }
 
 // --- Modelos ---
 export function mirrorTemplate(t: ShiftTemplate): void {
-  if (!cloudActive()) return;
-  supabase.from('shift_templates').upsert(clean(t) as never)
-    .then(({ error }) => { if (error) log('upsert template', error); });
+  enqueue({ k: 'upsert', table: 'shift_templates', row: clean(t), key: `shift_templates:${t.id}` });
 }
 export function mirrorDeleteTemplate(id: string): void {
-  if (!cloudActive()) return;
-  supabase.from('shift_templates').delete().eq('id', id)
-    .then(({ error }) => { if (error) log('delete template', error); });
+  enqueue({ k: 'delete', table: 'shift_templates', match: { id }, key: `shift_templates:${id}` });
 }
 
 // --- Plantões ---
 export function mirrorShift(s: Shift): void {
-  if (!cloudActive()) return;
-  supabase.from('shifts').upsert(clean(s, ['updated_at']) as never)
-    .then(({ error }) => { if (error) log('upsert shift', error); });
+  enqueue({ k: 'upsert', table: 'shifts', row: clean(s, ['updated_at']), key: `shifts:${s.id}` });
 }
 export function mirrorShifts(list: Shift[]): void {
-  if (!cloudActive() || !list.length) return;
-  supabase.from('shifts').upsert(list.map(s => clean(s, ['updated_at'])) as never)
-    .then(({ error }) => { if (error) log('upsert shifts', error); });
+  for (const s of list) mirrorShift(s);
 }
 export function mirrorDeleteShift(opts: { id?: string; recurrenceId?: string }): void {
-  if (!cloudActive()) return;
   if (opts.recurrenceId) {
-    supabase.from('shifts').delete().eq('recurrence_id', opts.recurrenceId)
-      .then(({ error }) => { if (error) log('delete shifts(recorrência)', error); });
+    enqueue({ k: 'delete', table: 'shifts', match: { recurrence_id: opts.recurrenceId }, key: `shifts:rec:${opts.recurrenceId}` });
   } else if (opts.id) {
-    supabase.from('shifts').delete().eq('id', opts.id)
-      .then(({ error }) => { if (error) log('delete shift', error); });
+    enqueue({ k: 'delete', table: 'shifts', match: { id: opts.id }, key: `shifts:${opts.id}` });
   }
 }
 
 // --- Recorrência ---
 export function mirrorRecurrence(r: RecurrenceRule): void {
-  if (!cloudActive()) return;
-  supabase.from('recurrence_rules').upsert(clean(r) as never)
-    .then(({ error }) => { if (error) log('upsert recurrence', error); });
+  enqueue({ k: 'upsert', table: 'recurrence_rules', row: clean(r), key: `recurrence_rules:${r.id}` });
+}
+
+// Reenvia a fila automaticamente quando a conexão volta.
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { void flushQueue(); });
+}
+
+/**
+ * Assina mudanças em tempo real dos dados do usuário (multi-dispositivo).
+ * Chama `onChange` a cada evento em shifts/workplaces/shift_templates do usuário.
+ * Retorna a função para cancelar a assinatura.
+ */
+export function subscribeUserData(userId: string, onChange: () => void): () => void {
+  if (!cloudActive()) return () => {};
+  const channel = supabase
+    .channel(`userdata:${userId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: `user_id=eq.${userId}` }, () => onChange())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'workplaces', filter: `user_id=eq.${userId}` }, () => onChange())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_templates', filter: `user_id=eq.${userId}` }, () => onChange())
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
 }
 
 /**
@@ -98,6 +158,9 @@ export function mirrorRecurrence(r: RecurrenceRule): void {
  */
 export async function hydrateUserFromCloud(userId: string): Promise<void> {
   if (!cloudActive()) return;
+  // Envia primeiro o que estiver pendente, para não sobrescrever escritas locais
+  // ainda não sincronizadas ao substituir o cache pelo estado da nuvem.
+  await flushQueue();
   const replaceUserRows = (key: string, rows: { user_id?: string }[]) => {
     let all: { user_id?: string }[] = [];
     try { all = JSON.parse(localStorage.getItem(PREFIX + key) || '[]'); } catch { all = []; }

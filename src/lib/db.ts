@@ -157,7 +157,7 @@ export function updateWorkplace(id: string, data: Partial<Workplace>): Workplace
 export function deleteWorkplace(id: string): void {
   const wps = get<Workplace>('workplaces');
   const idx = wps.findIndex(w => w.id === id);
-  if (idx >= 0) { wps[idx].active = false; set('workplaces', wps); cloud.mirrorDeleteWorkplace(id); }
+  if (idx >= 0) { wps[idx].active = false; set('workplaces', wps); cloud.mirrorWorkplace(wps[idx]); }
 }
 
 // ============================================================

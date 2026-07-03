@@ -4,7 +4,7 @@ import { getWorkplace, updateShift } from '../lib/db';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Shift, ShiftStatus, FiscalNature } from '../types';
-import { STATUS_LABELS, FISCAL_NATURE_LABELS, resolveFiscalNature } from '../types';
+import { STATUS_LABELS, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER, isPJNature, resolveFiscalNature } from '../types';
 import { useLanguage } from '../hooks/useLanguage';
 import { usePlan } from '../contexts/PlanContext';
 import { useGuest } from '../hooks/useGuest';
@@ -270,10 +270,10 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
                 <Layers size={11} strokeWidth={2.5} /> {t('Forma de recebimento')}
               </label>
               {/* forma de recebimento */}
-              <div className="flex gap-1.5 mb-2">
-                {(['PJ', 'AUTONOMO'] as FiscalNature[]).map(nat => (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {FISCAL_NATURE_ORDER.map(nat => (
                   <button key={nat} type="button" onClick={() => setFiscalNature(nat)}
-                    className={`flex-1 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95 ${
+                    className={`px-3 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95 ${
                       fiscalNature === nat ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                     }`}>
                     {FISCAL_NATURE_LABELS[nat]}
@@ -281,7 +281,7 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
                 ))}
               </div>
               {/* campos por natureza */}
-              {fiscalNature === 'PJ' && (
+              {isPJNature(fiscalNature) && (
                 <div className="space-y-2">
                   <input value={nfNumber} onChange={e => setNfNumber(e.target.value)} placeholder="Nº da Nota Fiscal"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />

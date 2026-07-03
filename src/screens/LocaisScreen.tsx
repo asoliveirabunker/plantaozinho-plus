@@ -3,7 +3,7 @@ import { Plus, Trash2, X, Check, Building2, MapPin, ChevronRight, Pencil, HelpCi
 import { useApp } from '../contexts/AppContext';
 import { createWorkplace, deleteWorkplace, createShiftTemplate, deleteShiftTemplate, getShiftTemplates, updateWorkplace, updateShiftTemplate } from '../lib/db';
 import type { Workplace, WorkplaceType, PaymentMethod, ShiftType, ShiftTemplate, FiscalNature } from '../types';
-import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS, FISCAL_NATURE_LABELS } from '../types';
+import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER } from '../types';
 import { format } from 'date-fns';
 import { useLanguage } from '../hooks/useLanguage';
 import { usePlan } from '../contexts/PlanContext';
@@ -334,7 +334,7 @@ export default function LocaisScreen() {
                 <select value={form.fiscal_nature}
                   onChange={e => setForm(f => ({ ...f, fiscal_nature: e.target.value as FiscalNature }))}
                   className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none">
-                  {(['PJ','AUTONOMO'] as FiscalNature[]).map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
+                  {FISCAL_NATURE_ORDER.map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
                 </select>
               </div>
               <div className="flex items-center gap-3 px-3 py-2.5">
@@ -858,7 +858,7 @@ function EditWorkplaceSheet({ workplace, onClose, onSaved }: {
               <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Forma de recebimento (relatório do contador)</p>
               <select value={fiscalNature} onChange={e => setFiscalNature(e.target.value as FiscalNature)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
-                {(['PJ', 'AUTONOMO'] as FiscalNature[]).map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
+                {FISCAL_NATURE_ORDER.map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
               </select>
             </div>
             <input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="CNPJ/CPF (opcional)"

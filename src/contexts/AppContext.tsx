@@ -7,9 +7,9 @@ import {
 import { isSupabaseConfigured } from '../lib/supabase';
 import {
   getSession, onAuthChange, getCurrentProfile, signOut as sbSignOut,
-  mapProfileToUser, updateMyProfile,
+  mapProfileToUser, updateMyProfile, setSubscriptionPlan,
 } from '../lib/supabaseAuth';
-import { hydrateUserFromCloud } from '../lib/cloudSync';
+import { hydrateUserFromCloud, subscribeUserData } from '../lib/cloudSync';
 
 interface AppContextType {
   user: User | null;
@@ -55,6 +55,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // ---- Modo Supabase ----
     let active = true;
+    let unsubRealtime: (() => void) | null = null;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+
+    // Realtime: quando outro dispositivo altera os dados, re-hidrata e recarrega.
+    const setupRealtime = (u: User) => {
+      unsubRealtime?.();
+      unsubRealtime = subscribeUserData(u.id, () => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(async () => {
+          await hydrateUserFromCloud(u.id);
+          if (active) loadData(u);
+        }, 800);
+      });
+    };
 
     const applyAuthUser = async () => {
       const profile = await getCurrentProfile();
@@ -67,6 +81,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!active) return;
         setUser(u);
         loadData(u);
+        setupRealtime(u);
       }
     };
 
@@ -93,6 +108,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (userId) {
         await applyAuthUser();
       } else if (!keepGuestIfAny()) {
+        unsubRealtime?.(); unsubRealtime = null;
         setUser(null);
         setWorkplaces([]);
         setShifts([]);
@@ -100,7 +116,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => { active = false; unsub(); };
+    return () => {
+      active = false;
+      unsub();
+      unsubRealtime?.();
+      if (debounce) clearTimeout(debounce);
+    };
   }, [loadData]);
 
   const login = useCallback((u: User, withDemo = false) => {
@@ -149,7 +170,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUser(updated);
     // Persiste no banco quando for usuário real do Supabase (visitante fica só local).
     if (isSupabaseConfigured && !user.is_guest) {
-      updateMyProfile(updates).catch(e => console.error('[profile] update falhou', e));
+      // Plano vai para user_subscriptions (fonte de verdade); demais campos para profiles.
+      const { subscription_plan, ...profileUpdates } = updates;
+      if (subscription_plan) {
+        setSubscriptionPlan(subscription_plan).then(({ error }) => { if (error) console.error('[plano] update falhou', error); });
+      }
+      if (Object.keys(profileUpdates).length) {
+        updateMyProfile(profileUpdates).catch(e => console.error('[profile] update falhou', e));
+      }
     }
   }, [user]);
 

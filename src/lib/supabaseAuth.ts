@@ -121,6 +121,20 @@ export function mapProfileToUser(p: any): User {
   };
 }
 
+/**
+ * Muda o plano do usuário escrevendo em `user_subscriptions` (fonte de verdade).
+ * O trigger `sync_subscription_plan_to_profile` atualiza `profiles.subscription_plan`.
+ */
+export async function setSubscriptionPlan(planId: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: new Error('Sem sessão') };
+  const { error } = await supabase
+    .from('user_subscriptions')
+    .update({ plan_id: planId, status: 'active' })
+    .eq('user_id', user.id);
+  return { error };
+}
+
 /** Atualiza o profile do usuário autenticado com um subconjunto de campos do `User`. */
 export async function updateMyProfile(updates: Partial<User>) {
   const { data: { user } } = await supabase.auth.getUser();

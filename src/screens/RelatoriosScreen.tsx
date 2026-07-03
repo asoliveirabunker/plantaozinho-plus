@@ -12,7 +12,7 @@ import { usePlan } from '../contexts/PlanContext';
 import { useGuest } from '../hooks/useGuest';
 import ScreenHelpSheet from '../components/ScreenHelpSheet';
 import { Layers } from 'lucide-react';
-import { resolveFiscalNature, FISCAL_NATURE_LABELS, type FiscalNature, type Shift } from '../types';
+import { resolveFiscalNature, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER, isPJNature, type FiscalNature, type Shift } from '../types';
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
@@ -23,13 +23,14 @@ const GROUP_LABELS: Record<GroupBy, string> = {
   forma: 'Forma de recebimento',
   local: 'Por local',
 };
-const FORMA_ORDER: FiscalNature[] = ['PJ', 'AUTONOMO'];
+const FORMA_ORDER: FiscalNature[] = FISCAL_NATURE_ORDER;
 
 /** Deduções/retenções de um plantão conforme a forma de recebimento.
- *  PJ → ISS + PIS + COFINS · Autônomo (RPA) → INSS + IRRF. Campos vazios contam 0. */
+ *  Regimes PJ (MEI/Simples/Lucro Presumido/PJ) → ISS + PIS + COFINS ·
+ *  PF/Autônomo (RPA) → INSS + IRRF. Campos vazios contam 0. */
 function deducoesOfShift(s: Shift, forma: FiscalNature): number {
-  if (forma === 'PJ') return (s.iss_retido || 0) + (s.pis || 0) + (s.cofins || 0);
-  return (s.inss_retido || 0) + (s.irrf_retido || 0); // AUTONOMO
+  if (isPJNature(forma)) return (s.iss_retido || 0) + (s.pis || 0) + (s.cofins || 0);
+  return (s.inss_retido || 0) + (s.irrf_retido || 0); // PF / Autônomo
 }
 
 function WhatsAppIcon({ size = 16, className = '' }: { size?: number; className?: string }) {

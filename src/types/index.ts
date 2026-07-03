@@ -95,13 +95,29 @@ export interface ShiftTemplate {
 
 export type ShiftStatus = 'previsto' | 'realizado' | 'recebido' | 'atrasado' | 'cancelado';
 
-/** Forma de recebimento de um plantão — usada no relatório do contador (Plano Max). */
-export type FiscalNature = 'PJ' | 'AUTONOMO';
+/**
+ * Forma de recebimento de um plantão — usada no relatório do contador (Plano Max).
+ * Congruente com os regimes das Configurações Contábeis: os regimes de PJ
+ * (MEI, Simples Nacional, Lucro Presumido) + recebimento como pessoa física
+ * (PF / Autônomo / RPA). 'PJ' permanece como o genérico (legado / não sabe o regime).
+ */
+export type FiscalNature = 'MEI' | 'SIMPLES' | 'LUCRO_PRESUMIDO' | 'PJ' | 'AUTONOMO';
 
 export const FISCAL_NATURE_LABELS: Record<FiscalNature, string> = {
-  PJ: 'PJ',
-  AUTONOMO: 'Autônomo (RPA)',
+  MEI: 'MEI',
+  SIMPLES: 'Simples Nacional',
+  LUCRO_PRESUMIDO: 'Lucro Presumido',
+  PJ: 'PJ (outro)',
+  AUTONOMO: 'PF / Autônomo (RPA)',
 };
+
+/** Ordem canônica de exibição das formas de recebimento. */
+export const FISCAL_NATURE_ORDER: FiscalNature[] = ['MEI', 'SIMPLES', 'LUCRO_PRESUMIDO', 'PJ', 'AUTONOMO'];
+
+/** True se a forma de recebimento é via pessoa jurídica (deduções ISS/PIS/COFINS). */
+export function isPJNature(n: FiscalNature): boolean {
+  return n !== 'AUTONOMO';
+}
 
 export interface Shift {
   id: string;
