@@ -14,6 +14,7 @@ import AddShiftModal from './components/AddShiftModal';
 import UpgradeModal from './components/UpgradeModal';
 import GuestBanner from './components/GuestBanner';
 import GuestSignupPrompt from './components/GuestSignupPrompt';
+import BrandMark from './components/BrandMark';
 
 type Tab = 'hoje' | 'calendario' | 'ganhos' | 'locais' | 'relatorios';
 
@@ -22,6 +23,7 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('hoje');
   const [showAddShift, setShowAddShift] = useState(false);
   const [addShiftDate, setAddShiftDate] = useState<string | undefined>();
+  const [locaisAutoNew, setLocaisAutoNew] = useState(false);
   const [animClass, setAnimClass] = useState('animate-fade-in');
   const prevTabRef = React.useRef<Tab>('hoje');
 
@@ -40,13 +42,8 @@ function AppContent() {
     return (
       <div className="app-container flex items-center justify-center min-h-screen bg-white">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-            style={{ background: '#1877F2' }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-              <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-              <line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
+          <div className="mx-auto mb-4">
+            <BrandMark size={64} />
           </div>
           <p className="text-gray-400 text-sm">Carregando...</p>
         </div>
@@ -67,6 +64,11 @@ function AppContent() {
     handleTabChange(tab as Tab);
   }
 
+  function handleGoToLocaisNew() {
+    setLocaisAutoNew(true);
+    handleTabChange('locais');
+  }
+
   return (
     <div className="app-container">
       {/* Banner persistente durante sessão de visitante */}
@@ -83,7 +85,7 @@ function AppContent() {
           <GanhosScreen />
         )}
         {activeTab === 'locais' && (
-          <LocaisScreen />
+          <LocaisScreen autoOpenNew={locaisAutoNew} onAutoOpenNewHandled={() => setLocaisAutoNew(false)} />
         )}
         {activeTab === 'relatorios' && (
           <RelatoriosScreen />
@@ -99,6 +101,7 @@ function AppContent() {
         <AddShiftModal
           onClose={() => { setShowAddShift(false); setAddShiftDate(undefined); }}
           initialDate={addShiftDate}
+          onGoToLocais={handleGoToLocaisNew}
         />
       )}
 

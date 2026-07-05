@@ -12,7 +12,14 @@ import { PLAN_META } from '../lib/plans';
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
-export default function LocaisScreen() {
+interface LocaisScreenProps {
+  /** Quando true, abre direto no formulário de novo local (ex.: vindo do aviso do AddShiftModal). */
+  autoOpenNew?: boolean;
+  /** Chamado após consumir o autoOpenNew, para o pai resetar a flag. */
+  onAutoOpenNewHandled?: () => void;
+}
+
+export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: LocaisScreenProps = {}) {
   const { user, workplaces, shifts, refreshWorkplaces, refreshShifts } = useApp();
   const { t } = useLanguage();
   const { limits, requireUpgrade, plan } = usePlan();
@@ -27,6 +34,14 @@ export default function LocaisScreen() {
     setView('new');
   }
   const [view, setView] = useState<'list' | 'detail' | 'new' | 'newTemplate'>('list');
+
+  useEffect(() => {
+    if (autoOpenNew) {
+      handleNewWorkplace();
+      onAutoOpenNewHandled?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenNew]);
   const [selectedWp, setSelectedWp] = useState<Workplace | null>(null);
   const [editWpSheet, setEditWpSheet] = useState<Workplace | null>(null);
   const [editTemplateSheet, setEditTemplateSheet] = useState<ShiftTemplate | null>(null);

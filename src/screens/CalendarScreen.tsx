@@ -217,7 +217,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
             {shift.status === 'previsto' && (
               <button onClick={() => handleMarkDone(shift.id)}
                 className="flex-1 py-1.5 rounded-lg text-white text-[12px] font-medium flex items-center justify-center gap-1"
-                style={{ background: '#1877F2' }}>
+                style={{ background: '#03bb85' }}>
                 <Check size={12} /> {t('Concluir')}
               </button>
             )}
@@ -380,7 +380,7 @@ export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
                       const wp = getWorkplace(s.workplace_id);
                       return (
                         <span key={s.id} className="w-1 h-1 rounded-full"
-                          style={{ background: isSelected ? 'rgba(255,255,255,0.85)' : (wp?.color || '#1877F2') }} />
+                          style={{ background: isSelected ? 'rgba(255,255,255,0.85)' : (wp?.color || '#03bb85') }} />
                       );
                     })}
                   </div>
@@ -563,7 +563,7 @@ function FilterChip({ label, active, onClick, color }: { label: string; active: 
     <button onClick={onClick}
       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all flex-shrink-0"
       style={{
-        background: active ? (color || '#1877F2') : '#f3f4f6',
+        background: active ? (color || '#03bb85') : '#f3f4f6',
         color: active ? 'white' : '#6b7280',
       }}>
       {color && !active && <span className="w-2 h-2 rounded-full" style={{ background: color }} />}

@@ -2,11 +2,35 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Paleta de marca (Plantão Pro) — substitui a escala azul padrão do Tailwind.
+ * Como quase todo o app usa utilitários `blue-*` (bg-blue-600, text-blue-500...),
+ * remapear a escala aqui reskina o app inteiro sem tocar em cada componente.
+ * Cores principais: #03bb85 (teal, primária) · #39d39b (mint) · #27c8fe (ciano).
+ */
+@theme {
+  --color-blue-50:  #e6fcf5;
+  --color-blue-100: #c9f8e9;
+  --color-blue-200: #9df2d6;
+  --color-blue-300: #7de4c3;
+  --color-blue-400: #39d39b;
+  --color-blue-500: #27c8fe;
+  --color-blue-600: #03bb85;
+  --color-blue-700: #029b6e;
+  --color-blue-800: #027a57;
+  --color-blue-900: #015a40;
+}
+
 @layer base {
   :root {
-    --color-primary: #1877F2;
-    --color-primary-dark: #1565d8;
-    --color-primary-light: #e8f0fe;
+    --color-primary: #03bb85;
+    --color-primary-dark: #029b6e;
+    --color-primary-light: #c9f8e9;
+    --color-brand-teal: #03bb85;
+    --color-brand-mint: #39d39b;
+    --color-brand-cyan: #27c8fe;
+    --color-brand-skyblue: #79adef;
+    --color-brand-blue: #1794d2;
     --color-success: #22c55e;
     --color-warning: #f59e0b;
     --color-danger: #ef4444;
@@ -287,12 +311,12 @@
     color: #374151;
   }
   .calendar-day[data-today="true"] {
-    background: #eff6ff;
-    border: 1.5px solid #1877F2;
+    background: var(--color-primary-light);
+    border: 1.5px solid var(--color-primary);
   }
-  .calendar-day[data-today="true"] .calendar-day-num { color: #1877F2; }
+  .calendar-day[data-today="true"] .calendar-day-num { color: var(--color-primary); }
   .calendar-day[data-selected="true"] {
-    background: #1877F2;
+    background: var(--color-primary);
     border: none;
   }
   .calendar-day[data-selected="true"] .calendar-day-num { color: white; }
@@ -407,7 +431,7 @@
     position: relative;
     color: #9ca3af;
   }
-  .nav-item.active { color: #1877F2; }
+  .nav-item.active { color: var(--color-primary); }
   .nav-item .nav-icon {
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
@@ -426,7 +450,7 @@
     transform: translateX(-50%);
     width: 32px;
     height: 3px;
-    background: #1877F2;
+    background: var(--color-primary);
     border-radius: 0 0 3px 3px;
     transition: opacity 0.2s ease;
   }

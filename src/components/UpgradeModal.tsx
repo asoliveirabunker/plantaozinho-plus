@@ -1,9 +1,8 @@
 import { X, Check, Sparkles, Crown, Zap } from 'lucide-react';
 import { usePlan } from '../contexts/PlanContext';
-import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../hooks/useLanguage';
 import {
-  FEATURE_MIN_PLAN, FEATURE_LABEL, PLAN_META, type PlanId,
+  FEATURE_MIN_PLAN, FEATURE_LABEL, PLAN_META, SUBSCRIPTION_URL, type PlanId,
 } from '../lib/plans';
 
 /**
@@ -14,7 +13,6 @@ import {
  */
 export default function UpgradeModal() {
   const { upgradeFeature, closeUpgrade } = usePlan();
-  const { updateProfile } = useApp();
   const { t } = useLanguage();
 
   if (!upgradeFeature) return null;
@@ -24,9 +22,9 @@ export default function UpgradeModal() {
   const featureInfo = FEATURE_LABEL[upgradeFeature];
   const PlanIcon = requiredPlan === 'max' ? Crown : Zap;
 
-  // MVP sem gateway: ativa o plano diretamente (placeholder até integrar pagamento).
+  // Direciona para a página de vendas (a contratação acontece lá).
   function handleUpgrade() {
-    updateProfile({ subscription_plan: requiredPlan });
+    window.open(SUBSCRIPTION_URL, '_blank', 'noopener');
     closeUpgrade();
   }
 

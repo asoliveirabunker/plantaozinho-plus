@@ -7,6 +7,9 @@ import type { SubscriptionPlan } from '../types';
 
 export type PlanId = SubscriptionPlan; // 'free' | 'pro' | 'max'
 
+/** Página de vendas — destino de todos os botões de assinatura do app. */
+export const SUBSCRIPTION_URL = 'https://plantaopro-vendas.vercel.app/';
+
 /** Features que podem ser bloqueadas. Cada uma exige um plano mínimo. */
 export type Feature =
   | 'unlimited_workplaces'   // Pro — Free permite só 1 local
@@ -17,6 +20,7 @@ export type Feature =
   | 'overdue_alerts'         // Pro — alertas/aba de atrasos
   | 'fiscal_report'          // Pro — relatório fiscal / PDF contador
   | 'tax_forecast'           // Pro — previsão tributária
+  | 'fiscal_fields'          // Pro — forma de recebimento nos plantões
   | 'multiple_cnpj'          // Max — múltiplos CNPJs
   | 'annual_reports'         // Max — relatórios anuais
   | 'whatsapp_accountant'    // Max — envio ao contador via WhatsApp
@@ -41,6 +45,7 @@ export const FEATURE_MIN_PLAN: Record<Feature, PlanId> = {
   overdue_alerts: 'pro',
   fiscal_report: 'pro',
   tax_forecast: 'pro',
+  fiscal_fields: 'pro',
   multiple_cnpj: 'max',
   annual_reports: 'max',
   whatsapp_accountant: 'max',
@@ -89,8 +94,8 @@ export const PLAN_META: Record<PlanId, PlanMeta> = {
     id: 'pro',
     name: 'Pro',
     tagline: 'Para o plantonista no controle total',
-    color: '#1877F2',
-    gradient: 'linear-gradient(135deg, #3b82f6, #1877F2)',
+    color: '#03bb85',
+    gradient: 'linear-gradient(135deg, #03bb85, #39d39b, #27c8fe)',
     priceLabel: 'R$ 14,90/mês',
     highlights: [
       'Locais e plantões ilimitados',
@@ -125,6 +130,7 @@ export const FEATURE_LABEL: Record<Feature, { title: string; description: string
   overdue_alerts:       { title: 'Alertas de atrasos', description: 'Saiba exatamente quais pagamentos estão atrasados.' },
   fiscal_report:        { title: 'Relatório fiscal', description: 'Gere PDF/CSV completo para enviar ao seu contador.' },
   tax_forecast:         { title: 'Previsão tributária', description: 'Calcule a provisão de impostos do seu regime.' },
+  fiscal_fields:        { title: 'Forma de recebimento', description: 'Classifique cada plantão por regime (MEI, Simples, PJ, PF/RPA) ao registrar.' },
   multiple_cnpj:        { title: 'Múltiplos CNPJs', description: 'Gerencie faturamento de vários CNPJs separadamente.' },
   annual_reports:       { title: 'Relatórios anuais', description: 'Visão consolidada do ano inteiro para o IR.' },
   whatsapp_accountant:  { title: 'Envio ao contador', description: 'Mande relatórios direto ao seu contador via WhatsApp.' },

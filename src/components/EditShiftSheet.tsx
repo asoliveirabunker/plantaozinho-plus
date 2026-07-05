@@ -65,7 +65,8 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
   const [error, setError] = useState('');
 
   // --- Campos fiscais (recurso Max) ---
-  const showFiscal = can('mixed_fiscal_report') || isGuest;
+  // Forma de recebimento + detalhamento de impostos: recurso Pro (visitante experimenta tudo).
+  const showFiscal = can('fiscal_fields') || isGuest;
   const [fiscalNature, setFiscalNature] = useState<FiscalNature>(resolveFiscalNature(shift, wp));
   const [nfNumber, setNfNumber] = useState(shift.nf_number || '');
   const numToStr = (v?: number) => (v != null ? String(v) : '');

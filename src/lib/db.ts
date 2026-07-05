@@ -510,7 +510,7 @@ export function seedDemoData(userId: string): void {
     user_id: userId,
     name: 'Hospital São Marcos',
     type: 'hospital',
-    color: '#1877F2',
+    color: '#03bb85',
     default_shift_value: 1400,
     default_duration_hours: 12,
     payment_day: 10,

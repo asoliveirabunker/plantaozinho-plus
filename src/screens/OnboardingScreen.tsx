@@ -7,6 +7,7 @@ import { PROFILE_TYPE_LABELS } from '../types';
 import { registerUser, loginUser, getUsers } from '../lib/db';
 import { useApp } from '../contexts/AppContext';
 import { isSupabaseConfigured } from '../lib/supabase';
+import BrandMark from '../components/BrandMark';
 import { signUp as sbSignUp, signIn as sbSignIn } from '../lib/supabaseAuth';
 
 /** Bandeira BR mini para o seletor de idioma */
@@ -33,7 +34,7 @@ function MiniFlagMX() {
 const slides = [
   {
     icon: <Calendar size={40} className="text-white" />,
-    iconBg: '#1877F2',
+    iconBg: '#03bb85',
     title: 'Controle seus plantões\nem segundos.',
     subtitle: 'Cadastre, repita e organize toda sua escala num só lugar — feito para a rotina do médico plantonista.',
   },
@@ -318,8 +319,8 @@ export default function OnboardingScreen() {
             {t('Voltar')}
           </button>
           <div className="mb-6">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: '#1877F2' }}>
-              <Calendar size={22} className="text-white" />
+            <div className="mb-4">
+              <BrandMark size={48} />
             </div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Acesso')}</p>
             <h1 className="text-[22px] font-black text-slate-900 tracking-tight leading-tight">{t('Entrar na conta')}</h1>
@@ -402,7 +403,7 @@ export default function OnboardingScreen() {
           <div className="flex gap-1.5 mb-4">
             {[0, 1].map(i => (
               <div key={i} className="h-1 rounded-full transition-all duration-300 flex-1"
-                style={{ background: '#1877F2', opacity: i <= registerStep ? 1 : 0.2 }} />
+                style={{ background: '#03bb85', opacity: i <= registerStep ? 1 : 0.2 }} />
             ))}
           </div>
 
@@ -550,7 +551,7 @@ export default function OnboardingScreen() {
                     style={{
                       background: sel ? (isDark ? 'rgba(24,119,242,0.15)' : '#eff6ff') : (isDark ? '#1e293b' : '#f8fafc'),
                       color: sel ? '#60a5fa' : (isDark ? '#e2e8f0' : '#475569'),
-                      border: `1.5px solid ${sel ? '#1877F2' : (isDark ? '#334155' : 'transparent')}`,
+                      border: `1.5px solid ${sel ? '#03bb85' : (isDark ? '#334155' : 'transparent')}`,
                     }}>
                     <span className="leading-tight">{t(g)}</span>
                     {sel && (
@@ -584,7 +585,7 @@ export default function OnboardingScreen() {
             className="w-full text-left px-3 py-2.5 rounded-2xl transition-all flex items-center justify-between gap-2 mb-2"
             style={{
               background: withDemo ? (isDark ? 'rgba(24,119,242,0.15)' : '#eff6ff') : (isDark ? '#1e293b' : '#f8fafc'),
-              border: `1.5px solid ${withDemo ? '#1877F2' : (isDark ? '#334155' : 'transparent')}`,
+              border: `1.5px solid ${withDemo ? '#03bb85' : (isDark ? '#334155' : 'transparent')}`,
             }}>
             <div className="min-w-0">
               <p className="text-[12.5px] font-bold leading-tight" style={{ color: withDemo ? '#60a5fa' : (isDark ? '#e2e8f0' : '#1e293b') }}>
@@ -663,7 +664,7 @@ export default function OnboardingScreen() {
               style={{
                 width: i === step ? 22 : 6,
                 height: 3,
-                background: '#1877F2',
+                background: '#03bb85',
                 opacity: i === step ? 1 : 0.25,
               }}
               aria-label={`Slide ${i + 1}`}

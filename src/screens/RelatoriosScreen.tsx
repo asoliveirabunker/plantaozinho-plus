@@ -253,10 +253,8 @@ export default function RelatoriosScreen() {
     : '1. DADOS DO PROFISSIONAL (PJ)';
   const userNameOrRazao = user?.tax_regime === 'PF' ? 'Nome:' : 'Razão Social:';
 
-  const handleDownloadPDF = useCallback(async () => {
-    if (pdfLoading) return;
-    setPdfLoading(true);
-    try {
+  /** Monta o documento PDF do relatório — usado pelo download e pelo compartilhamento. */
+  const buildPdfDoc = useCallback(() => {
       const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = 210;
       const pageH = 297;
@@ -482,14 +480,57 @@ export default function RelatoriosScreen() {
       pdf.setTextColor(148, 163, 184);
       pdf.text('Este documento é um relatório gerencial e não substitui notas fiscais ou recibos oficiais.', pageW / 2, y + 4, { align: 'center' });
 
-      pdf.save(`relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.pdf`);
+      return pdf;
+  }, [selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle, groupBy, groupSummary, groupSummaryTitle, detailGroups, wpById, totalDeducoes, totalLiquido]);
+
+  const pdfFileName = `relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.pdf`;
+
+  async function handleDownloadPDF() {
+    if (pdfLoading) return;
+    setPdfLoading(true);
+    try {
+      buildPdfDoc().save(pdfFileName);
     } catch (err) {
       console.error(err);
       alert('Erro ao gerar PDF. Tente novamente.');
     } finally {
       setPdfLoading(false);
     }
-  }, [pdfLoading, selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, isResumido, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, totalTableValue, docTitle, groupBy, groupSummary, groupSummaryTitle, detailGroups, wpById, totalDeducoes, totalLiquido]);
+  }
+
+  /**
+   * Compartilha o PDF como ARQUIVO via Web Share API — no celular abre a folha
+   * nativa (WhatsApp, e-mail, etc.) com o PDF anexado. Quando o navegador não
+   * suporta compartilhar arquivos (desktop), faz fallback: baixa o PDF e abre
+   * o WhatsApp com o resumo em texto, para o usuário anexar o arquivo baixado.
+   */
+  async function handleSharePDF() {
+    let pdfBlob: Blob | null = null;
+    try {
+      pdfBlob = buildPdfDoc().output('blob');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao gerar PDF. Tente novamente.');
+      return;
+    }
+    const file = new File([pdfBlob], pdfFileName, { type: 'application/pdf' });
+    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Relatório Plantão Pro',
+          text: `Relatório ${format(selectedMonth, 'MMMM yyyy', { locale: ptBR })} — Plantão Pro`,
+        });
+        return;
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return; // usuário fechou a folha de compartilhamento
+        console.error(err);
+      }
+    }
+    // Fallback: baixa o arquivo e abre o WhatsApp com o resumo em texto.
+    buildPdfDoc().save(pdfFileName);
+    handleWhatsApp();
+  }
 
   const handleExportCSV = useCallback(() => {
     const lines: string[][] = [];
@@ -608,7 +649,7 @@ export default function RelatoriosScreen() {
       <main className="flex-1 overflow-y-auto overflow-x-hidden pb-24 hide-scrollbar px-5">
         
         {/* Toggle Mês/Ano */}
-        <div className="bg-slate-100 p-1 rounded-xl flex my-5">
+        <div className="bg-slate-100 p-1 rounded-xl flex my-3">
           <button
             onClick={() => setActiveTab('mes')}
             className={`flex-1 font-semibold text-sm py-2 rounded-lg transition-all ${activeTab === 'mes' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
@@ -624,11 +665,11 @@ export default function RelatoriosScreen() {
 
         {activeTab === 'mes' && (
           <>
-            {/* Extrato Card */}
-            <div className="bg-blue-600 rounded-2xl p-6 text-white relative">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <p className="text-blue-200 text-xs font-bold tracking-wider uppercase mb-1 flex items-center gap-1">
+            {/* Extrato Card (com Previsão Tributária integrada no canto superior direito) */}
+            <div className="bg-blue-600 rounded-2xl p-5 text-white relative mb-4">
+              <div className="flex justify-between items-start gap-3 mb-4">
+                <div className="min-w-0">
+                  <p className="text-blue-100 text-xs font-bold tracking-wider uppercase mb-1 flex items-center gap-1">
                     <FileText size={12} />
                     Extrato Fiscal
                   </p>
@@ -636,7 +677,7 @@ export default function RelatoriosScreen() {
                     <h2 className="text-2xl font-bold capitalize">
                       {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
                     </h2>
-                    <ChevronDown size={18} className="text-blue-300" />
+                    <ChevronDown size={18} className="text-blue-200" />
                     {/* input type="month" → ativa o picker nativo do smartphone (iOS/Android) */}
                     <input
                       type="month"
@@ -652,6 +693,18 @@ export default function RelatoriosScreen() {
                     />
                   </label>
                 </div>
+
+                {/* Previsão Tributária — compacta, canto superior direito */}
+                <div
+                  className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2 text-right shrink-0"
+                  title="*Valores para planejamento. Consulte seu contador para emissão da guia oficial."
+                >
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-blue-100 leading-none mb-1">⚖️ {t('Previsão Tributária')}</p>
+                  <p className="text-[16px] font-bold text-white leading-tight">{fmtCur(taxAmount)}</p>
+                  <p className="text-[9px] text-blue-100 leading-tight">
+                    {user?.tax_regime || 'Simples Nacional'}{useFixedMei ? ` · ${t('Valor Fixo')}` : ` · ${(taxRate * 100).toFixed(1)}%`}
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -659,63 +712,25 @@ export default function RelatoriosScreen() {
                   <span className="text-blue-100 text-sm">{t('Faturamento Bruto Total')}</span>
                   <span className="text-2xl font-bold text-white">{fmtCur(stats?.expected || 0)}</span>
                 </div>
-                
+
                 <div className="flex justify-between text-sm pt-1">
-                  <span className="text-blue-200">{t('Plantões realizados')}</span>
+                  <span className="text-blue-100">{t('Plantões realizados')}</span>
                   <span className="font-medium">{stats?.totalShifts || 0} plantões ({stats?.totalHours || 0}h)</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-blue-200">Status dos pagamentos</span>
+                  <span className="text-blue-100">Status dos pagamentos</span>
                   <div className="text-right">
-                    <span className="text-emerald-300 font-medium text-xs">Pago: {fmtCur(stats?.received || 0)}</span>
-                    <span className="text-blue-200 mx-1">•</span>
-                    <span className="text-yellow-300 font-medium text-xs">Pendente: {fmtCur(stats?.pending || 0)}</span>
+                    <span className="text-white font-medium text-xs">Pago: {fmtCur(stats?.received || 0)}</span>
+                    <span className="text-blue-100 mx-1">•</span>
+                    <span className="text-yellow-200 font-medium text-xs">Pendente: {fmtCur(stats?.pending || 0)}</span>
                   </div>
                 </div>
-              </div>
-            </div>
-            
-            {/* Previsão Tributária */}
-            <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-slate-100 mt-4 mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-                  <span className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-slate-500">⚖️</span>
-                  Previsão Tributária
-                </h3>
-                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded uppercase tracking-wider">
-                  {user?.tax_regime || 'Simples Nacional'}
-                </span>
-              </div>
-              
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                {!useFixedMei ? (
-                  <>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm text-slate-600">{t('Alíquota Estimada')}</span>
-                      <span className="text-sm font-bold text-slate-800">{(taxRate * 100).toFixed(2)}%</span>
-                    </div>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-xs text-slate-400">{t('Base de cálculo:')} {fmtCur(taxBase)}</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm text-slate-600">{t('Contribuição Mensal (DAS MEI)')}</span>
-                    <span className="text-sm font-bold text-slate-800">{t('Valor Fixo')}</span>
-                  </div>
-                )}
-
-                <div className="border-t border-slate-200 pt-3 flex justify-between items-center">
-                  <span className="text-sm font-semibold text-slate-800">{t(taxLabel)}</span>
-                  <span className="text-lg font-bold text-red-500">{fmtCur(taxAmount)}</span>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-2 text-center">{t('*Valores para planejamento. Consulte seu contador para emissão da guia oficial.')}</p>
               </div>
             </div>
 
             {/* ====== RELATÓRIO PARA O CONTADOR (unificado · Max) ====== */}
-            <div className="mb-6">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">{t('Relatórios')}</h3>
+            <div className="mb-4">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">{t('Relatórios')}</h3>
               <button
                 onClick={openReport}
                 className="w-full text-left bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:border-violet-200 hover:shadow-[0_2px_12px_rgba(139,92,246,0.08)] transition active:scale-[0.99] flex items-center gap-3">
@@ -740,11 +755,11 @@ export default function RelatoriosScreen() {
             </div>
 
             {/* ====== COMPARTILHAR ====== */}
-            <div className="mb-6">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">{t('Compartilhar')}</h3>
+            <div className="mb-4">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">{t('Compartilhar')}</h3>
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => gate('whatsapp_accountant', () => requireSignup('Compartilhar via WhatsApp', handleWhatsApp))}
+                  onClick={() => gate('whatsapp_accountant', () => requireSignup('Compartilhar via WhatsApp', handleSharePDF))}
                   className="bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
                   <WhatsAppIcon size={16} className="text-emerald-500" />
                   WhatsApp
@@ -761,7 +776,7 @@ export default function RelatoriosScreen() {
 
             {/* Fontes Pagadoras (Hospitais) */}
             <div className="mb-4">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">{t('Detalhamento por CNPJ/Local')}</h3>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">{t('Detalhamento por CNPJ/Local')}</h3>
               <div className="space-y-3">
                 {Object.entries(wpBreakdown).map(([wpId, data]) => {
                   const wp = workplaces.find(w => w.id === wpId);
@@ -1355,16 +1370,15 @@ export default function RelatoriosScreen() {
             </div>
 
             <div className="p-5 space-y-2">
-              {/* WhatsApp — envio ao contador é recurso Max */}
+              {/* WhatsApp — envio ao contador é recurso Max (compartilha o PDF como arquivo) */}
               <button
                 onClick={() => {
                   if (!gate('whatsapp_accountant')) { setShowShareModal(false); return; }
-                  if (!requireSignup('Compartilhar via WhatsApp', () => { handleWhatsApp(); setShowShareModal(false); })) {
+                  if (!requireSignup('Compartilhar via WhatsApp', () => { handleSharePDF(); setShowShareModal(false); })) {
                     setShowShareModal(false);
                   }
                 }}
-                disabled={!user?.whatsapp}
-                className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-[0.98] text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-[0.98] text-left"
               >
                 <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                   <WhatsAppIcon size={18} />
@@ -1372,7 +1386,7 @@ export default function RelatoriosScreen() {
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-slate-900 text-sm">WhatsApp</p>
                   <p className="text-[11px] text-slate-500 truncate">
-                    {user?.whatsapp || t('Cadastre seu WhatsApp no perfil')}
+                    {t('Envia o PDF do relatório como anexo')}
                   </p>
                 </div>
                 <ChevronDown size={16} className="text-slate-400 -rotate-90 shrink-0" />

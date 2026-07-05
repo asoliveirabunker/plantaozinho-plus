@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Check, RefreshCw, Zap, SlidersHorizontal, Repeat2, Clock, Calendar, Crown } from 'lucide-react';
+import { X, Check, RefreshCw, Zap, SlidersHorizontal, Repeat2, Clock, Calendar, Crown, ChevronRight } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { createShift, createRecurrenceShifts } from '../lib/db';
 import type { ShiftStatus, RecurrenceFrequency, FiscalNature } from '../types';
@@ -12,6 +12,8 @@ import { useGuest } from '../hooks/useGuest';
 interface AddShiftModalProps {
   onClose: () => void;
   initialDate?: string;
+  /** Chamado quando o usuário pede para ir cadastrar um local (sem nenhum ainda). */
+  onGoToLocais?: () => void;
 }
 
 type Mode = 'quick' | 'manual' | 'recurrence';
@@ -52,13 +54,14 @@ function calcDuration(start: string, end: string) {
   return Math.round(diff * 10 / 60) / 10;
 }
 
-export default function AddShiftModal({ onClose, initialDate }: AddShiftModalProps) {
+export default function AddShiftModal({ onClose, initialDate, onGoToLocais }: AddShiftModalProps) {
   const { user, workplaces, templates, refreshShifts, shifts } = useApp();
   const { t } = useLanguage();
   const { limits, gate, requireUpgrade, can } = usePlan();
   const { isGuest } = useGuest();
   const canRecurrence = can('recurrence');
-  const showFiscal = can('mixed_fiscal_report') || isGuest;
+  // Forma de recebimento é recurso Pro (visitante experimenta tudo).
+  const canFiscalFields = can('fiscal_fields') || isGuest;
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const [mode, setMode] = useState<Mode>('quick');
@@ -177,7 +180,7 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
       status,
       payment_due_date: payDue,
       notes,
-      ...(showFiscal ? { fiscal_nature: fiscalNature } : {}),
+      ...(canFiscalFields ? { fiscal_nature: fiscalNature } : {}),
     };
   }
 
@@ -302,9 +305,14 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
           <div className="mb-4">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Local')}</p>
             {workplaces.length === 0 ? (
-              <div className="p-3 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium">
-                {t('⚠️ Cadastre um local antes de adicionar plantões')}
-              </div>
+              <button
+                type="button"
+                onClick={() => { onGoToLocais?.(); onClose(); }}
+                className="w-full text-left p-3 rounded-xl bg-amber-50 text-amber-700 text-sm font-medium hover:bg-amber-100 transition active:scale-[0.99] flex items-center justify-between gap-2"
+              >
+                <span>{t('⚠️ Cadastre um local antes de adicionar plantões')}</span>
+                <ChevronRight size={15} strokeWidth={2.5} className="shrink-0" />
+              </button>
             ) : (
               <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
                 {workplaces.map(wp => {
@@ -447,33 +455,41 @@ export default function AddShiftModal({ onClose, initialDate }: AddShiftModalPro
             {errors.value && <p className="text-red-500 text-[11px] mt-1">{errors.value}</p>}
           </div>
 
-          {/* Regime fiscal — alimenta o Relatório por Regime Fiscal (Max) */}
-          {showFiscal && (
-            <div className="mb-4">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Forma de recebimento')}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {FISCAL_NATURE_ORDER.map(nat => {
-                  const active = fiscalNature === nat;
-                  return (
-                    <button
-                      key={nat}
-                      type="button"
-                      onClick={() => setFiscalNature(nat)}
-                      className="px-3 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95"
-                      style={{
-                        background: active ? tabColor : '#f9fafb',
-                        color: active ? 'white' : '#64748b',
-                        border: active ? `1.5px solid ${tabColor}` : '1.5px solid #f0f0f0',
-                      }}
-                    >
-                      {FISCAL_NATURE_LABELS[nat]}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1.5 px-1">{t('Padrão herdado do local. Detalhe impostos depois ao editar o plantão.')}</p>
+          {/* Forma de recebimento — recurso Pro (Free vê bloqueado; clique abre o paywall) */}
+          <div className="mb-4">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+              {t('Forma de recebimento')}
+              {!canFiscalFields && <Crown size={11} className="text-amber-400" strokeWidth={2.5} />}
+            </p>
+            <div className="flex flex-wrap gap-1.5" style={{ opacity: canFiscalFields ? 1 : 0.55 }}>
+              {FISCAL_NATURE_ORDER.map(nat => {
+                const active = canFiscalFields && fiscalNature === nat;
+                return (
+                  <button
+                    key={nat}
+                    type="button"
+                    onClick={() => {
+                      if (!canFiscalFields) { gate('fiscal_fields'); return; }
+                      setFiscalNature(nat);
+                    }}
+                    className="px-3 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95"
+                    style={{
+                      background: active ? tabColor : '#f9fafb',
+                      color: active ? 'white' : '#64748b',
+                      border: active ? `1.5px solid ${tabColor}` : '1.5px solid #f0f0f0',
+                    }}
+                  >
+                    {FISCAL_NATURE_LABELS[nat]}
+                  </button>
+                );
+              })}
             </div>
-          )}
+            <p className="text-[10px] text-slate-400 mt-1.5 px-1">
+              {canFiscalFields
+                ? t('Padrão herdado do local. Detalhe impostos depois ao editar o plantão.')
+                : t('Disponível no plano Pro — classifique cada plantão por regime fiscal.')}
+            </p>
+          </div>
 
           {/* MANUAL: extra fields */}
           {mode === 'manual' && (

@@ -261,6 +261,6 @@ export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {
 };
 
 export const WORKPLACE_COLORS = [
-  '#1877F2', '#22c55e', '#8b5cf6', '#f59e0b', '#ef4444',
+  '#03bb85', '#22c55e', '#8b5cf6', '#f59e0b', '#ef4444',
   '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
 ];
