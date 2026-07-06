@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   X, Calendar, Check, AlertCircle, Loader2, ChevronRight, RefreshCw,
-  CircleHelp, Sparkles, ArrowRight,
+  CircleHelp, Sparkles, ArrowRight, Crown,
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { createShift, createWorkplace } from '../lib/db';
@@ -165,6 +165,14 @@ export default function GoogleCalendarSync({ onClose, onImported }: Props) {
         {/* ---------- FASE: INTRO ---------- */}
         {phase === 'intro' && (
           <div>
+            {/* Aviso: recurso em desenvolvimento, exclusivo do plano Max */}
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-3">
+              <Crown size={15} className="text-amber-500 shrink-0" strokeWidth={2.5} />
+              <p className="text-[11.5px] text-amber-800 leading-snug">
+                <strong>Em breve</strong> — recurso em desenvolvimento, exclusivo do plano <strong>Max</strong>. A prévia abaixo é uma demonstração.
+              </p>
+            </div>
+
             <p className="text-[13px] text-slate-600 leading-relaxed mb-3">
               Conecte sua agenda do Google e o Plantão Pro <strong>lê automaticamente</strong> os eventos que são plantões —
               identificando <strong>local, horário, valor e tipo de escala</strong> — e ignora reuniões, consultas e compromissos pessoais.

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, X, Check, Building2, MapPin, ChevronRight, Pencil, HelpCircle, Zap, Sparkles } from 'lucide-react';
+import { Plus, Trash2, X, Check, Building2, MapPin, ChevronRight, ChevronLeft, Pencil, HelpCircle, Zap, Sparkles, Palette, DollarSign, Wallet, Phone, Clock, Tag } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { createWorkplace, deleteWorkplace, createShiftTemplate, deleteShiftTemplate, getShiftTemplates, updateWorkplace, updateShiftTemplate } from '../lib/db';
 import type { Workplace, WorkplaceType, PaymentMethod, ShiftType, ShiftTemplate, FiscalNature } from '../types';
-import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER } from '../types';
+import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER, STATUS_LABELS } from '../types';
 import { format } from 'date-fns';
 import { useLanguage } from '../hooks/useLanguage';
 import { usePlan } from '../contexts/PlanContext';
@@ -55,12 +55,14 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
     fiscal_nature: 'PJ' as FiscalNature,
     contact_name: '', contact_phone: '', cnpj: '', address: '',
   });
+  const [formError, setFormError] = useState('');
 
   // New template form
   const [tForm, setTForm] = useState({
     name: '', start_time: '07:00', end_time: '19:00',
     default_value: '', shift_type: 'dia' as ShiftType, notes: '',
   });
+  const [tFormError, setTFormError] = useState('');
 
   function calcDuration(start: string, end: string) {
     const [sh, sm] = start.split(':').map(Number);
@@ -71,7 +73,9 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
   }
 
   function handleCreateWp() {
-    if (!form.name.trim() || !user) return;
+    if (!user) return;
+    if (!form.name.trim()) { setFormError('Informe o nome do local.'); return; }
+    setFormError('');
     createWorkplace({
       user_id: user.id,
       name: form.name.trim(),
@@ -101,7 +105,9 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
   }
 
   function handleCreateTemplate() {
-    if (!tForm.name.trim() || !user || !selectedWp) return;
+    if (!user || !selectedWp) return;
+    if (!tForm.name.trim()) { setTFormError('Informe o nome do modelo.'); return; }
+    setTFormError('');
     const duration = calcDuration(tForm.start_time, tForm.end_time);
     createShiftTemplate({
       user_id: user.id,
@@ -135,78 +141,81 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
 
   if (view === 'newTemplate' && selectedWp) {
     const tDuration = calcDuration(tForm.start_time, tForm.end_time);
+    const shiftTypes: ShiftType[] = ['dia', 'noite', '24h', 'sobreaviso', 'sala_vermelha', 'UTI', 'anestesia', 'cirurgia', 'ambulatorio', 'outro'];
+    const typeLabel = (ty: string) => ty.charAt(0).toUpperCase() + ty.slice(1).replace('_', ' ');
     return (
-      <div className="page-content pb-[130px]">
-        {/* Header */}
+      <div className="page-content bg-white min-h-screen pb-[150px]">
+        {/* Header — padrão do "Editar plantão" */}
         <div className="px-5 pt-7 pb-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setView('detail')}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition">
-                <X size={15} />
-              </button>
-              <div>
-                <h1 className="font-bold text-[17px] text-slate-900">Novo Modelo</h1>
-                <p className="text-[11px] text-slate-400 font-medium">{selectedWp.name}</p>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="hospital-avatar shrink-0" style={{ background: selectedWp.color }}>
+                {selectedWp.name.slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">{selectedWp.name}</p>
+                <h1 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Novo modelo</h1>
+                <p className="text-[12px] text-slate-500 mt-0.5">Salve horário e valor para lançar em 1 toque.</p>
               </div>
             </div>
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: selectedWp.color }}>
-              <span className="text-white text-[11px] font-bold">{selectedWp.name.slice(0, 2).toUpperCase()}</span>
-            </div>
-          </div>
-          <div className="px-3 py-1.5 rounded-xl" style={{ background: `${selectedWp.color}18` }}>
-            <p className="text-[11px] font-medium" style={{ color: selectedWp.color }}>
-              Salvo aqui para usar ao adicionar plantões rapidamente
-            </p>
+            <button onClick={() => setView('detail')}
+              className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
+              <X size={16} />
+            </button>
           </div>
         </div>
 
-        <div className="px-5 space-y-5">
-          {/* Modelo */}
+        <div className="px-5 space-y-4">
+          {/* Identificação */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Modelo</p>
-            <div className="bg-slate-50 rounded-[14px] overflow-hidden">
-              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                <span className="text-[11px] text-slate-400 font-semibold w-14 flex-shrink-0">Nome</span>
-                <input value={tForm.name}
-                  onChange={e => setTForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder='Ex: "Noite 19h–7h"'
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-semibold outline-none" />
-              </div>
-              <div className="flex items-center gap-3 px-3 py-2.5">
-                <span className="text-[11px] text-slate-400 font-semibold w-14 flex-shrink-0">Tipo</span>
-                <select value={tForm.shift_type}
-                  onChange={e => setTForm(f => ({ ...f, shift_type: e.target.value as ShiftType }))}
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none">
-                  {(['dia','noite','24h','sobreaviso','sala_vermelha','UTI','anestesia','cirurgia','ambulatorio','outro'] as ShiftType[]).map(t => (
-                    <option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>
-                  ))}
-                </select>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <Tag size={11} strokeWidth={2.5} /> Modelo
+            </label>
+            <div>
+              <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Nome do modelo</p>
+              <input value={tForm.name}
+                onChange={e => { setTForm(f => ({ ...f, name: e.target.value })); if (tFormError) setTFormError(''); }}
+                placeholder='Ex: "Noite 19h–7h"'
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+            </div>
+            <div className="mt-2">
+              <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Tipo de escala</p>
+              <div className="flex flex-wrap gap-1.5">
+                {shiftTypes.map(ty => {
+                  const active = tForm.shift_type === ty;
+                  return (
+                    <button key={ty} type="button"
+                      onClick={() => setTForm(f => ({ ...f, shift_type: ty }))}
+                      className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-all active:scale-95 ${
+                        active ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:opacity-80'
+                      }`}
+                      style={active ? { background: selectedWp.color } : undefined}>
+                      {typeLabel(ty)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
 
           {/* Horário */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Horário</p>
-            <div className="bg-slate-50 rounded-[14px] overflow-hidden">
-              <div className="grid grid-cols-2">
-                <div className="flex items-center gap-2 px-3 py-2.5 border-r border-white">
-                  <div>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">Início</p>
-                    <input type="time" value={tForm.start_time}
-                      onChange={e => setTForm(f => ({ ...f, start_time: e.target.value }))}
-                      className="bg-transparent text-sm text-slate-800 font-semibold outline-none w-full" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-2.5">
-                  <div>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">Fim</p>
-                    <input type="time" value={tForm.end_time}
-                      onChange={e => setTForm(f => ({ ...f, end_time: e.target.value }))}
-                      className="bg-transparent text-sm text-slate-800 font-semibold outline-none w-full" />
-                  </div>
-                </div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <Clock size={11} strokeWidth={2.5} /> Horário
+            </label>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Início</p>
+                <input type="time" value={tForm.start_time}
+                  onChange={e => setTForm(f => ({ ...f, start_time: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              </div>
+              <span className="pb-3 text-slate-400 text-[11px] font-medium">até</span>
+              <div className="flex-1">
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Fim</p>
+                <input type="time" value={tForm.end_time}
+                  onChange={e => setTForm(f => ({ ...f, end_time: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
               </div>
             </div>
             <p className="text-[11px] text-slate-400 mt-1.5 px-1">
@@ -214,29 +223,35 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
             </p>
           </div>
 
-          {/* Valor */}
+          {/* Valor padrão */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Valor Padrão</p>
-            <div className="bg-slate-50 rounded-[14px] flex items-center px-3 py-2.5">
-              <span className="text-sm text-slate-400 mr-2 font-semibold">R$</span>
-              <input type="number" value={tForm.default_value}
-                onChange={e => setTForm(f => ({ ...f, default_value: e.target.value }))}
-                placeholder={selectedWp.default_shift_value.toString()}
-                className="flex-1 bg-transparent text-sm text-slate-800 font-semibold outline-none" />
-            </div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <DollarSign size={11} strokeWidth={2.5} /> Valor padrão (R$)
+            </label>
+            <input type="number" inputMode="decimal" step="50" value={tForm.default_value}
+              onChange={e => setTForm(f => ({ ...f, default_value: e.target.value }))}
+              placeholder={selectedWp.default_shift_value.toString()}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
           </div>
+
+          {tFormError && (
+            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              {tFormError}
+            </div>
+          )}
         </div>
 
-        <div className="fixed bottom-[61px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-4 pt-4 bg-white border-t border-slate-100 z-[51]">
+        {/* Footer */}
+        <div className="fixed bottom-[61px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-4 pt-3 bg-white border-t border-slate-100 z-[51] flex gap-2">
+          <button onClick={() => setView('detail')}
+            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+            Cancelar
+          </button>
           <button onClick={handleCreateTemplate}
             disabled={!tForm.name.trim()}
-            className="w-full py-3.5 rounded-[16px] text-white text-[15px] font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
-            style={{
-              background: tForm.name.trim() ? selectedWp.color : '#9ca3af',
-              boxShadow: tForm.name.trim() ? `0 8px 20px ${selectedWp.color}40` : 'none',
-            }}>
-            <Check size={16} strokeWidth={2.5} />
-            Salvar modelo
+            className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-bold transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+            style={{ background: selectedWp.color, boxShadow: `0 4px 12px ${selectedWp.color}40` }}>
+            <Check size={14} strokeWidth={3} /> Salvar modelo
           </button>
         </div>
       </div>
@@ -245,165 +260,189 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
 
   if (view === 'new') {
     return (
-      <div className="page-content pb-[130px]">
-        {/* Header */}
+      <div className="page-content bg-white min-h-screen pb-[150px]">
+        {/* Header — mesmo padrão do "Editar plantão": avatar + pretitle + título black */}
         <div className="px-5 pt-7 pb-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setView('list')}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition">
-                <X size={15} />
-              </button>
-              <h1 className="font-bold text-[17px] text-slate-900">Novo Local</h1>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="hospital-avatar shrink-0 transition-all duration-300" style={{ background: form.color }}>
+                {form.name.trim()
+                  ? form.name.trim().slice(0, 2).toUpperCase()
+                  : <Building2 size={17} color="white" strokeWidth={2.2} />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Locais de Plantão')}</p>
+                <h1 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Novo local</h1>
+                <p className="text-[12px] text-slate-500 mt-0.5">Hospital, UPA ou clínica onde você atende.</p>
+              </div>
             </div>
-            {/* Live color preview */}
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center transition-all" style={{ background: form.color }}>
-              <Building2 size={18} color="white" strokeWidth={2.2} />
-            </div>
-          </div>
-          <div className="px-3 py-1.5 rounded-xl bg-blue-50">
-            <p className="text-[11px] font-medium text-blue-500">Configure o hospital, UPA ou clínica onde você faz plantões</p>
+            <button onClick={() => setView('list')}
+              className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
+              <X size={16} />
+            </button>
           </div>
         </div>
 
-        <div className="px-5 space-y-5">
+        <div className="px-5 space-y-4">
           {/* Identificação */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Identificação</p>
-            <div className="bg-slate-50 rounded-[14px] overflow-hidden mb-3">
-              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                <span className="text-[11px] text-slate-400 font-semibold w-14 flex-shrink-0">Nome</span>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <Building2 size={11} strokeWidth={2.5} /> Identificação
+            </label>
+            <div className="space-y-2">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Nome do local</p>
                 <input value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (formError) setFormError(''); }}
                   placeholder="Hospital São Marcos"
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-semibold outline-none" />
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
               </div>
-              <div className="flex items-center gap-3 px-3 py-2.5">
-                <span className="text-[11px] text-slate-400 font-semibold w-14 flex-shrink-0">Tipo</span>
-                <select value={form.type}
-                  onChange={e => setForm(f => ({ ...f, type: e.target.value as WorkplaceType }))}
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none">
-                  {Object.entries(WORKPLACE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Tipo</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(WORKPLACE_TYPE_LABELS).map(([k, v]) => {
+                    const active = form.type === k;
+                    return (
+                      <button key={k} type="button"
+                        onClick={() => setForm(f => ({ ...f, type: k as WorkplaceType }))}
+                        className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-all active:scale-95 ${
+                          active ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:opacity-80'
+                        }`}
+                        style={active ? { background: form.color } : undefined}>
+                        {v}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
+          </div>
 
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Cor de identificação</p>
-            <div className="flex gap-3 flex-wrap">
+          {/* Cor de identificação */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+              <Palette size={11} strokeWidth={2.5} /> Cor de identificação
+            </label>
+            <div className="flex gap-2.5 flex-wrap">
               {WORKPLACE_COLORS.map(c => (
-                <button key={c} onClick={() => setForm(f => ({ ...f, color: c }))}
-                  className="w-9 h-9 rounded-full transition-all flex items-center justify-center"
+                <button key={c} type="button" onClick={() => setForm(f => ({ ...f, color: c }))}
+                  className="w-8 h-8 rounded-full transition-all flex items-center justify-center"
                   style={{
                     background: c,
-                    transform: form.color === c ? 'scale(1.2)' : 'scale(1)',
-                    boxShadow: form.color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none',
+                    transform: form.color === c ? 'scale(1.15)' : 'scale(1)',
+                    boxShadow: form.color === c ? `0 0 0 2.5px white, 0 0 0 4.5px ${c}` : 'none',
                   }}>
-                  {form.color === c && <Check size={13} color="white" strokeWidth={3} />}
+                  {form.color === c && <Check size={12} color="white" strokeWidth={3} />}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Plantão Padrão */}
+          {/* Plantão padrão */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Plantão Padrão</p>
-            <div className="bg-slate-50 rounded-[14px] overflow-hidden">
-              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Valor (R$)</span>
-                <input type="number" value={form.default_shift_value}
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <DollarSign size={11} strokeWidth={2.5} /> Plantão padrão
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Valor (R$)</p>
+                <input type="number" inputMode="decimal" step="50" value={form.default_shift_value}
                   onChange={e => setForm(f => ({ ...f, default_shift_value: e.target.value }))}
                   placeholder="1400"
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-semibold outline-none" />
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
               </div>
-              <div className="flex items-center gap-3 px-3 py-2.5">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Duração (h)</span>
-                <input type="number" value={form.default_duration_hours}
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Duração (h)</p>
+                <input type="number" inputMode="decimal" step="0.5" value={form.default_duration_hours}
                   onChange={e => setForm(f => ({ ...f, default_duration_hours: e.target.value }))}
                   placeholder="12"
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none" />
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
               </div>
             </div>
           </div>
 
           {/* Pagamento */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Pagamento</p>
-            <div className="bg-slate-50 rounded-[14px] overflow-hidden">
-              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Dia do mês</span>
-                <input type="number" value={form.payment_day}
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <Wallet size={11} strokeWidth={2.5} /> Pagamento
+            </label>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Dia do mês</p>
+                <input type="number" inputMode="numeric" min="1" max="31" value={form.payment_day}
                   onChange={e => setForm(f => ({ ...f, payment_day: e.target.value }))}
                   placeholder="10"
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-semibold outline-none" />
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
               </div>
-              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Método</span>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Método</p>
                 <select value={form.payment_method}
                   onChange={e => setForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none">
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
                   {(['PJ','PF','RPA','cooperativa','outro'] as PaymentMethod[]).map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
-              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Recebimento</span>
+            </div>
+            <div className="space-y-2">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Forma de recebimento (relatório do contador)</p>
                 <select value={form.fiscal_nature}
                   onChange={e => setForm(f => ({ ...f, fiscal_nature: e.target.value as FiscalNature }))}
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none">
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
                   {FISCAL_NATURE_ORDER.map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
                 </select>
               </div>
-              <div className="flex items-center gap-3 px-3 py-2.5">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">CNPJ/CPF</span>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">CNPJ/CPF da fonte pagadora</p>
                 <input value={form.cnpj}
                   onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))}
                   placeholder="Opcional"
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none" />
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
               </div>
             </div>
           </div>
 
-          {/* Contato */}
+          {/* Contato (opcional) */}
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Contato</p>
-              <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-semibold">opcional</span>
-            </div>
-            <div className="bg-slate-50 rounded-[14px] overflow-hidden">
-              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Endereço</span>
-                <input value={form.address}
-                  onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                  placeholder="Rua, Número, Cidade"
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none" />
-              </div>
-              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-white">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Responsável</span>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <Phone size={11} strokeWidth={2.5} /> Contato
+              <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-semibold normal-case tracking-normal">opcional</span>
+            </label>
+            <div className="space-y-2">
+              <input value={form.address}
+                onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+                placeholder="Endereço (rua, número, cidade)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              <div className="grid grid-cols-2 gap-2">
                 <input value={form.contact_name}
                   onChange={e => setForm(f => ({ ...f, contact_name: e.target.value }))}
-                  placeholder="Nome"
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none" />
-              </div>
-              <div className="flex items-center gap-3 px-3 py-2.5">
-                <span className="text-[11px] text-slate-400 font-semibold w-24 flex-shrink-0">Telefone</span>
+                  placeholder="Responsável"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
                 <input value={form.contact_phone}
                   onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
                   placeholder="(00) 00000-0000"
-                  className="flex-1 bg-transparent text-sm text-slate-800 font-medium outline-none" />
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
               </div>
             </div>
           </div>
+
+          {formError && (
+            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              {formError}
+            </div>
+          )}
         </div>
 
-        <div className="fixed bottom-[61px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-4 pt-4 bg-white border-t border-slate-100 z-[51]">
+        {/* Footer — CTA no padrão do "Editar plantão" */}
+        <div className="fixed bottom-[61px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-4 pt-3 bg-white border-t border-slate-100 z-[51] flex gap-2">
+          <button onClick={() => setView('list')}
+            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+            Cancelar
+          </button>
           <button onClick={handleCreateWp}
-            disabled={!form.name.trim()}
-            className="w-full py-3.5 rounded-[16px] text-white text-[15px] font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
-            style={{
-              background: form.name.trim() ? form.color : '#9ca3af',
-              boxShadow: form.name.trim() ? `0 8px 20px ${form.color}40` : 'none',
-            }}>
-            <Check size={16} strokeWidth={2.5} />
-            Salvar local
+            className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            disabled={!form.name.trim()}>
+            <Check size={14} strokeWidth={3} /> Salvar local
           </button>
         </div>
       </div>
@@ -417,117 +456,132 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
     const totalReceived = wpShifts.filter(s => s.status === 'recebido').reduce((a, s) => a + (s.received_value || s.expected_value), 0);
 
     return (
-      <div className="page-content">
-        <div className="pt-14">
-          <div className="px-5 mb-4">
-            <div className="flex items-center justify-between mb-4">
-              <button onClick={() => setView('list')} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"><X size={16} /></button>
-              <button onClick={() => setEditWpSheet(selectedWp)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-[12px] font-semibold hover:bg-blue-100 transition active:scale-95">
-                <Pencil size={12} strokeWidth={2.5} /> Editar local
-              </button>
-            </div>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="hospital-avatar w-16 h-16 text-xl rounded-2xl" style={{ background: selectedWp.color, width: 64, height: 64, fontSize: 22, borderRadius: 18 }}>
-                {selectedWp.name.slice(0, 2).toUpperCase()}
-              </div>
-              <div>
-                <h1 className="font-bold text-2xl text-gray-900">{selectedWp.name}</h1>
-                <p className="text-gray-400 text-sm mb-1">{WORKPLACE_TYPE_LABELS[selectedWp.type]} · Pagamento Dia {selectedWp.payment_day} · {selectedWp.payment_method}</p>
-                {selectedWp.address && <p className="text-gray-400 text-xs truncate max-w-[250px]">📍 {selectedWp.address}</p>}
-              </div>
-            </div>
+      <div className="page-content bg-white min-h-screen">
+        {/* Header — botão voltar + editar local */}
+        <div className="px-5 pt-7 pb-3 flex items-center justify-between">
+          <button onClick={() => setView('list')}
+            className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95">
+            <ChevronLeft size={18} strokeWidth={2.5} />
+          </button>
+          <button onClick={() => setEditWpSheet(selectedWp)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-[12px] font-bold hover:bg-blue-100 transition active:scale-95">
+            <Pencil size={12} strokeWidth={2.5} /> Editar local
+          </button>
+        </div>
 
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="card border border-gray-50 text-center">
-                <p className="text-xs text-gray-400 mb-1">Padrão</p>
-                <p className="font-bold text-gray-900 text-sm">{fmtCur(selectedWp.default_shift_value)}</p>
+        {/* Identidade */}
+        <div className="px-5">
+          <div className="flex items-center gap-3.5 mb-4">
+            <div className="hospital-avatar shrink-0" style={{ background: selectedWp.color, width: 60, height: 60, fontSize: 20, borderRadius: 18 }}>
+              {selectedWp.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <h1 className="font-black text-[22px] text-slate-900 tracking-tight leading-tight truncate">{selectedWp.name}</h1>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{WORKPLACE_TYPE_LABELS[selectedWp.type]}</span>
               </div>
-              <div className="card border border-gray-50 text-center">
-                <p className="text-xs text-gray-400 mb-1">Total</p>
-                <p className="font-bold text-gray-900 text-sm">{fmtCur(totalExpected)}</p>
-              </div>
-              <div className="card border border-gray-50 text-center">
-                <p className="text-xs text-gray-400 mb-1">Recebido</p>
-                <p className="font-bold text-green-600 text-sm">{fmtCur(totalReceived)}</p>
-              </div>
+              <p className="text-slate-500 text-[12px]">Pag. dia {selectedWp.payment_day} · {selectedWp.payment_method}</p>
+              {selectedWp.address && (
+                <p className="text-slate-400 text-[11px] flex items-center gap-1 mt-0.5 truncate">
+                  <MapPin size={10} className="shrink-0" /> <span className="truncate">{selectedWp.address}</span>
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Templates */}
-          <div className="px-5 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-900">Modelos de Plantão</h3>
-              <button onClick={() => setView('newTemplate')} className="text-blue-600 text-sm font-medium flex items-center gap-1">
-                <Plus size={14} /> Novo
-              </button>
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2 mb-5">
+            <div className="bg-slate-50 rounded-2xl border border-slate-100 px-3 py-3 text-center">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Padrão</p>
+              <p className="font-black text-slate-900 text-[14px] tracking-tight">{fmtCur(selectedWp.default_shift_value)}</p>
             </div>
-            {templates.length === 0 ? (
-              <div className="card border border-dashed border-gray-200 text-center py-6">
-                <p className="text-gray-400 text-sm mb-2">Nenhum modelo criado</p>
-                <button onClick={() => setView('newTemplate')} className="text-blue-600 text-sm font-medium">Criar modelo</button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {templates.map(t => (
-                  <div key={t.id} onClick={() => setEditTemplateSheet(t)}
-                    className="card border border-gray-50 flex items-center justify-between cursor-pointer hover:border-slate-200 active:scale-[0.99] transition">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: selectedWp.color }}>
-                        {t.shift_type.slice(0,2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-900 text-sm truncate">{t.name}</p>
-                        <p className="text-xs text-gray-400">{t.start_time}–{t.end_time} · {t.duration_hours}h · {fmtCur(t.default_value)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button onClick={e => { e.stopPropagation(); setEditTemplateSheet(t); }}
-                        className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition active:scale-95"
-                        title="Editar modelo">
-                        <Pencil size={12} strokeWidth={2.5} />
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); if(confirm('Excluir modelo?')) { deleteShiftTemplate(t.id); refreshWorkplaces(); } }}
-                        className="w-7 h-7 rounded-full bg-gray-100 hover:bg-red-50 flex items-center justify-center transition active:scale-95"
-                        title="Excluir modelo">
-                        <Trash2 size={13} className="text-gray-400 hover:text-red-500 transition" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="bg-slate-50 rounded-2xl border border-slate-100 px-3 py-3 text-center">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total</p>
+              <p className="font-black text-slate-900 text-[14px] tracking-tight">{fmtCur(totalExpected)}</p>
+            </div>
+            <div className="bg-slate-50 rounded-2xl border border-slate-100 px-3 py-3 text-center">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Recebido</p>
+              <p className="font-black text-emerald-600 text-[14px] tracking-tight">{fmtCur(totalReceived)}</p>
+            </div>
           </div>
+        </div>
 
-          {/* Recent shifts */}
-          <div className="px-5 mb-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Histórico de Plantões</h3>
-            {wpShifts.length === 0 ? (
-              <div className="card border border-gray-50 text-center py-6 text-gray-400 text-sm">Nenhum plantão registrado</div>
-            ) : (
-              <div className="space-y-2">
-                {wpShifts.slice(0, 8).map(s => (
-                  <div key={s.id} className="flex items-center justify-between py-2 border-b border-gray-50">
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{format(new Date(s.date), 'dd/MM/yyyy')}</p>
-                      <p className="text-xs text-gray-400">{format(new Date(s.start_datetime), 'HH:mm')}–{format(new Date(s.end_datetime), 'HH:mm')} · {s.duration_hours}h</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-gray-900 text-sm">{fmtCur(s.expected_value)}</p>
-                      <span className={`status-badge status-${s.status}`} style={{ fontSize: 9 }}>{s.status}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="px-5 pb-6">
-            <button onClick={() => handleDeleteWp(selectedWp.id)}
-              className="w-full py-3 rounded-xl bg-red-50 text-red-600 font-semibold text-sm flex items-center justify-center gap-2">
-              <Trash2 size={16} /> Excluir local
+        {/* Modelos de Plantão */}
+        <div className="px-5 mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Modelos de plantão</h3>
+            <button onClick={() => setView('newTemplate')}
+              className="flex items-center gap-1 text-[12px] font-bold text-blue-600 hover:text-blue-700 transition active:scale-95">
+              <Plus size={13} strokeWidth={2.5} /> Novo
             </button>
           </div>
+          {templates.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-dashed border-slate-200 text-center py-6 px-4">
+              <p className="text-slate-500 text-[12px] mb-2">Nenhum modelo criado ainda.</p>
+              <button onClick={() => setView('newTemplate')}
+                className="text-[12px] font-bold text-blue-600 hover:text-blue-700 transition">Criar primeiro modelo</button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {templates.map(t => (
+                <div key={t.id} onClick={() => setEditTemplateSheet(t)}
+                  className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-2.5 flex items-center justify-between gap-2 cursor-pointer hover:border-slate-200 active:scale-[0.99] transition">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ background: selectedWp.color }}>
+                      {t.shift_type.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 text-[13px] truncate leading-tight">{t.name}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{t.start_time}–{t.end_time} · {t.duration_hours}h · {fmtCur(t.default_value)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={e => { e.stopPropagation(); setEditTemplateSheet(t); }}
+                      className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition active:scale-95"
+                      title="Editar modelo">
+                      <Pencil size={12} strokeWidth={2.5} />
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); if (confirm('Excluir modelo?')) { deleteShiftTemplate(t.id); refreshWorkplaces(); } }}
+                      className="w-7 h-7 rounded-full bg-slate-100 hover:bg-red-50 flex items-center justify-center transition active:scale-95"
+                      title="Excluir modelo">
+                      <Trash2 size={13} className="text-slate-400 hover:text-red-500 transition" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Histórico de Plantões */}
+        <div className="px-5 mb-5">
+          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Histórico de plantões</h3>
+          {wpShifts.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-100 text-center py-6 text-slate-400 text-[12px]">Nenhum plantão registrado</div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.03)] px-3 divide-y divide-slate-50">
+              {wpShifts.slice(0, 8).map(s => (
+                <div key={s.id} className="flex items-center justify-between py-2.5">
+                  <div>
+                    <p className="text-[13px] font-bold text-slate-800 leading-tight">{format(new Date(s.date), 'dd/MM/yyyy')}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{format(new Date(s.start_datetime), 'HH:mm')}–{format(new Date(s.end_datetime), 'HH:mm')} · {s.duration_hours}h</p>
+                  </div>
+                  <div className="text-right flex flex-col items-end gap-1">
+                    <p className="font-bold text-slate-900 text-[13px] tracking-tight">{fmtCur(s.expected_value)}</p>
+                    <span className={`status-badge status-${s.status}`} style={{ fontSize: 9 }}>{STATUS_LABELS[s.status]}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Zona de perigo */}
+        <div className="px-5 pb-8">
+          <button onClick={() => handleDeleteWp(selectedWp.id)}
+            className="w-full py-3 rounded-2xl bg-white border border-red-100 text-red-600 text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-red-50 transition active:scale-[0.98]">
+            <Trash2 size={15} strokeWidth={2.5} /> Excluir local
+          </button>
         </div>
 
         {editWpSheet && (

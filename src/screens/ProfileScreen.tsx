@@ -107,7 +107,8 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
   const initials = user?.name?.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'U';
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col animate-fade-in">
+    <div className="fixed inset-0 z-50 flex justify-center animate-fade-in" style={{ background: 'var(--color-bg)' }}>
+     <div className="w-full max-w-[430px] h-full bg-white flex flex-col relative shadow-xl overflow-hidden">
       {/* Header */}
       <header className="px-5 pt-7 pb-3 bg-white border-b border-slate-100 shrink-0">
         <div className="flex items-center justify-between">
@@ -355,6 +356,7 @@ export default function ProfileScreen({ onClose, onSaved }: ProfileScreenProps) 
           color: rgb(241 245 249);
         }
       `}</style>
+     </div>
     </div>
   );
 }

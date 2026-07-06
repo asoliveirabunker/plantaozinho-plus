@@ -440,10 +440,10 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
           )}
       </main>
 
-      {/* Backdrop Global */}
-      <div 
-        onClick={() => { setShiftDetails(null); setShowRepetirModal(false); setShowMarcarPagoModal(false); }} 
-        className={`absolute inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300 ${anyModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      {/* Backdrop Global (sem blur) */}
+      <div
+        onClick={() => { setShiftDetails(null); setShowRepetirModal(false); setShowMarcarPagoModal(false); }}
+        className={`absolute inset-0 z-40 bg-slate-900/40 transition-opacity duration-300 ${anyModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
       </div>
 
       {/* MODAL: DETALHES DO PLANTÃO */}
