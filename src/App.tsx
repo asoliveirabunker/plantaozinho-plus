@@ -15,6 +15,7 @@ import UpgradeModal from './components/UpgradeModal';
 import GuestBanner from './components/GuestBanner';
 import GuestSignupPrompt from './components/GuestSignupPrompt';
 import BrandMark from './components/BrandMark';
+import MarbleBackground from './components/MarbleBackground';
 
 type Tab = 'hoje' | 'calendario' | 'ganhos' | 'locais' | 'relatorios';
 
@@ -40,12 +41,14 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <div className="app-container flex items-center justify-center min-h-screen bg-white">
-        <div className="text-center">
-          <div className="mx-auto mb-4">
-            <BrandMark size={64} />
+      <div className="app-container relative flex items-center justify-center min-h-screen overflow-hidden">
+        {/* Fundo marmoreado animado da marca */}
+        <MarbleBackground />
+        <div className="relative z-10 text-center">
+          <div className="mx-auto mb-4 w-fit drop-shadow-[0_10px_24px_rgba(4,80,62,0.35)]">
+            <BrandMark size={72} />
           </div>
-          <p className="text-gray-400 text-sm">Carregando...</p>
+          <p className="text-white text-sm font-semibold tracking-wide on-marble">Carregando...</p>
         </div>
       </div>
     );

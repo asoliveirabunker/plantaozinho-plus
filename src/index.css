@@ -258,6 +258,72 @@
     100% { background-position: 200% 0; }
   }
 
+  /* ============================================================
+   * Mármore animado — o marmoreio REAL da marca (marble.webp) com
+   * movimento lento de câmera (pan + rotação + zoom, estilo Ken Burns)
+   * e brilhos de cor derivando por cima ("cores em movimento").
+   * Uso: <MarbleBackground /> dentro de um pai relative + overflow-hidden.
+   * ============================================================ */
+  @keyframes marble-pan {
+    0%   { transform: translate(-53%, -53%) rotate(-2.5deg) scale(1); }
+    50%  { transform: translate(-49%, -47%) rotate(0.5deg) scale(1.07); }
+    100% { transform: translate(-46%, -51%) rotate(3deg) scale(1.12); }
+  }
+  @keyframes marble-glow-a {
+    0%   { transform: translate(-20%, -12%) scale(1); opacity: 0.35; }
+    100% { transform: translate(24%, 16%) scale(1.25); opacity: 0.55; }
+  }
+  @keyframes marble-glow-b {
+    0%   { transform: translate(18%, 14%) scale(1.15); opacity: 0.3; }
+    100% { transform: translate(-22%, -10%) scale(0.95); opacity: 0.5; }
+  }
+
+  .marble-bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: #2fc3a4; /* fallback enquanto a imagem carrega */
+  }
+  .marble-bg .marble-img {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 165%; height: 165%;
+    object-fit: cover;
+    animation: marble-pan 48s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  /* Brilhos suaves de cor cruzando o mármore */
+  .marble-bg .marble-glow {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(52px);
+    mix-blend-mode: soft-light;
+    will-change: transform, opacity;
+  }
+  .marble-bg .marble-glow-a {
+    width: 70%; height: 55%; left: -6%; top: -8%;
+    background: #d6fff1;
+    animation: marble-glow-a 26s ease-in-out infinite alternate;
+  }
+  .marble-bg .marble-glow-b {
+    width: 65%; height: 50%; right: -10%; bottom: -6%;
+    background: #21b9d8;
+    animation: marble-glow-b 30s ease-in-out infinite alternate;
+  }
+  /* Véu sutil de contraste — melhora a legibilidade do texto branco */
+  .marble-bg .marble-contrast {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(6, 78, 59, 0.22) 0%, rgba(6, 78, 59, 0.06) 45%, rgba(6, 78, 59, 0.2) 100%);
+  }
+  /* Texto sobre mármore — sombra dupla para leitura confortável */
+  .on-marble {
+    text-shadow: 0 1px 3px rgba(6, 78, 59, 0.45), 0 6px 18px rgba(6, 78, 59, 0.3);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marble-bg .marble-img, .marble-bg .marble-glow { animation: none; }
+  }
+
   @keyframes pulse-dot {
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.3); opacity: 0.7; }

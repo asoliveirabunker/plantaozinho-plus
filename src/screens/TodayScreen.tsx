@@ -8,6 +8,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useLanguage } from '../hooks/useLanguage';
 import ProfileScreen from './ProfileScreen';
 import ScreenHelpSheet from '../components/ScreenHelpSheet';
+import MarbleBackground from '../components/MarbleBackground';
 import type { Shift } from '../types';
 
 interface TodayScreenProps {
@@ -273,27 +274,29 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
               </p>
 
               {nextShift && wp ? (
-                <button onClick={() => setShiftDetails(nextShift)} className="hero-shift-card w-full text-left bg-[#4b80e5] rounded-[20px] p-4 text-white shadow-lg shadow-blue-500/20 relative overflow-hidden flex flex-col justify-between min-h-[120px] cursor-pointer">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
+                <button onClick={() => setShiftDetails(nextShift)} className="hero-shift-card w-full text-left rounded-[20px] p-4 text-white shadow-lg shadow-emerald-600/25 relative overflow-hidden flex flex-col justify-between min-h-[120px] cursor-pointer">
+                    <MarbleBackground />
 
                     <div className="relative z-10 flex justify-between items-start">
-                        <div>
-                            <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider inline-block mb-1.5">
+                        <div className="min-w-0">
+                            <span className="bg-white/25 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider inline-block mb-1.5 on-marble">
                               {nextShift.date === todayStr ? t('Hoje') : format(parseISO(nextShift.date), 'dd/MM')}
                             </span>
-                            <h2 className="text-[19px] font-bold mb-0.5 leading-tight tracking-tight">{wp.name}</h2>
-                            <p className="text-blue-100 text-[12px]">{nextShift.title}</p>
+                            <h2 className="text-[19px] font-bold mb-0.5 leading-tight tracking-tight on-marble">{wp.name}</h2>
+                            <p className="text-white/90 text-[12px] on-marble">{nextShift.title}</p>
                         </div>
                     </div>
 
-                    <div className="relative z-10 flex justify-between items-end mt-3">
-                        <div>
-                            <p className="text-[9px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">{t('Horário')}</p>
-                            <p className="font-bold text-[14px] tracking-tight">{format(parseISO(nextShift.start_datetime), 'HH:mm')}–{format(parseISO(nextShift.end_datetime), 'HH:mm')}</p>
+                    {/* flex-wrap + nowrap nos valores: em telas estreitas o VALOR desce
+                        para a linha de baixo em vez de colidir com o HORÁRIO */}
+                    <div className="relative z-10 flex flex-wrap justify-between items-end gap-x-4 gap-y-1.5 mt-3">
+                        <div className="min-w-0">
+                            <p className="text-[9px] text-white/80 uppercase tracking-widest font-bold mb-0.5 on-marble">{t('Horário')}</p>
+                            <p className="font-bold text-[14px] tracking-tight whitespace-nowrap on-marble">{format(parseISO(nextShift.start_datetime), 'HH:mm')}–{format(parseISO(nextShift.end_datetime), 'HH:mm')}</p>
                         </div>
-                        <div className="text-right">
-                            <p className="text-[9px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">{t('Valor')}</p>
-                            <p className="font-bold text-[20px] tracking-tight leading-none">{formatCurrency(nextShift.expected_value)}</p>
+                        <div className="text-right ml-auto">
+                            <p className="text-[9px] text-white/80 uppercase tracking-widest font-bold mb-0.5 on-marble">{t('Valor')}</p>
+                            <p className="font-bold text-[20px] tracking-tight leading-none whitespace-nowrap on-marble">{formatCurrency(nextShift.expected_value)}</p>
                         </div>
                     </div>
                 </button>
@@ -511,22 +514,22 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
           
               <div className="p-5 overflow-y-auto hide-scrollbar">
                   {latestShift ? (
-                    <div className="bg-[#4b80e5] p-4 rounded-[16px] text-white shadow-lg shadow-blue-500/20 mb-6 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-white opacity-10 rounded-full -mr-8 -mt-8 blur-xl pointer-events-none"></div>
+                    <div className="p-4 rounded-[16px] text-white shadow-lg shadow-emerald-600/25 mb-6 relative overflow-hidden">
+                        <MarbleBackground />
                         <div className="relative z-10 flex justify-between items-start">
-                            <div>
-                                <h4 className="font-bold text-[16px] leading-tight tracking-tight">{getWorkplace(latestShift.workplace_id)?.name}</h4>
-                                <p className="text-blue-100 text-[12px] mt-0.5">{latestShift.title}</p>
+                            <div className="min-w-0">
+                                <h4 className="font-bold text-[16px] leading-tight tracking-tight on-marble">{getWorkplace(latestShift.workplace_id)?.name}</h4>
+                                <p className="text-white/90 text-[12px] mt-0.5 on-marble">{latestShift.title}</p>
                             </div>
                         </div>
-                        <div className="relative z-10 flex justify-between items-end mt-4 pt-3 border-t border-white/10">
-                            <div>
-                                <p className="text-[8px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">Horário</p>
-                                <p className="font-bold text-[13px] tracking-tight">{format(parseISO(latestShift.start_datetime), 'HH:mm')}–{format(parseISO(latestShift.end_datetime), 'HH:mm')}</p>
+                        <div className="relative z-10 flex flex-wrap justify-between items-end gap-x-4 gap-y-1.5 mt-4 pt-3 border-t border-white/20">
+                            <div className="min-w-0">
+                                <p className="text-[8px] text-white/80 uppercase tracking-widest font-bold mb-0.5 on-marble">Horário</p>
+                                <p className="font-bold text-[13px] tracking-tight whitespace-nowrap on-marble">{format(parseISO(latestShift.start_datetime), 'HH:mm')}–{format(parseISO(latestShift.end_datetime), 'HH:mm')}</p>
                             </div>
-                            <div className="text-right">
-                                <p className="text-[8px] text-blue-200/80 uppercase tracking-widest font-bold mb-0.5">Valor a repetir</p>
-                                <p className="font-bold text-[20px] tracking-tight leading-none">{formatCurrency(latestShift.expected_value)}</p>
+                            <div className="text-right ml-auto">
+                                <p className="text-[8px] text-white/80 uppercase tracking-widest font-bold mb-0.5 on-marble">Valor a repetir</p>
+                                <p className="font-bold text-[20px] tracking-tight leading-none whitespace-nowrap on-marble">{formatCurrency(latestShift.expected_value)}</p>
                             </div>
                         </div>
                     </div>

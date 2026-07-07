@@ -8,6 +8,7 @@ import { registerUser, loginUser, getUsers } from '../lib/db';
 import { useApp } from '../contexts/AppContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import BrandMark from '../components/BrandMark';
+import MarbleBackground from '../components/MarbleBackground';
 import { signUp as sbSignUp, signIn as sbSignIn } from '../lib/supabaseAuth';
 
 /** Bandeira BR mini para o seletor de idioma */
@@ -102,6 +103,13 @@ export default function OnboardingScreen() {
   const [loginError, setLoginError] = useState('');
   const [signupMsg, setSignupMsg] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+
+  // A notificação de cadastro flutua no topo e se dispensa sozinha.
+  useEffect(() => {
+    if (!signupMsg) return;
+    const timer = setTimeout(() => setSignupMsg(null), 7000);
+    return () => clearTimeout(timer);
+  }, [signupMsg]);
 
   // Password strength
   const passwordChecks = useMemo(() =>
@@ -313,19 +321,24 @@ export default function OnboardingScreen() {
   if (mode === 'login') {
     return (
       <div className="app-container flex flex-col min-h-screen bg-white">
-        <div className="flex-1 flex flex-col px-5 pt-10">
-          <button onClick={() => setMode('onboarding')} className="flex items-center gap-1 text-blue-600 font-medium mb-5 text-sm w-fit">
-            <ChevronLeft size={18} />
-            {t('Voltar')}
-          </button>
-          <div className="mb-6">
-            <div className="mb-4">
-              <BrandMark size={48} />
+        <div className="flex-1 flex flex-col overflow-y-auto hide-scrollbar">
+          {/* Hero marmoreado — compacto */}
+          <div className="relative overflow-hidden px-5 pt-6 pb-7">
+            <MarbleBackground />
+            <div className="relative z-10">
+              <button onClick={() => setMode('onboarding')}
+                className="flex items-center gap-1 text-white font-semibold mb-4 text-sm w-fit px-2.5 py-1.5 -ml-1 rounded-full bg-white/15 border border-white/25 hover:bg-white/25 transition active:scale-95">
+                <ChevronLeft size={16} strokeWidth={2.5} />
+                {t('Voltar')}
+              </button>
+              <p className="text-[11px] font-bold text-white/90 uppercase tracking-[0.22em] mb-0.5 on-marble">{t('Acesso')}</p>
+              <h1 className="text-[24px] font-black text-white tracking-tight leading-tight on-marble">{t('Entrar na conta')}</h1>
+              <p className="text-white/95 text-[13px] mt-0.5 on-marble">{t('Digite e-mail e senha cadastrados.')}</p>
             </div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Acesso')}</p>
-            <h1 className="text-[22px] font-black text-slate-900 tracking-tight leading-tight">{t('Entrar na conta')}</h1>
-            <p className="text-slate-500 text-[13px] mt-0.5">{t('Digite e-mail e senha cadastrados.')}</p>
           </div>
+
+          {/* Folha branca sobreposta */}
+          <div className="relative z-10 bg-white rounded-t-[26px] -mt-4 px-5 pt-5 flex-1">
           <div className="space-y-2.5">
             <div>
               <p className="text-[10px] text-slate-500 mb-1 ml-0.5 font-medium">{t('E-mail')}</p>
@@ -363,6 +376,7 @@ export default function OnboardingScreen() {
               </div>
             )}
           </div>
+          </div>
         </div>
         <div className="px-5 pb-8 pt-3 space-y-2">
           <button onClick={handleLogin} className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20">
@@ -386,33 +400,68 @@ export default function OnboardingScreen() {
   if (mode === 'register') {
     return (
       <div className="app-container flex flex-col min-h-screen bg-white">
-        <div className="flex-1 overflow-y-auto px-5 pt-7 pb-24 hide-scrollbar">
-          {/* Header compacto */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
-              <Stethoscope size={20} className="text-blue-600" />
+        {/* Notificação flutuante (resultado do cadastro) — não empurra o layout */}
+        {signupMsg && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] w-[calc(100%-32px)] max-w-[400px] animate-scale-in">
+            <div className={`flex items-start gap-2.5 rounded-2xl px-3.5 py-3 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)] border ${
+              signupMsg.type === 'error' ? 'border-red-100' : 'border-emerald-100'
+            }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                signupMsg.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'
+              }`}>
+                {signupMsg.type === 'error' ? <X size={15} strokeWidth={2.5} /> : <Check size={15} strokeWidth={3} />}
+              </div>
+              <p className={`flex-1 min-w-0 text-[12.5px] font-semibold leading-snug pt-1 ${
+                signupMsg.type === 'error' ? 'text-red-600' : 'text-emerald-700'
+              }`}>
+                {signupMsg.text}
+              </p>
+              <button onClick={() => setSignupMsg(null)}
+                className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0 hover:bg-slate-200 transition">
+                <X size={12} />
+              </button>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Cadastro')}</p>
-              <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Vamos personalizar')}</h1>
-              <p className="text-[11px] text-slate-500 leading-snug">{t('Algumas informações rápidas.')}</p>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
+          {/* Hero marmoreado — compacto: tile à esquerda, texto ao lado */}
+          <div className="relative overflow-hidden px-5 pt-6 pb-7">
+            <MarbleBackground />
+            <div className="relative z-10">
+              <div className="flex items-center gap-3.5">
+                <div className="w-[52px] h-[52px] rounded-2xl bg-white/90 shadow-[0_10px_24px_rgba(4,80,62,0.28)] flex items-center justify-center shrink-0">
+                  <Stethoscope size={25} className="text-emerald-600" strokeWidth={2.2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-white/90 uppercase tracking-[0.22em] mb-0.5 on-marble">{t('Cadastro')}</p>
+                  <h1 className="text-[24px] font-black text-white tracking-tight leading-tight on-marble">
+                    {registerStep === 0 ? t('Vamos personalizar') : t('Seu perfil médico')}
+                  </h1>
+                  <p className="text-white/95 text-[13px] mt-0.5 on-marble">
+                    {registerStep === 0 ? t('Algumas informações rápidas.') : t('Como você atua nos plantões.')}
+                  </p>
+                </div>
+              </div>
+              {/* Progress — 2 etapas */}
+              <div className="flex gap-2 mt-4">
+                {[0, 1].map(i => (
+                  <div key={i} className="h-[5px] rounded-full flex-1 transition-all duration-300"
+                    style={{ background: `rgba(255,255,255,${i <= registerStep ? 0.95 : 0.3})` }} />
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Progress — 2 etapas */}
-          <div className="flex gap-1.5 mb-4">
-            {[0, 1].map(i => (
-              <div key={i} className="h-1 rounded-full transition-all duration-300 flex-1"
-                style={{ background: '#03bb85', opacity: i <= registerStep ? 1 : 0.2 }} />
-            ))}
-          </div>
+          {/* Folha branca sobreposta ao mármore */}
+          <div className="relative z-10 bg-white rounded-t-[26px] -mt-4 px-5 pt-5">
 
           {/* ============ ETAPA 1 — Identificação + Senha ============ */}
           {registerStep === 0 && (<>
 
           {/* SEÇÃO: IDENTIFICAÇÃO */}
           <section className="mb-3">
-            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <h2 className="text-[11px] font-black text-emerald-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <UserCircle2 size={11} strokeWidth={2.5} /> {t('Identificação')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
@@ -438,7 +487,7 @@ export default function OnboardingScreen() {
 
           {/* SEÇÃO: SENHA */}
           <section className="mb-3">
-            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <h2 className="text-[11px] font-black text-emerald-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Lock size={11} strokeWidth={2.5} /> {t('Senha')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
@@ -505,7 +554,7 @@ export default function OnboardingScreen() {
 
           {/* SEÇÃO: ATUAÇÃO PROFISSIONAL */}
           <section className="mb-3">
-            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <h2 className="text-[11px] font-black text-emerald-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Stethoscope size={11} strokeWidth={2.5} /> {t('Atuação profissional')}
             </h2>
             <div className="bg-white rounded-2xl border border-slate-100 p-2.5 space-y-2 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
@@ -538,7 +587,7 @@ export default function OnboardingScreen() {
 
           {/* SEÇÃO: OBJETIVOS */}
           <section className="mb-3">
-            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <h2 className="text-[11px] font-black text-emerald-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Check size={11} strokeWidth={2.5} /> {t('Principais objetivos')}
               <span className="text-slate-400 font-normal normal-case tracking-normal text-[10px] ml-auto">{t('Selecione um ou mais')}</span>
             </h2>
@@ -567,7 +616,7 @@ export default function OnboardingScreen() {
 
           {/* SEÇÃO: CRM */}
           <section className="mb-3">
-            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <h2 className="text-[11px] font-black text-emerald-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Stethoscope size={11} strokeWidth={2.5} /> CRM
               <span className="text-slate-400 font-normal normal-case tracking-normal text-[10px] ml-auto">{t('(opcional)')}</span>
             </h2>
@@ -601,19 +650,11 @@ export default function OnboardingScreen() {
           </button>
 
           </>)}
+          </div>
         </div>
 
         {/* Footer sticky */}
         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-6 pt-3 bg-white border-t border-slate-100 z-[51]" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
-          {signupMsg && (
-            <div className={`mb-2.5 text-[12px] rounded-xl px-3 py-2 border ${
-              signupMsg.type === 'error'
-                ? 'text-red-600 bg-red-50 border-red-100'
-                : 'text-emerald-700 bg-emerald-50 border-emerald-100'
-            }`}>
-              {signupMsg.text}
-            </div>
-          )}
           <div className="flex gap-2">
             <button onClick={handleRegisterBack} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
               {t('Voltar')}
@@ -631,25 +672,28 @@ export default function OnboardingScreen() {
   // ONBOARDING — uma única tela com carrossel auto-rotativo (3s por slide, 9s total)
   const slide = slides[step];
   return (
-    <div className="app-container flex flex-col min-h-screen bg-white">
+    <div className="app-container relative flex flex-col min-h-screen overflow-hidden">
+      {/* Fundo marmoreado animado da marca */}
+      <MarbleBackground />
+
       {/* Top bar: language toggle */}
-      <div className="absolute top-0 right-0 left-0 z-10 flex justify-end px-4 pt-4">
+      <div className="absolute top-0 right-0 left-0 z-20 flex items-center justify-end px-4 pt-4">
         <button
           onClick={() => setLanguage(language === 'pt-BR' ? 'es-LATAM' : 'pt-BR')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200 hover:bg-slate-100 transition active:scale-95 shadow-sm"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/20 border border-white/30 hover:bg-white/30 transition active:scale-95"
           title={language === 'pt-BR' ? 'Cambiar a español' : 'Mudar para português'}
         >
-          <span className="rounded-[3px] overflow-hidden leading-none ring-1 ring-black/5">
+          <span className="rounded-[3px] overflow-hidden leading-none ring-1 ring-white/30">
             {language === 'pt-BR' ? <MiniFlagBR /> : <MiniFlagMX />}
           </span>
-          <span className="text-[11px] font-semibold text-slate-700 leading-none">
+          <span className="text-[11px] font-semibold text-white leading-none">
             {language === 'pt-BR' ? 'PT' : 'ES'}
           </span>
         </button>
       </div>
 
       <div
-        className="flex-1 flex flex-col items-center px-5 pt-10 select-none relative"
+        className="flex-1 flex flex-col items-center px-5 pt-14 select-none relative z-10"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         style={{ touchAction: 'pan-y' }}
@@ -664,8 +708,8 @@ export default function OnboardingScreen() {
               style={{
                 width: i === step ? 22 : 6,
                 height: 3,
-                background: '#03bb85',
-                opacity: i === step ? 1 : 0.25,
+                background: 'white',
+                opacity: i === step ? 1 : 0.35,
               }}
               aria-label={`Slide ${i + 1}`}
             />
@@ -675,14 +719,13 @@ export default function OnboardingScreen() {
         {/* Hero carrossel — auto-rotação + swipe */}
         <div className="flex-1 flex flex-col items-center justify-center text-center max-w-xs pb-4 w-full">
           <div key={step} className="flex flex-col items-center animate-fade-in">
-            <div className="w-[68px] h-[68px] rounded-[20px] flex items-center justify-center mb-5 shadow-lg transition-all duration-500"
-              style={{ background: slide.iconBg, boxShadow: `0 10px 24px -8px ${slide.iconBg}55` }}>
+            <div className="w-[68px] h-[68px] rounded-[20px] flex items-center justify-center mb-5 bg-white/20 border border-white/30 backdrop-blur-md shadow-[0_14px_30px_rgba(4,80,62,0.28)] transition-all duration-500">
               {slide.icon}
             </div>
-            <h1 className="text-[22px] font-black text-slate-900 leading-tight tracking-tight whitespace-pre-line mb-3">
+            <h1 className="text-[22px] font-black text-white leading-tight tracking-tight whitespace-pre-line mb-3 on-marble">
               {t(slide.title)}
             </h1>
-            <p className="text-slate-500 text-[13.5px] leading-relaxed">
+            <p className="text-white/95 text-[13.5px] leading-relaxed on-marble">
               {t(slide.subtitle)}
             </p>
           </div>
@@ -692,29 +735,29 @@ export default function OnboardingScreen() {
         <button
           onClick={goPrevSlide}
           aria-label="Slide anterior"
-          className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.06)] hover:bg-white hover:border-slate-300 hover:text-blue-600 hover:scale-105 active:scale-95 transition-all duration-200"
+          className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/15 backdrop-blur-md border border-white/30 text-white flex items-center justify-center hover:bg-white/30 hover:scale-105 active:scale-95 transition-all duration-200"
         >
           <ChevronLeft size={18} strokeWidth={2.5} />
         </button>
         <button
           onClick={goNextSlide}
           aria-label="Próximo slide"
-          className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.06)] hover:bg-white hover:border-slate-300 hover:text-blue-600 hover:scale-105 active:scale-95 transition-all duration-200"
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/15 backdrop-blur-md border border-white/30 text-white flex items-center justify-center hover:bg-white/30 hover:scale-105 active:scale-95 transition-all duration-200"
         >
           <ChevronRight size={18} strokeWidth={2.5} />
         </button>
       </div>
 
       {/* Buttons — sempre visíveis */}
-      <div className="px-5 pb-8 pt-3 space-y-2" style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}>
-        <button onClick={handleNext} className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
-          {t('Continuar')} <ChevronRight size={16} />
+      <div className="relative z-10 px-5 pb-8 pt-3 space-y-2" style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}>
+        <button onClick={handleNext} className="w-full py-3.5 rounded-2xl bg-white text-emerald-700 text-sm font-black hover:bg-emerald-50 transition active:scale-[0.98] shadow-[0_10px_26px_rgba(4,80,62,0.3)] flex items-center justify-center gap-1.5">
+          {t('Continuar')} <ChevronRight size={16} strokeWidth={2.75} />
         </button>
-        <button onClick={() => setMode('login')} className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition active:scale-[0.98]">
+        <button onClick={() => setMode('login')} className="w-full py-3 rounded-2xl bg-white/15 border border-white/30 text-white text-sm font-semibold hover:bg-white/25 transition active:scale-[0.98]">
           {t('Já tenho conta — Entrar')}
         </button>
         <button onClick={handleGuestLogin}
-          className="w-full flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-slate-800 transition text-[12.5px] font-medium">
+          className="w-full flex items-center justify-center gap-1.5 py-2 text-white/80 hover:text-white transition text-[12.5px] font-medium">
           <UserCircle2 size={14} />
           {t('Entrar como visitante')}
         </button>
