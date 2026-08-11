@@ -22,17 +22,17 @@ import {
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function fmtShortCur(v: number) { return 'R$ ' + (v / 1000).toFixed(1).replace('.0', '') + 'k'; }
 
-/** Overlay de bloqueio Pro — desfoca o conteúdo e mostra CTA de upgrade. */
+/** Bloqueio Pro — preenche o card com cor sólida (sem blur) e centraliza cadeado + rótulo. */
 function ProLockOverlay({ label, onUnlock }: { label: string; onUnlock: () => void }) {
   return (
     <button
       onClick={onUnlock}
-      className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/60 backdrop-blur-[3px] transition active:scale-[0.99]"
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-100 transition active:scale-[0.99]"
     >
-      <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/30">
-        <Lock size={15} strokeWidth={2.5} />
+      <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/30">
+        <Lock size={16} strokeWidth={2.5} />
       </div>
-      <span className="text-[11px] font-bold text-slate-700">{label}</span>
+      <span className="text-[11.5px] font-bold text-slate-700">{label}</span>
     </button>
   );
 }
@@ -394,7 +394,7 @@ export default function GanhosScreen() {
                 </div>
                 <div className="relative">
                 {!canGoals && <ProLockOverlay label={t('Recurso Pro')} onUnlock={() => gate('goals')} />}
-                <div className={!canGoals ? 'blur-[3px] pointer-events-none select-none' : ''}>
+                <div className={!canGoals ? 'invisible pointer-events-none select-none' : ''}>
 
                 {monthGoal ? (() => {
                   const received = stats?.received || 0;
@@ -968,7 +968,7 @@ export default function GanhosScreen() {
 
       {/* MODAL: META MENSAL */}
       {editGoal && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setEditGoal(false)}>
+        <div className="fixed inset-0 z-[60] bg-slate-900/40 flex items-center justify-center p-4" onClick={() => setEditGoal(false)}>
           <div className="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-slate-900 text-lg mb-1">{t('Meta do mês')}</h3>
             <p className="text-slate-500 text-xs mb-4">Defina quanto deseja faturar neste mês.</p>
@@ -991,7 +991,7 @@ export default function GanhosScreen() {
 
       {/* MODAL: REGISTRAR PAGAMENTO */}
       {receiveModal && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setReceiveModal(null)}>
+        <div className="fixed inset-0 z-[60] bg-slate-900/40 flex items-center justify-center p-4" onClick={() => setReceiveModal(null)}>
           <div className="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-slate-900 text-lg mb-1">Registrar Pagamento</h3>
             <p className="text-slate-500 text-xs mb-4">

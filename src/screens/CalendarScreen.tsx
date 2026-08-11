@@ -38,7 +38,7 @@ function formatCurrency(v: number) {
 }
 
 export default function CalendarScreen({ onAddShift }: CalendarScreenProps) {
-  const { user, workplaces, shifts, refreshShifts } = useApp();
+  const { workplaces, shifts, refreshShifts } = useApp();
   const { t } = useLanguage();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());

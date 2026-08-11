@@ -136,7 +136,7 @@ export async function deleteShiftTemplate(id: string): Promise<void> {
 // ============================================================================
 // SHIFTS
 // ============================================================================
-export async function getShifts(filter?: { from?: string; to?: string; status?: string; workplaceId?: string }): Promise<Shift[]> {
+export async function getShifts(filter?: { from?: string; to?: string; status?: Shift['status']; workplaceId?: string }): Promise<Shift[]> {
   let q = supabase.from('shifts').select('*').order('date', { ascending: false });
   if (filter?.from) q = q.gte('date', filter.from);
   if (filter?.to)   q = q.lte('date', filter.to);

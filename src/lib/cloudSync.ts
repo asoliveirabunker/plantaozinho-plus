@@ -28,7 +28,7 @@ function log(ctx: string, e: unknown) {
 }
 
 /** Remove chaves indesejadas e campos undefined antes de enviar ao banco. */
-function clean<T extends Record<string, unknown>>(obj: T, drop: string[] = []): Record<string, unknown> {
+function clean(obj: object, drop: string[] = []): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(obj)) {
     if (drop.includes(k)) continue;

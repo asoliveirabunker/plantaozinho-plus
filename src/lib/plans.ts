@@ -10,6 +10,22 @@ export type PlanId = SubscriptionPlan; // 'free' | 'pro' | 'max'
 /** Página de vendas — destino de todos os botões de assinatura do app. */
 export const SUBSCRIPTION_URL = 'https://plantaopro-vendas.vercel.app/';
 
+/**
+ * Monta a URL do checkout já identificando a conta. Sem `uid`/`email` o
+ * webhook do Mercado Pago não tem como saber qual conta ativar após o
+ * pagamento — por isso sempre passamos os dois quando há usuário logado.
+ */
+export function buildSubscriptionUrl(
+  plan: PlanId,
+  user?: { id?: string; email?: string } | null,
+): string {
+  const url = new URL(SUBSCRIPTION_URL);
+  url.searchParams.set('plano', plan);
+  if (user?.id) url.searchParams.set('uid', user.id);
+  if (user?.email) url.searchParams.set('email', user.email);
+  return url.toString();
+}
+
 /** Features que podem ser bloqueadas. Cada uma exige um plano mínimo. */
 export type Feature =
   | 'unlimited_workplaces'   // Pro — Free permite só 1 local
@@ -18,9 +34,10 @@ export type Feature =
   | 'charts'                 // Pro — gráfico de evolução
   | 'goals'                  // Pro — meta financeira do mês
   | 'overdue_alerts'         // Pro — alertas/aba de atrasos
-  | 'fiscal_report'          // Pro — relatório fiscal / PDF contador
-  | 'tax_forecast'           // Pro — previsão tributária
+  | 'fiscal_report'          // Max — relatório fiscal / PDF contador
+  | 'tax_forecast'           // Max — previsão tributária
   | 'fiscal_fields'          // Pro — forma de recebimento nos plantões
+  | 'shift_editing'          // Pro — edição completa de plantões
   | 'multiple_cnpj'          // Max — múltiplos CNPJs
   | 'annual_reports'         // Max — relatórios anuais
   | 'whatsapp_accountant'    // Max — envio ao contador via WhatsApp
@@ -43,9 +60,10 @@ export const FEATURE_MIN_PLAN: Record<Feature, PlanId> = {
   charts: 'pro',
   goals: 'pro',
   overdue_alerts: 'pro',
-  fiscal_report: 'pro',
-  tax_forecast: 'pro',
+  fiscal_report: 'max',
+  tax_forecast: 'max',
   fiscal_fields: 'pro',
+  shift_editing: 'pro',
   multiple_cnpj: 'max',
   annual_reports: 'max',
   whatsapp_accountant: 'max',
@@ -99,9 +117,9 @@ export const PLAN_META: Record<PlanId, PlanMeta> = {
     priceLabel: 'R$ 14,90/mês',
     highlights: [
       'Locais e plantões ilimitados',
+      'Edição completa de plantões',
       'Escalas recorrentes (12x36, 24x72…)',
       'Gráficos, metas e alertas',
-      'Relatório fiscal e previsão tributária',
     ],
   },
   max: {
@@ -113,6 +131,7 @@ export const PLAN_META: Record<PlanId, PlanMeta> = {
     priceLabel: 'R$ 29,90/mês',
     highlights: [
       'Relatório completo para o contador (PDF + planilha, por forma de recebimento)',
+      'Previsão tributária do seu regime',
       'Múltiplos CNPJs e relatórios anuais',
       'Envio ao contador via WhatsApp',
       'Histórico ilimitado e suporte prioritário',
@@ -130,6 +149,7 @@ export const FEATURE_LABEL: Record<Feature, { title: string; description: string
   overdue_alerts:       { title: 'Alertas de atrasos', description: 'Saiba exatamente quais pagamentos estão atrasados.' },
   fiscal_report:        { title: 'Relatório fiscal', description: 'Gere PDF/CSV completo para enviar ao seu contador.' },
   tax_forecast:         { title: 'Previsão tributária', description: 'Calcule a provisão de impostos do seu regime.' },
+  shift_editing:        { title: 'Edição de plantões', description: 'Altere status, valores, horários e observações de qualquer plantão.' },
   fiscal_fields:        { title: 'Forma de recebimento', description: 'Classifique cada plantão por regime (MEI, Simples, PJ, PF/RPA) ao registrar.' },
   multiple_cnpj:        { title: 'Múltiplos CNPJs', description: 'Gerencie faturamento de vários CNPJs separadamente.' },
   annual_reports:       { title: 'Relatórios anuais', description: 'Visão consolidada do ano inteiro para o IR.' },

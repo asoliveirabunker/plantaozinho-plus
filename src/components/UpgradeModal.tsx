@@ -1,8 +1,9 @@
 import { X, Check, Sparkles, Crown, Zap } from 'lucide-react';
 import { usePlan } from '../contexts/PlanContext';
+import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../hooks/useLanguage';
 import {
-  FEATURE_MIN_PLAN, FEATURE_LABEL, PLAN_META, SUBSCRIPTION_URL, type PlanId,
+  FEATURE_MIN_PLAN, FEATURE_LABEL, PLAN_META, buildSubscriptionUrl, type PlanId,
 } from '../lib/plans';
 
 /**
@@ -13,6 +14,7 @@ import {
  */
 export default function UpgradeModal() {
   const { upgradeFeature, closeUpgrade } = usePlan();
+  const { user } = useApp();
   const { t } = useLanguage();
 
   if (!upgradeFeature) return null;
@@ -22,15 +24,16 @@ export default function UpgradeModal() {
   const featureInfo = FEATURE_LABEL[upgradeFeature];
   const PlanIcon = requiredPlan === 'max' ? Crown : Zap;
 
-  // Direciona para a página de vendas (a contratação acontece lá).
+  // Direciona para a página de vendas (a contratação acontece lá), levando a
+  // identidade da conta para o checkout conseguir ativá-la após o pagamento.
   function handleUpgrade() {
-    window.open(SUBSCRIPTION_URL, '_blank', 'noopener');
+    window.open(buildSubscriptionUrl(requiredPlan, user), '_blank', 'noopener');
     closeUpgrade();
   }
 
   return (
     <div
-      className="fixed inset-0 z-[200] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[200] bg-slate-900/50 flex items-center justify-center p-4 animate-fade-in"
       onClick={closeUpgrade}
     >
       <div

@@ -50,6 +50,7 @@ export interface Database {
           email: string;
         };
         Update: Partial<Database['public']['Tables']['profiles']['Row']>;
+        Relationships: [];
       };
 
       workplaces: {
@@ -75,6 +76,7 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['workplaces']['Row'], 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Database['public']['Tables']['workplaces']['Row']>;
+        Relationships: [];
       };
 
       shift_templates: {
@@ -93,6 +95,7 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['shift_templates']['Row'], 'id' | 'created_at'> & { id?: string };
         Update: Partial<Database['public']['Tables']['shift_templates']['Row']>;
+        Relationships: [];
       };
 
       shifts: {
@@ -118,6 +121,7 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['shifts']['Row'], 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Database['public']['Tables']['shifts']['Row']>;
+        Relationships: [];
       };
 
       recurrence_rules: {
@@ -138,6 +142,7 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['recurrence_rules']['Row'], 'id' | 'created_at'> & { id?: string };
         Update: Partial<Database['public']['Tables']['recurrence_rules']['Row']>;
+        Relationships: [];
       };
 
       payment_batches: {
@@ -155,6 +160,7 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['payment_batches']['Row'], 'id' | 'difference' | 'created_at'> & { id?: string };
         Update: Partial<Database['public']['Tables']['payment_batches']['Row']>;
+        Relationships: [];
       };
 
       subscription_plans: {
@@ -187,6 +193,7 @@ export interface Database {
           name: string;
         };
         Update: Partial<Database['public']['Tables']['subscription_plans']['Row']>;
+        Relationships: [];
       };
 
       user_subscriptions: {
@@ -210,6 +217,7 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['user_subscriptions']['Row'], 'id' | 'created_at' | 'updated_at'> & { id?: string };
         Update: Partial<Database['public']['Tables']['user_subscriptions']['Row']>;
+        Relationships: [];
       };
 
       subscription_history: {
@@ -228,6 +236,7 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['subscription_history']['Row'], 'id' | 'created_at'> & { id?: string };
         Update: Partial<Database['public']['Tables']['subscription_history']['Row']>;
+        Relationships: [];
       };
 
       audit_log: {
@@ -244,8 +253,11 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['audit_log']['Row'], 'id' | 'created_at'> & { id?: string };
         Update: never;
+        Relationships: [];
       };
     };
+
+    Views: Record<string, never>;
 
     Functions: {
       get_monthly_stats: {

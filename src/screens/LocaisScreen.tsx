@@ -1118,7 +1118,7 @@ function EditTemplateSheet({ template, workplaceColor, onClose, onSaved, onDelet
         </div>
 
         {confirmDelete && (
-          <div className="fixed inset-0 z-[400] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setConfirmDelete(false)}>
+          <div className="fixed inset-0 z-[400] bg-slate-900/50 flex items-center justify-center p-4" onClick={() => setConfirmDelete(false)}>
             <div className="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
               <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
                 <Trash2 size={20} className="text-red-600" />

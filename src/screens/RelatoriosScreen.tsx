@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getMonthlyStats } from '../lib/db';
-import { format, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   FileText, Download, Mail, Settings, ChevronLeft, ChevronDown, X, Loader2, Crown, HelpCircle, BarChart2
@@ -694,17 +694,30 @@ export default function RelatoriosScreen() {
                   </label>
                 </div>
 
-                {/* Previsão Tributária — compacta, canto superior direito */}
-                <div
-                  className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2 text-right shrink-0"
-                  title="*Valores para planejamento. Consulte seu contador para emissão da guia oficial."
-                >
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-blue-100 leading-none mb-1">⚖️ {t('Previsão Tributária')}</p>
-                  <p className="text-[16px] font-bold text-white leading-tight">{fmtCur(taxAmount)}</p>
-                  <p className="text-[9px] text-blue-100 leading-tight">
-                    {user?.tax_regime || 'Simples Nacional'}{useFixedMei ? ` · ${t('Valor Fixo')}` : ` · ${(taxRate * 100).toFixed(1)}%`}
-                  </p>
-                </div>
+                {/* Previsão Tributária — compacta, canto superior direito (contabilidade = Max) */}
+                {(can('tax_forecast') || isGuest) ? (
+                  <div
+                    className="bg-white/15 rounded-xl px-3 py-2 text-right shrink-0"
+                    title="*Valores para planejamento. Consulte seu contador para emissão da guia oficial."
+                  >
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-blue-100 leading-none mb-1">⚖️ {t('Previsão Tributária')}</p>
+                    <p className="text-[16px] font-bold text-white leading-tight">{fmtCur(taxAmount)}</p>
+                    <p className="text-[9px] text-blue-100 leading-tight">
+                      {user?.tax_regime || 'Simples Nacional'}{useFixedMei ? ` · ${t('Valor Fixo')}` : ` · ${(taxRate * 100).toFixed(1)}%`}
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => gate('tax_forecast')}
+                    className="bg-white/15 rounded-xl px-3 py-2 text-right shrink-0 hover:bg-white/25 transition active:scale-95"
+                  >
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-blue-100 leading-none mb-1">⚖️ {t('Previsão Tributária')}</p>
+                    <p className="text-[14px] font-bold text-white leading-tight flex items-center justify-end gap-1">
+                      <Crown size={12} className="text-amber-300" strokeWidth={2.5} /> Max
+                    </p>
+                    <p className="text-[9px] text-blue-100 leading-tight">{t('Toque para desbloquear')}</p>
+                  </button>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -1076,7 +1089,7 @@ export default function RelatoriosScreen() {
       {/* MODAL DE SELEÇÃO DE FORMATO                                 */}
       {/* ========================================================= */}
       {showFormatModal && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-start justify-center p-4 pt-[15vh] transition-opacity">
+        <div className="fixed inset-0 z-[60] bg-slate-900/40 flex items-start justify-center p-4 pt-[15vh] transition-opacity">
           <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center">
               <div>
@@ -1151,7 +1164,7 @@ export default function RelatoriosScreen() {
       {/* MODAL: SEPARAR OS GANHOS POR                                */}
       {/* ========================================================= */}
       {showGroupModal && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-start justify-center p-4 pt-[15vh] transition-opacity">
+        <div className="fixed inset-0 z-[60] bg-slate-900/40 flex items-start justify-center p-4 pt-[15vh] transition-opacity">
           <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center">
               <div>
@@ -1198,7 +1211,7 @@ export default function RelatoriosScreen() {
       {/* MODAL DE CONFIGURAÇÕES CONTÁBEIS                            */}
       {/* ========================================================= */}
       {showSettingsModal && (
-        <div className="fixed inset-0 z-[70] bg-slate-900/40 backdrop-blur-sm flex items-start justify-center p-4 pt-[12vh] transition-opacity">
+        <div className="fixed inset-0 z-[70] bg-slate-900/40 flex items-start justify-center p-4 pt-[12vh] transition-opacity">
           <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in max-h-[80vh] flex flex-col">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
               <div>
@@ -1356,7 +1369,7 @@ export default function RelatoriosScreen() {
       {/* MODAL DE COMPARTILHAMENTO (WhatsApp / Email)               */}
       {/* ========================================================= */}
       {showShareModal && (
-        <div className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowShareModal(false)}>
+        <div className="fixed inset-0 z-[80] bg-slate-900/50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowShareModal(false)}>
           <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
               <div>

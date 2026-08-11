@@ -441,7 +441,7 @@ export function getMonthlyStats(userId: string, year: number, month: number): Mo
   const shifts = getShiftsByMonth(userId, year, month).filter(s => s.status !== 'cancelado');
   const expected = shifts.reduce((sum, s) => sum + s.expected_value, 0);
   const received = shifts
-    .filter(s => s.status === 'recebido' || s.status === 'divergente')
+    .filter(s => s.status === 'recebido')
     .reduce((sum, s) => sum + (s.received_value || s.expected_value), 0);
   const overdue = shifts
     .filter(s => s.status === 'atrasado')

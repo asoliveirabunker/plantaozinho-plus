@@ -7,7 +7,6 @@ import { PROFILE_TYPE_LABELS } from '../types';
 import { registerUser, loginUser, getUsers } from '../lib/db';
 import { useApp } from '../contexts/AppContext';
 import { isSupabaseConfigured } from '../lib/supabase';
-import BrandMark from '../components/BrandMark';
 import MarbleBackground from '../components/MarbleBackground';
 import { signUp as sbSignUp, signIn as sbSignIn } from '../lib/supabaseAuth';
 

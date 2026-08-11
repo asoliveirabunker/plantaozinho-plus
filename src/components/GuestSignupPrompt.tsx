@@ -20,7 +20,7 @@ export default function GuestSignupPrompt() {
 
   return (
     <div
-      className="fixed inset-0 z-[210] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[210] bg-slate-900/50 flex items-center justify-center p-4 animate-fade-in"
       onClick={closeSignupPrompt}
     >
       <div

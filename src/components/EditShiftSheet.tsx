@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Check, Copy, Trash2, Clock, DollarSign, CalendarDays, FileText, AlertCircle, Layers } from 'lucide-react';
+import { X, Check, Copy, Trash2, Clock, DollarSign, CalendarDays, FileText, AlertCircle, Layers, Lock, Crown } from 'lucide-react';
 import { getWorkplace, updateShift } from '../lib/db';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -49,8 +49,11 @@ interface EditShiftSheetProps {
 export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDuplicate }: EditShiftSheetProps) {
   const wp = getWorkplace(shift.workplace_id);
   const { t } = useLanguage();
-  const { can } = usePlan();
+  const { can, gate } = usePlan();
   const { isGuest } = useGuest();
+
+  // Edição de plantões é recurso Pro — Free só pode excluir (visitante experimenta tudo).
+  const canEdit = can('shift_editing') || isGuest;
 
   const [status, setStatus] = useState<ShiftStatus>(shift.status);
   const [date, setDate] = useState(shift.date);
@@ -164,6 +167,33 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
           </button>
         </div>
 
+        {!canEdit ? (
+          /* Plano Free: edição bloqueada (Recurso Pro) — apenas excluir é permitido */
+          <div className="space-y-3">
+            <button
+              onClick={() => gate('shift_editing')}
+              className="w-full rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-100 py-8 px-6 flex flex-col items-center justify-center gap-2 transition active:scale-[0.99]"
+            >
+              <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/30">
+                <Lock size={16} strokeWidth={2.5} />
+              </div>
+              <span className="text-[12px] font-bold text-slate-700">{t('Recurso Pro')}</span>
+              <span className="text-[11px] text-slate-500 text-center leading-snug">
+                {t('Editar status, valores, horários e observações está disponível no plano Pro.')}
+              </span>
+            </button>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setConfirmDelete(true)}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 text-[12.5px] font-semibold hover:bg-red-100 transition active:scale-[0.98]">
+                <Trash2 size={13} strokeWidth={2.5} /> {t('Excluir')}
+              </button>
+              <button onClick={() => gate('shift_editing')}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
+                <Crown size={13} strokeWidth={2.5} /> {t('Desbloquear edição')}
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-4">
           {/* Status */}
           <div>
@@ -349,10 +379,11 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
             </button>
           </div>
         </div>
+        )}
 
         {/* Confirm delete overlay */}
         {confirmDelete && (
-          <div className="fixed inset-0 z-[400] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setConfirmDelete(false)}>
+          <div className="fixed inset-0 z-[400] bg-slate-900/50 flex items-center justify-center p-4" onClick={() => setConfirmDelete(false)}>
             <div className="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
               <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
                 <Trash2 size={20} className="text-red-600" />

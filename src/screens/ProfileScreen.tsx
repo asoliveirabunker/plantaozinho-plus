@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Check, User as UserIcon, Briefcase, LogOut, Calculator, Languages, UploadCloud, Loader2 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { PROFILE_TYPE_LABELS, type ProfileType, isGuestUser } from '../types';
-import { useLanguage, type Language } from '../hooks/useLanguage';
+import { useLanguage } from '../hooks/useLanguage';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { countLegacyLocalData, importLegacyLocalToCloud } from '../lib/cloudSync';
 

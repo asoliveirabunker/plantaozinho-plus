@@ -149,6 +149,6 @@ export async function updateMyProfile(updates: Partial<User>) {
     if (k in updates && updates[k] !== undefined) row[k] = updates[k];
   }
   if (Object.keys(row).length === 0) return { error: null };
-  const { error } = await supabase.from('profiles').update(row).eq('id', user.id);
+  const { error } = await supabase.from('profiles').update(row as never).eq('id', user.id);
   return { error };
 }

@@ -11,7 +11,24 @@
       "Bash(npx tsc *)",
       "Bash(awk 'NR>=375 && NR<=440' src/screens/GanhosScreen.tsx)",
       "Bash(grep -n \"proFeature=\\\\\"fiscal_report\\\\\"\\\\|/>$\" src/screens/RelatoriosScreen.tsx)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(node -e \"console.log\\(require\\('@supabase/supabase-js/package.json'\\).version\\)\")",
+      "Bash(xargs grep -l \"GenericSchema\")",
+      "Bash(rm -f node_modules/.tmp/tsconfig.app.tsbuildinfo node_modules/.tmp/tsconfig.node.tsbuildinfo)",
+      "Bash(npm run *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); const d={...p.dependencies,...p.devDependencies}; ['radix-ui','@radix-ui/react-slot','class-variance-authority','clsx','tailwind-merge','tailwindcss','lucide-react'].forEach\\(k=>console.log\\(k+':', d[k]||'AUSENTE'\\)\\)\")",
+      "Bash(export PGHOST=aws-1-us-east-2.pooler.supabase.com PGPORT=5432 PGUSER=postgres.cqicvnpubmbapezryxyj PGPASSWORD='Mh200306@@#B10' PGDATABASE=postgres)",
+      "Bash(taskkill //F //IM node.exe //FI \"WINDOWTITLE eq serve*\")",
+      "Bash(curl -s -o /dev/null -w \"porta 4173: HTTP %{http_code}\\\\n\" --max-time 3 http://localhost:4173/)",
+      "WebFetch(domain:www.mercadopago.com.br)",
+      "Bash(curl -s https://plantaopro-vendas.vercel.app/)",
+      "Bash(curl -s -X POST https://plantaopro-vendas.vercel.app/api/create-subscription -H \"Content-Type: application/json\" -d '{\"plan\":\"pro\",\"billing\":\"monthly\",\"email\":\"teste@exemplo.com\",\"uid\":\"abc-123\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(cd /tmp && sleep 50; echo \"=== TESTE APOS REDEPLOY ===\" && curl -s -X POST https://plantaopro-vendas.vercel.app/api/create-subscription -H \"Content-Type: application/json\" -d '{\"plan\":\"pro\",\"billing\":\"monthly\",\"email\":\"teste@exemplo.com\",\"uid\":\"abc-123\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -s https://plantaopro-vendas.vercel.app/api/diagnostico)",
+      "Bash(curl -s -o /dev/null -w \"Checkout HTTP %{http_code}\\\\n\" -L \"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id=2b078259616b419cade81c0a65c4a53e\")",
+      "Bash(curl -s -X POST https://plantaopro-vendas.vercel.app/api/create-subscription -H \"Content-Type: application/json\" -d '{\"plan\":\"max\",\"billing\":\"yearly\",\"email\":\"teste@exemplo.com\",\"uid\":\"xyz-789\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -X POST https://plantaopro-vendas.vercel.app/api/create-subscription -H \"Content-Type: application/json\" -d '{\"plan\":\"gratis_pra_sempre\",\"billing\":\"monthly\",\"email\":\"teste@exemplo.com\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "WebSearch"
     ]
   }
 }

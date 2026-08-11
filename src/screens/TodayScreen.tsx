@@ -9,6 +9,8 @@ import { useLanguage } from '../hooks/useLanguage';
 import ProfileScreen from './ProfileScreen';
 import ScreenHelpSheet from '../components/ScreenHelpSheet';
 import MarbleBackground from '../components/MarbleBackground';
+import MonthSummaryCard from '../components/MonthSummaryCard';
+import ConfirmDialog from '../components/ConfirmDialog';
 import type { Shift } from '../types';
 
 interface TodayScreenProps {
@@ -102,6 +104,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
   const [showOverdueSheet, setShowOverdueSheet] = useState(false);
   const [showPendingSheet, setShowPendingSheet] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const { theme, toggleTheme } = useTheme();
@@ -247,7 +250,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
                 {theme === 'dark' ? <Sun size={15} strokeWidth={2.25} /> : <Moon size={15} strokeWidth={2.25} />}
               </button>
               <button
-                onClick={() => { if (confirm(t('Deseja sair da sua conta?'))) logout(); }}
+                onClick={() => setShowLogoutConfirm(true)}
                 className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95"
                 title={t('Sair')}
               >
@@ -314,27 +317,15 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
               )}
           </div>
 
-          {/* Resumo do Mês */}
+          {/* Resumo do Mês — total previsto + composição (recebido / a receber / atrasado) */}
           <div className="mb-4">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{format(now, "MMMM 'de' yyyy", { locale: ptBR })}</p>
-              <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <p className="text-[11px] text-slate-500 font-medium">{t('Previsto')}</p>
-                      <p className="text-[15px] font-bold text-slate-900 tracking-tight">{formatCurrency(stats?.expected || 0)}</p>
-                  </div>
-                  <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <p className="text-[11px] text-slate-500 font-medium">{t('Recebido')}</p>
-                      <p className="text-[15px] font-bold text-emerald-500 tracking-tight">{formatCurrency(stats?.received || 0)}</p>
-                  </div>
-                  <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <p className="text-[11px] text-slate-500 font-medium">{t('A receber')}</p>
-                      <p className="text-[15px] font-bold text-blue-500 tracking-tight">{formatCurrency(stats?.pending || 0)}</p>
-                  </div>
-                  <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                      <p className="text-[11px] text-slate-500 font-medium">{t('Atrasado')}</p>
-                      <p className="text-[15px] font-bold text-red-500 tracking-tight">{formatCurrency(stats?.overdue || 0)}</p>
-                  </div>
-              </div>
+              <MonthSummaryCard
+                monthLabel={format(now, "MMMM 'de' yyyy", { locale: ptBR })}
+                expected={stats?.expected || 0}
+                received={stats?.received || 0}
+                pending={stats?.pending || 0}
+                overdue={stats?.overdue || 0}
+              />
           </div>
 
           {/* Alertas */}
@@ -767,6 +758,18 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
         />
       )}
 
+      {/* CONFIRMAÇÃO: SAIR DA CONTA */}
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        icon={LogOut}
+        title={t('Sair da conta?')}
+        description={t('Você precisará entrar novamente para acessar seus dados.')}
+        confirmLabel={t('Sair')}
+        tone="danger"
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => { setShowLogoutConfirm(false); logout(); }}
+      />
+
       {/* DRILLDOWN: SOBRE A TELA HOJE */}
       <ScreenHelpSheet
         open={showHelp}
@@ -780,7 +783,7 @@ export default function TodayScreen({ onAddShift, onNavigate }: TodayScreenProps
           { title: 'Alertas de pagamento', desc: 'Toque para ver plantões a receber e pagamentos atrasados.' },
           { title: 'Atalhos rápidos', desc: 'Adicione, repita, marque como pago ou abra a agenda em 1 toque.' },
         ]}
-        proPitch="No Pro você desbloqueia gráficos de evolução, metas, alertas de atraso e relatórios fiscais completos."
+        proPitch="No Pro você desbloqueia gráficos de evolução, metas, alertas de atraso e edição completa de plantões."
         proFeature="charts"
       />
 

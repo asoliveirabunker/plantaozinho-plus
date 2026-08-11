@@ -48,7 +48,6 @@ export const translations: Record<Language, Record<string, string>> = {
     'Como podemos te chamar?': '¿Cómo podemos llamarte?',
     'WhatsApp': 'WhatsApp',
     '(opcional)': '(opcional)',
-    'Senha': 'Contraseña',
     'Criar senha': 'Crear contraseña',
     'Mínimo 8 caracteres': 'Mínimo 8 caracteres',
     'Força': 'Fuerza',
@@ -407,8 +406,6 @@ export const translations: Record<Language, Record<string, string>> = {
 
     // Profile screen
     'Conta': 'Cuenta',
-    'Plano Free': 'Plan Free',
-    'Plano Pro': 'Plan Pro',
     'Premium': 'Premium',
     'Dados pessoais': 'Datos personales',
     'Nome completo': 'Nombre completo',
