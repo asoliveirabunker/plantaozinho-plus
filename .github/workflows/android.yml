@@ -41,12 +41,14 @@ jobs:
           fi
           npm run build
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
+      # O runner do GitHub já traz o SDK do Android; o Gradle baixa o que faltar.
+      - name: Aceitar as licenças do SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
 
       - name: Levar o app web para o projeto Android
         run: npx cap sync android
