@@ -28,7 +28,9 @@
       "Bash(curl -s -o /dev/null -w \"Checkout HTTP %{http_code}\\\\n\" -L \"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id=2b078259616b419cade81c0a65c4a53e\")",
       "Bash(curl -s -X POST https://plantaopro-vendas.vercel.app/api/create-subscription -H \"Content-Type: application/json\" -d '{\"plan\":\"max\",\"billing\":\"yearly\",\"email\":\"teste@exemplo.com\",\"uid\":\"xyz-789\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
       "Bash(curl -s -X POST https://plantaopro-vendas.vercel.app/api/create-subscription -H \"Content-Type: application/json\" -d '{\"plan\":\"gratis_pra_sempre\",\"billing\":\"monthly\",\"email\":\"teste@exemplo.com\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(curl -s -o /tmp/login.json -w '%{http_code}' https://cqicvnpubmbapezryxyj.supabase.co/auth/v1/token?grant_type=password -H 'apikey: sb_publishable_Z-jfrwrSk01zLRIyRLxaAg_t5Re-rUc' -H 'Content-Type: application/json' -d '{\"email\":\"asoliveira2006@hotmail.com\",\"password\":\"Mh200306@\"}')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('login OK:', !!j.access_token\\);console.log\\('email:', j.user&&j.user.email\\);console.log\\('plano \\(profile\\):', j.user&&j.user.user_metadata&&j.user.user_metadata.name || '-'\\);console.log\\('erro:', j.error_description||j.msg||'nenhum'\\);}\\);\")"
     ]
   }
 }
