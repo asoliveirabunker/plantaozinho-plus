@@ -33,3 +33,6 @@ dist-ssr
 .supabase/
 supabase/.branches
 supabase/.temp
+
+# Configuração local do Claude Code — pode conter comandos com credenciais
+.claude/settings.local.json
