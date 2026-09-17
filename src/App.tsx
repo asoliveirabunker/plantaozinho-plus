@@ -41,14 +41,24 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <div className="app-container relative flex items-center justify-center min-h-screen overflow-hidden">
-        {/* Fundo marmoreado animado da marca */}
-        <MarbleBackground />
-        <div className="relative z-10 text-center">
-          <div className="mx-auto mb-4 w-fit drop-shadow-[0_10px_24px_rgba(4,80,62,0.35)]">
-            <BrandMark size={72} />
-          </div>
-          <p className="text-white text-sm font-semibold tracking-wide on-marble">Carregando...</p>
+      <div className="app-container relative flex flex-col items-center justify-center min-h-dvh overflow-hidden [&_.marble-img]:object-[46%_40%]">
+        {/* Pedra da marca em tela cheia (parada — o sistema não anima o mármore), com véu próprio */}
+        <MarbleBackground contrast={false} />
+        <div
+          className="absolute inset-0 bg-[linear-gradient(170deg,rgba(6,48,39,.3)_0%,rgba(6,48,39,.14)_40%,rgba(6,48,39,.52)_100%)]"
+          aria-hidden="true"
+        />
+        <div className="relative text-center" role="status" aria-live="polite">
+          {/* Logo em ladrilho branco de 64px, raio 20, apoiado sobre a pedra */}
+          <span className="flex w-16 h-16 mx-auto rounded-[20px] bg-white/[0.94] shadow-[0_20px_40px_-18px_rgba(4,60,48,.6)] items-center justify-center">
+            <BrandMark size={40} />
+          </span>
+          <p className="mt-6 text-[19px] font-medium tracking-[-0.02em] text-white">Plantão Pro</p>
+          <p className="mt-2 text-[13.5px] font-medium text-white/80">Preparando sua escala</p>
+          {/* Progresso como filete de 2px — não spinner */}
+          <span className="block w-16 h-[2px] mx-auto mt-[22px] rounded-[2px] bg-white/30 overflow-hidden" aria-hidden="true">
+            <span className="block w-[38%] h-[2px] bg-white/95" />
+          </span>
         </div>
       </div>
     );

@@ -1,4 +1,3 @@
-import { X, Check, Sparkles, Crown, Zap } from 'lucide-react';
 import { usePlan } from '../contexts/PlanContext';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../hooks/useLanguage';
@@ -8,9 +7,22 @@ import {
 
 /**
  * Modal de upgrade — aparece quando o usuário tenta acessar uma feature
- * acima do seu plano. Mostra o plano necessário, os benefícios e o CTA.
+ * acima do seu plano.
  *
- * Renderizado uma única vez no nível do App (consome PlanContext).
+ * Antes: cabeçalho com `meta.gradient` — linear-gradient(135deg, #03bb85,
+ * #39d39b, #27c8fe) no Pro e violeta no Max. Era o elemento mais "template"
+ * do app inteiro, justamente na tela que precisa parecer caro.
+ *
+ * Agora (tela "Upgrade Pro" do bloco Núcleo): cabeçalho de pedra com pílula
+ * de vidro do plano. Os dois planos usam a MESMA pedra e o mesmo raio —
+ * diferenciados só pelo texto da pílula e pelo preço em 32/200. Benefícios em
+ * linhas de filete, não em bullets com círculos pastel.
+ *
+ * O enquadramento da pedra segue o design (textura a 210%, posição 20% 60%,
+ * véu 155° .44→.7), diferente do `frame="deep"` do MarbleBackground.
+ *
+ * Nota de migração: `PLAN_META[].gradient` e `[].color` deixam de ser usados
+ * aqui. Se nenhum outro componente os consumir, podem sair de lib/plans.ts.
  */
 export default function UpgradeModal() {
   const { upgradeFeature, closeUpgrade } = usePlan();
@@ -22,7 +34,6 @@ export default function UpgradeModal() {
   const requiredPlan: PlanId = FEATURE_MIN_PLAN[upgradeFeature];
   const meta = PLAN_META[requiredPlan];
   const featureInfo = FEATURE_LABEL[upgradeFeature];
-  const PlanIcon = requiredPlan === 'max' ? Crown : Zap;
 
   // Direciona para a página de vendas (a contratação acontece lá), levando a
   // identidade da conta para o checkout conseguir ativá-la após o pagamento.
@@ -31,80 +42,111 @@ export default function UpgradeModal() {
     closeUpgrade();
   }
 
+  const [price, period] = meta.priceLabel
+    ? [meta.priceLabel.split('/')[0], meta.priceLabel.split('/')[1] || 'mês']
+    : ['', 'mês'];
+
   return (
-    <div
-      className="fixed inset-0 z-[200] bg-slate-900/50 flex items-center justify-center p-4 animate-fade-in"
-      onClick={closeUpgrade}
-    >
+    <div className="modal-overlay animate-fade-in" onClick={closeUpgrade}>
       <div
-        className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl overflow-hidden animate-scale-in"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="upgrade-title"
+        className="bg-white w-full max-w-[402px] max-h-[92vh] rounded-[28px] overflow-hidden overflow-y-auto hide-scrollbar leading-[normal] animate-scale-in"
+        style={{ boxShadow: '0 40px 80px -30px rgba(7,56,45,.5)' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header com gradiente do plano */}
-        <div className="relative px-5 pt-6 pb-5 text-white" style={{ background: meta.gradient }}>
-          <button
-            onClick={closeUpgrade}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition active:scale-95"
-          >
-            <X size={16} />
-          </button>
-
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-              <PlanIcon size={20} strokeWidth={2.5} />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest opacity-80 leading-none mb-0.5">
-                {t('Recurso')} {meta.name}
-              </p>
-              <p className="text-[17px] font-black leading-none">Plantão {meta.name}</p>
-            </div>
+        {/* Cabeçalho de pedra */}
+        <div className="relative overflow-hidden p-6">
+          <div aria-hidden="true" className="absolute inset-0 overflow-hidden bg-[#2f6f60]">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: 'url(/marble.webp)',
+                backgroundSize: '210% auto',
+                backgroundPosition: '20% 60%',
+                filter: 'saturate(.84)',
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{ background: 'linear-gradient(155deg, rgba(6,48,39,.44), rgba(6,48,39,.7))' }}
+            />
           </div>
 
-          <h3 className="text-[18px] font-black tracking-tight leading-tight">{featureInfo.title}</h3>
-          <p className="text-[12.5px] opacity-90 mt-1 leading-snug">{featureInfo.description}</p>
+          <div className="relative">
+            <div className="flex items-start justify-between gap-4">
+              {/* Pílula de vidro: "Recurso Pro" / "Recurso Max" — mesmo raio nos dois planos */}
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/30 bg-white/[0.12] text-white text-[11px] font-medium tracking-[0.08em] uppercase">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M13 3 6 13.5h5l-1 7.5 7-10.5h-5z" />
+                </svg>
+                {t('Recurso')} {meta.name}
+              </span>
+              <button
+                onClick={closeUpgrade}
+                className="w-[34px] h-[34px] shrink-0 rounded-full border border-white/30 bg-white/[0.14] hover:bg-white/[0.26] text-white flex items-center justify-center p-0 transition-colors"
+                aria-label={t('Fechar')}
+                title={t('Fechar')}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+
+            <h2
+              id="upgrade-title"
+              className="mt-[26px] text-[26px] font-light leading-[1.1] tracking-[-0.035em] text-white"
+            >
+              {t(featureInfo.title)}
+            </h2>
+            <p className="mt-2.5 text-[14px] font-normal leading-[1.55] text-white/[0.88]">
+              {t(featureInfo.description)}
+            </p>
+          </div>
         </div>
 
-        {/* Benefícios do plano */}
-        <div className="px-5 py-4">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <Sparkles size={11} strokeWidth={2.5} style={{ color: meta.color }} />
-            {t('O que você desbloqueia')}
+        <div className="p-6">
+          <p className="text-[12.5px] font-normal text-slate-500">
+            {t('O que abre com o plano')}
           </p>
-          <div className="space-y-2">
+
+          {/* Benefícios: linhas de filete, check jade de traço 1.8. */}
+          <div className="mt-2.5">
             {meta.highlights.map((h, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <div
-                  className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ background: `${meta.color}1a` }}
+              <div
+                key={i}
+                className="flex items-start gap-3 py-3 border-b border-[var(--color-border)]"
+              >
+                <svg
+                  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+                  className="shrink-0 mt-0.5 text-blue-600" aria-hidden="true"
                 >
-                  <Check size={10} strokeWidth={3} style={{ color: meta.color }} />
-                </div>
-                <span className="text-[13px] text-slate-700 leading-snug">{h}</span>
+                  <path d="M5 12.5l4.5 4.5L19 7.5" />
+                </svg>
+                <span className="text-[14px] font-normal leading-[1.45] text-slate-700">{t(h)}</span>
               </div>
             ))}
           </div>
-        </div>
 
-        {/* Ações */}
-        <div className="px-5 pb-5 pt-1 space-y-2">
           {meta.priceLabel && (
-            <div className="flex items-baseline justify-center gap-1 mb-1">
-              <span className="text-[22px] font-black text-slate-900">{meta.priceLabel.split('/')[0]}</span>
-              <span className="text-[12px] text-slate-400">/{meta.priceLabel.split('/')[1] || 'mês'}</span>
+            <div className="flex flex-wrap items-baseline gap-x-2 mt-[22px]">
+              <span className="text-[32px] font-extralight tracking-[-0.04em] text-slate-900 tabular-nums">
+                {price}
+              </span>
+              <span className="text-[13px] font-light text-slate-500">
+                {t('por')} {period}, {t('cancela quando quiser')}
+              </span>
             </div>
           )}
-          <button
-            onClick={handleUpgrade}
-            className="w-full py-3 rounded-xl text-white text-sm font-bold transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-2"
-            style={{ background: meta.gradient }}
-          >
-            <PlanIcon size={15} strokeWidth={2.5} />
+
+          <button onClick={handleUpgrade} className="btn-primary mt-5 font-medium">
             {t('Assinar')} Plantão {meta.name}
           </button>
           <button
             onClick={closeUpgrade}
-            className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]"
+            className="w-full h-12 mt-2 rounded-xl bg-transparent text-[13.5px] font-normal text-slate-500 hover:text-slate-900 transition-colors"
           >
             {t('Agora não')}
           </button>

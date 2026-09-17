@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Check, Copy, Trash2, Clock, DollarSign, CalendarDays, FileText, AlertCircle, Layers, Lock, Crown } from 'lucide-react';
+import { useState, useEffect, type MouseEvent, type ReactNode } from 'react';
+import { X, Trash2 } from 'lucide-react';
 import { getWorkplace, updateShift } from '../lib/db';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -8,6 +8,7 @@ import { STATUS_LABELS, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER, isPJNature, r
 import { useLanguage } from '../hooks/useLanguage';
 import { usePlan } from '../contexts/PlanContext';
 import { useGuest } from '../hooks/useGuest';
+import MarbleBackground from './MarbleBackground';
 
 function formatCurrency(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -15,19 +16,17 @@ function formatCurrency(v: number) {
 
 const STATUS_ORDER: ShiftStatus[] = ['previsto', 'realizado', 'recebido', 'atrasado', 'cancelado'];
 
-function statusChipStyle(status: ShiftStatus, active: boolean) {
-  const map: Record<ShiftStatus, { bg: string; text: string; activeBg: string }> = {
-    previsto:   { bg: 'bg-slate-100',  text: 'text-slate-600',  activeBg: 'bg-slate-700' },
-    realizado:  { bg: 'bg-blue-50',    text: 'text-blue-600',   activeBg: 'bg-blue-600' },
-    recebido:   { bg: 'bg-emerald-50', text: 'text-emerald-700',activeBg: 'bg-emerald-600' },
-    atrasado:   { bg: 'bg-red-50',     text: 'text-red-600',    activeBg: 'bg-red-600' },
-    cancelado:  { bg: 'bg-slate-100',  text: 'text-slate-500',  activeBg: 'bg-slate-500' },
-  };
-  const m = map[status];
-  return active
-    ? `${m.activeBg} text-white shadow-sm`
-    : `${m.bg} ${m.text} hover:opacity-80`;
-}
+const MODAL_SHADOW = '0 40px 80px -30px rgba(7,56,45,.5)';
+
+/** Campo de data/hora sem ícone nativo — o toque abre o seletor (ver `openPicker`). */
+const NO_PICKER_ICON = '[&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-date-and-time-value]:text-left';
+
+/** Campo dentro da treliça: sem caixa, 15/400 (mesma peça do Adicionar plantão). */
+const LATTICE_INPUT = `block w-full mt-1 h-[22px] p-0 border-0 bg-transparent text-[15px] leading-[22px] font-normal text-slate-900 outline-none tabular-nums appearance-none ${NO_PICKER_ICON}`;
+const LATTICE_LABEL = 'block text-[12.5px] leading-[1.3] font-normal text-slate-500';
+
+/** Campo numérico sem as setas do navegador. */
+const NO_SPIN = '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
 function isoToInputDate(iso?: string) {
   if (!iso) return '';
@@ -38,6 +37,70 @@ function isoToInputTime(iso?: string) {
   try { return format(parseISO(iso), 'HH:mm'); } catch { return ''; }
 }
 
+/** "segunda-feira, 14 de setembro de 2026" → "Segunda, 14 de setembro de 2026" */
+function longDate(dateStr: string) {
+  try {
+    const s = format(parseISO(dateStr), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR }).replace('-feira', '');
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  } catch {
+    return dateStr;
+  }
+}
+
+function calcDuration(start: string, end: string) {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff <= 0) diff += 1440;
+  return Math.round(diff * 10 / 60) / 10;
+}
+
+/** Rótulos de forma de recebimento como no design ("PF / Autônomo"). */
+function formaLabel(n: FiscalNature) {
+  return n === 'AUTONOMO' ? 'PF / Autônomo' : FISCAL_NATURE_LABELS[n];
+}
+
+/** Abre o seletor nativo ao tocar em qualquer ponto do campo. */
+function openPicker(e: MouseEvent<HTMLInputElement>) {
+  try { e.currentTarget.showPicker?.(); } catch { /* navegador sem suporte */ }
+}
+
+/** O modo escuro pinta todo `input` com !important; na treliça o campo não tem caixa. */
+function clearDarkFill(el: HTMLInputElement | null) {
+  el?.style.setProperty('background-color', 'transparent', 'important');
+}
+
+/** Rótulo de campo 13/500 fora do campo. */
+function Label({ children, htmlFor, className = '' }: { children: ReactNode; htmlFor?: string; className?: string }) {
+  return htmlFor
+    ? <label htmlFor={htmlFor} className={`input-label ${className}`}>{children}</label>
+    : <p className={`input-label ${className}`}>{children}</p>;
+}
+
+/** Campo de valor com "R$" à esquerda (mesma peça do "Valor previsto"). */
+function MoneyInput({ id, value, onChange, placeholder, invalid }: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  invalid?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] font-normal text-slate-500 pointer-events-none">R$</span>
+      <input
+        id={id}
+        type="number" inputMode="decimal" step="50"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-invalid={invalid || undefined}
+        className={`input-field pl-[46px] tabular-nums ${NO_SPIN}`}
+      />
+    </div>
+  );
+}
+
 interface EditShiftSheetProps {
   shift: Shift;
   onClose: () => void;
@@ -46,6 +109,12 @@ interface EditShiftSheetProps {
   onDuplicate?: () => void;
 }
 
+/**
+ * Editar plantão — modal centrado "de destaque": cabeçalho de pedra
+ * (enquadramento `deep`, o mesmo do detalhe do plantão) e corpo no mesmo
+ * vocabulário do "Adicionar plantão · Manual": chips, treliça 2×2 de
+ * data/horário, campos 52px, seção "Detalhes" em filete e rodapé fixo.
+ */
 export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDuplicate }: EditShiftSheetProps) {
   const wp = getWorkplace(shift.workplace_id);
   const { t } = useLanguage();
@@ -67,7 +136,7 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
 
-  // --- Campos fiscais (recurso Max) ---
+  // --- Campos fiscais ---
   // Forma de recebimento + detalhamento de impostos: recurso Pro (visitante experimenta tudo).
   const showFiscal = can('fiscal_fields') || isGuest;
   const [fiscalNature, setFiscalNature] = useState<FiscalNature>(resolveFiscalNature(shift, wp));
@@ -142,268 +211,341 @@ export default function EditShiftSheet({ shift, onClose, onSaved, onDelete, onDu
     onSaved();
   }
 
+  const valueDiff = receivedValue && expectedValue
+    ? Math.abs(parseFloat(receivedValue) - parseFloat(expectedValue))
+    : 0;
+
+  // Treliça: duração calculada e valor-hora, como no Adicionar plantão.
+  const hasTimes = !!startTime && !!endTime;
+  const duration = hasTimes ? calcDuration(startTime, endTime) : 0;
+  const durationLabel = hasTimes
+    ? `${String(duration).replace('.', ',')} ${duration === 1 ? t('hora') : t('horas')}`
+    : '—';
+  const expectedNum = parseFloat(expectedValue);
+  const hourly = expectedNum > 0 && duration > 0 ? Math.round((expectedNum / duration) * 100) / 100 : 0;
+
+  const taxCell = (key: string, label: string, val: string, set: (v: string) => void) => (
+    <div key={key} className="min-w-0">
+      <Label htmlFor={`edit-shift-${key}`}>{label} (R$)</Label>
+      <input
+        id={`edit-shift-${key}`}
+        type="text" inputMode="decimal" value={val}
+        onChange={e => set(e.target.value.replace(/[^0-9.,]/g, ''))}
+        className="input-field px-3 tabular-nums"
+      />
+    </div>
+  );
+
   return (
-    <div className="bottom-sheet-overlay" onClick={onClose}>
-      <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-        <div className="sheet-handle" />
-
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            {wp && (
-              <div className="hospital-avatar shrink-0" style={{ background: wp.color }}>
-                {wp.name.slice(0, 2).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Editar plantão')}</p>
-              <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight truncate">{wp?.name || 'Plantão'}</h3>
-              <p className="text-[12px] text-slate-500 mt-0.5 capitalize">{format(parseISO(shift.date), "EEEE, dd 'de' MMM", { locale: ptBR })}</p>
-            </div>
-          </div>
-          <button onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
-            <X size={16} />
-          </button>
-        </div>
-
-        {!canEdit ? (
-          /* Plano Free: edição bloqueada (Recurso Pro) — apenas excluir é permitido */
-          <div className="space-y-3">
-            <button
-              onClick={() => gate('shift_editing')}
-              className="w-full rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-100 py-8 px-6 flex flex-col items-center justify-center gap-2 transition active:scale-[0.99]"
-            >
-              <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/30">
-                <Lock size={16} strokeWidth={2.5} />
-              </div>
-              <span className="text-[12px] font-bold text-slate-700">{t('Recurso Pro')}</span>
-              <span className="text-[11px] text-slate-500 text-center leading-snug">
-                {t('Editar status, valores, horários e observações está disponível no plano Pro.')}
-              </span>
-            </button>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setConfirmDelete(true)}
-                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 text-[12.5px] font-semibold hover:bg-red-100 transition active:scale-[0.98]">
-                <Trash2 size={13} strokeWidth={2.5} /> {t('Excluir')}
-              </button>
-              <button onClick={() => gate('shift_editing')}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
-                <Crown size={13} strokeWidth={2.5} /> {t('Desbloquear edição')}
-              </button>
-            </div>
-          </div>
-        ) : (
-        <div className="space-y-4">
-          {/* Status */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('Status')}</label>
-            <div className="flex flex-wrap gap-1.5">
-              {STATUS_ORDER.map(s => (
+    <>
+      <div className="bottom-sheet-overlay animate-fade-in" onClick={onClose}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('Editar plantão')}
+          className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-scale-in flex flex-col"
+          style={{ maxHeight: '88vh', boxShadow: MODAL_SHADOW }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Cabeçalho de pedra — enquadramento `deep`, o mesmo do detalhe do plantão */}
+          <div className="relative overflow-hidden px-6 pt-5 pb-6 shrink-0">
+            <MarbleBackground frame="deep" />
+            <div className="relative">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-[13.5px] font-medium text-white/80">{t('Editar plantão')}</p>
                 <button
-                  key={s}
-                  onClick={() => setStatus(s)}
-                  className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-all active:scale-95 ${statusChipStyle(s, status === s)}`}
+                  onClick={onClose}
+                  className="glass-icon-btn !w-[34px] !h-[34px] shrink-0"
+                  aria-label={t('Fechar')}
                 >
-                  {t(STATUS_LABELS[s])}
+                  <X size={15} strokeWidth={1.6} />
                 </button>
-              ))}
+              </div>
+              <h3 className="mt-4 text-[26px] font-light leading-[1.1] tracking-[-0.035em] text-white break-words">
+                {wp?.name || 'Plantão'}
+              </h3>
+              <p className="mt-2 text-[13.5px] text-white/[0.86]">{longDate(shift.date)}</p>
             </div>
           </div>
 
-          {/* Data e horário */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <CalendarDays size={11} strokeWidth={2.5} /> {t('Data e horário')}
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              <input
-                type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="col-span-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
-              />
-              <div className="col-span-1">
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 flex items-center gap-1"><Clock size={10} strokeWidth={2.5} /> {t('Início')}</p>
-                <input
-                  type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
-                />
-              </div>
-              <span className="self-end pb-3 text-center text-slate-400 text-[12px]">{t('até')}</span>
-              <div className="col-span-1">
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5 flex items-center gap-1"><Clock size={10} strokeWidth={2.5} /> {t('Fim')}</p>
-                <input
-                  type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Valores */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <DollarSign size={11} strokeWidth={2.5} /> {t('Valores')}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{t('Previsto (R$)')}</p>
-                <input
-                  type="number" inputMode="decimal" step="50" value={expectedValue}
-                  onChange={e => setExpectedValue(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
-                />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{t('Recebido (R$)')}</p>
-                <input
-                  type="number" inputMode="decimal" step="50" value={receivedValue}
-                  onChange={e => setReceivedValue(e.target.value)}
-                  placeholder={isReceivedFlow ? '0,00' : t('Opcional')}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
-                />
-              </div>
-            </div>
-            {receivedValue && expectedValue && Math.abs(parseFloat(receivedValue) - parseFloat(expectedValue)) > 0.01 && (
-              <div className="flex items-start gap-1.5 mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
-                <AlertCircle size={12} className="shrink-0 mt-0.5" />
-                <span>{t('Diferença de')} <strong>{formatCurrency(Math.abs(parseFloat(receivedValue) - parseFloat(expectedValue)))}</strong> {t('entre o valor previsto e o recebido.')}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Datas de pagamento */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <CalendarDays size={11} strokeWidth={2.5} /> {t('Pagamento')}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{t('Previsto para')}</p>
-                <input
-                  type="date" value={paymentDue} onChange={e => setPaymentDue(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
-                />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{t('Pago em')}</p>
-                <input
-                  type="date" value={paymentReceived} onChange={e => setPaymentReceived(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Fiscal (recurso Max) — alimenta o Relatório por Regime Fiscal */}
-          {showFiscal && (
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Layers size={11} strokeWidth={2.5} /> {t('Forma de recebimento')}
-              </label>
-              {/* forma de recebimento */}
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {FISCAL_NATURE_ORDER.map(nat => (
-                  <button key={nat} type="button" onClick={() => setFiscalNature(nat)}
-                    className={`px-3 py-2 rounded-xl text-[11px] font-semibold transition-all active:scale-95 ${
-                      fiscalNature === nat ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                    }`}>
-                    {FISCAL_NATURE_LABELS[nat]}
-                  </button>
-                ))}
-              </div>
-              {/* campos por natureza */}
-              {isPJNature(fiscalNature) && (
-                <div className="space-y-2">
-                  <input value={nfNumber} onChange={e => setNfNumber(e.target.value)} placeholder="Nº da Nota Fiscal"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-                  <div className="grid grid-cols-3 gap-2">
-                    {([['ISS', issRetido, setIssRetido], ['PIS', pis, setPis], ['COFINS', cofins, setCofins]] as const).map(([label, val, set]) => (
-                      <div key={label}>
-                        <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{label} (R$)</p>
-                        <input type="text" inputMode="decimal" value={val} onChange={e => set(e.target.value.replace(/[^0-9.,]/g, ''))}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {fiscalNature === 'AUTONOMO' && (
-                <div className="grid grid-cols-2 gap-2">
-                  {([['INSS retido', inssRetido, setInssRetido], ['IRRF', irrfRetido, setIrrfRetido]] as const).map(([label, val, set]) => (
-                    <div key={label}>
-                      <p className="text-[10px] text-slate-500 mb-1 ml-0.5">{label} (R$)</p>
-                      <input type="text" inputMode="decimal" value={val} onChange={e => set(e.target.value.replace(/[^0-9.,]/g, ''))}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="text-[10px] text-slate-400 mt-1.5 ml-0.5">Usado no Relatório por Forma de Recebimento. Deixe em branco para considerar zero.</p>
-            </div>
-          )}
-
-          {/* Observações */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <FileText size={11} strokeWidth={2.5} /> {t('Observações')}
-            </label>
-            <textarea
-              value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder={t('Anotações sobre o plantão (escala, contatos, divergências...)')}
-              rows={3}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition resize-none"
-            />
-          </div>
-
-          {error && (
-            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
-
-          {/* Action buttons */}
-          <div className="flex gap-2 pt-1">
-            {onDuplicate && (
-              <button onClick={onDuplicate}
-                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[12.5px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-                <Copy size={13} strokeWidth={2.5} /> {t('Duplicar')}
-              </button>
-            )}
-            <button onClick={() => setConfirmDelete(true)}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-50 text-red-600 text-[12.5px] font-semibold hover:bg-red-100 transition active:scale-[0.98]">
-              <Trash2 size={13} strokeWidth={2.5} /> {t('Excluir')}
-            </button>
-            <button onClick={handleSave}
-              className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5">
-              <Check size={14} strokeWidth={3} /> {t('Salvar alterações')}
-            </button>
-          </div>
-        </div>
-        )}
-
-        {/* Confirm delete overlay */}
-        {confirmDelete && (
-          <div className="fixed inset-0 z-[400] bg-slate-900/50 flex items-center justify-center p-4" onClick={() => setConfirmDelete(false)}>
-            <div className="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
-              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-                <Trash2 size={20} className="text-red-600" />
-              </div>
-              <h4 className="text-center font-bold text-slate-900 text-[15px] mb-1">{t('Excluir plantão?')}</h4>
-              <p className="text-center text-slate-500 text-[12px] mb-4">{t('Essa ação não pode ser desfeita.')}</p>
-              <div className="flex gap-2">
-                <button onClick={() => setConfirmDelete(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-                  {t('Cancelar')}
+          {!canEdit ? (
+            /* Plano Free: edição bloqueada (Recurso Pro) — apenas excluir é permitido */
+            <>
+              <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar px-6 pt-6">
+                <button
+                  type="button"
+                  onClick={() => gate('shift_editing')}
+                  className="notice w-full flex-col gap-0 text-left"
+                >
+                  <span className="flex items-center gap-[7px] text-[14px] font-semibold text-slate-900">
+                    {t('Recurso Pro')}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true" className="shrink-0">
+                      <rect x="5" y="11" width="14" height="9" rx="2" />
+                      <path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" />
+                    </svg>
+                  </span>
+                  <span className="block mt-[3px] text-[12.5px] font-normal leading-[1.5] text-slate-500">
+                    {t('Editar status, valores, horários e observações está disponível no plano Pro.')}
+                  </span>
                 </button>
-                <button onClick={() => { setConfirmDelete(false); onDelete(); }}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-[13px] font-bold hover:bg-red-700 transition active:scale-[0.98]">
+              </div>
+              <div className="px-6 pt-6 pb-6 shrink-0">
+                <button type="button" onClick={() => gate('shift_editing')} className="btn-primary">
+                  {t('Desbloquear edição')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  className="btn-danger mt-[10px]"
+                >
                   {t('Excluir')}
                 </button>
               </div>
+            </>
+          ) : (
+            <>
+              <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar px-6 pt-6 pb-5">
+                {/* Situação */}
+                <Label className="mb-[10px]">{t('Situação')}</Label>
+                <div role="group" aria-label={t('Situação')} className="flex flex-wrap gap-2">
+                  {STATUS_ORDER.map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setStatus(s)}
+                      aria-pressed={status === s}
+                      className="chip"
+                    >
+                      {t(STATUS_LABELS[s])}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Data e horário — treliça 2×2 editável */}
+                <div className="data-lattice mt-[26px]">
+                  <div>
+                    <label htmlFor="edit-shift-date" className={LATTICE_LABEL}>{t('Data')}</label>
+                    <input
+                      id="edit-shift-date"
+                      ref={clearDarkFill}
+                      type="date" value={date} onChange={e => setDate(e.target.value)}
+                      onClick={openPicker}
+                      className={LATTICE_INPUT}
+                    />
+                  </div>
+                  <div>
+                    <p className={LATTICE_LABEL}>{t('Duração')}</p>
+                    <p className="mt-1.5 text-[15px] leading-[1.3] font-normal text-slate-900 tabular-nums">{durationLabel}</p>
+                  </div>
+                  <div>
+                    <label htmlFor="edit-shift-start" className={LATTICE_LABEL}>{t('Início')}</label>
+                    <input
+                      id="edit-shift-start"
+                      ref={clearDarkFill}
+                      type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
+                      onClick={openPicker}
+                      className={LATTICE_INPUT}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="edit-shift-end" className={LATTICE_LABEL}>{t('Fim')}</label>
+                    <input
+                      id="edit-shift-end"
+                      ref={clearDarkFill}
+                      type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
+                      onClick={openPicker}
+                      className={LATTICE_INPUT}
+                    />
+                  </div>
+                </div>
+
+                {/* Valor previsto + valor-hora */}
+                <div className="mt-[26px]">
+                  <Label htmlFor="edit-shift-expected">{t('Valor previsto')}</Label>
+                  <MoneyInput
+                    id="edit-shift-expected"
+                    value={expectedValue}
+                    onChange={setExpectedValue}
+                    placeholder="0,00"
+                    invalid={error === 'Valor previsto inválido.'}
+                  />
+                  {hourly > 0 && (
+                    <p className="mt-[10px] text-[12.5px] font-normal text-slate-500 tabular-nums">
+                      {formatCurrency(hourly)} {t('por hora neste plantão.')}
+                    </p>
+                  )}
+                </div>
+
+                {/* Valor recebido */}
+                <div className="mt-[18px]">
+                  <Label htmlFor="edit-shift-received">{t('Valor recebido')}</Label>
+                  <MoneyInput
+                    id="edit-shift-received"
+                    value={receivedValue}
+                    onChange={setReceivedValue}
+                    placeholder={isReceivedFlow ? '0,00' : t('Opcional')}
+                  />
+                  {valueDiff > 0.01 && (
+                    <div className="notice notice-warn mt-3 flex-col gap-0">
+                      <span className="block text-[14px] font-semibold text-slate-900 tabular-nums">
+                        {t('Diferença de')} {formatCurrency(valueDiff)}
+                      </span>
+                      <span className="block mt-[3px] text-[12.5px] font-normal leading-[1.5] text-slate-500">
+                        {t('entre o valor previsto e o recebido.')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Forma de recebimento — detalhamento das retenções */}
+                {showFiscal && (
+                  <div className="mt-[26px]">
+                    <Label className="mb-[10px]">{t('Forma de recebimento')}</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {FISCAL_NATURE_ORDER.map(nat => (
+                        <button
+                          key={nat}
+                          type="button"
+                          onClick={() => setFiscalNature(nat)}
+                          aria-pressed={fiscalNature === nat}
+                          className="chip"
+                        >
+                          {formaLabel(nat)}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* campos por natureza */}
+                    {isPJNature(fiscalNature) && (
+                      <>
+                        <div className="mt-[18px]">
+                          <Label htmlFor="edit-shift-nf">{t('Nº da Nota Fiscal')}</Label>
+                          <input
+                            id="edit-shift-nf"
+                            value={nfNumber}
+                            onChange={e => setNfNumber(e.target.value)}
+                            className="input-field tabular-nums"
+                          />
+                        </div>
+                        <div className="grid grid-cols-3 gap-[10px] mt-[18px]">
+                          {taxCell('ISS', 'ISS', issRetido, setIssRetido)}
+                          {taxCell('PIS', 'PIS', pis, setPis)}
+                          {taxCell('COFINS', 'COFINS', cofins, setCofins)}
+                        </div>
+                      </>
+                    )}
+                    {fiscalNature === 'AUTONOMO' && (
+                      <div className="grid grid-cols-2 gap-[10px] mt-[18px]">
+                        {taxCell('INSS-retido', 'INSS retido', inssRetido, setInssRetido)}
+                        {taxCell('IRRF', 'IRRF', irrfRetido, setIrrfRetido)}
+                      </div>
+                    )}
+                    <p className="input-hint mt-3">
+                      {t('Usado no Relatório por Forma de Recebimento. Deixe em branco para considerar zero.')}
+                    </p>
+                  </div>
+                )}
+
+                {/* Detalhes */}
+                <div className="section-rule"><span>{t('Detalhes')}</span></div>
+                <div className="grid grid-cols-2 gap-[10px]">
+                  <div className="min-w-0">
+                    <Label htmlFor="edit-shift-due">{t('Vencimento')}</Label>
+                    <input
+                      id="edit-shift-due"
+                      type="date" value={paymentDue} onChange={e => setPaymentDue(e.target.value)}
+                      onClick={openPicker}
+                      className={`input-field tabular-nums ${NO_PICKER_ICON}`}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <Label htmlFor="edit-shift-paid">{t('Pago em')}</Label>
+                    <input
+                      id="edit-shift-paid"
+                      type="date" value={paymentReceived} onChange={e => setPaymentReceived(e.target.value)}
+                      onClick={openPicker}
+                      className={`input-field tabular-nums ${NO_PICKER_ICON}`}
+                    />
+                  </div>
+                </div>
+                <div className="mt-[18px]">
+                  <Label htmlFor="edit-shift-notes">{t('Observações')}</Label>
+                  <textarea
+                    id="edit-shift-notes"
+                    value={notes} onChange={e => setNotes(e.target.value)}
+                    placeholder={t('Anotações sobre o plantão (escala, contatos, divergências...)')}
+                    rows={3}
+                    className="input-field resize-none"
+                  />
+                </div>
+
+                {error && (
+                  <div className="notice notice-warn mt-[22px] items-start" role="alert">
+                    <span className="text-[14px] font-semibold text-slate-900">{t(error)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Rodapé fixo: primária 52px + secundária/terracota 48px */}
+              <div className="px-6 pt-4 pb-6 shrink-0 border-t" style={{ borderTopColor: 'var(--color-border)' }}>
+                <button type="button" onClick={handleSave} className="btn-primary">
+                  {t('Salvar alterações')}
+                </button>
+                <div className="mt-[10px] flex gap-[10px]">
+                  {onDuplicate && (
+                    <button
+                      type="button"
+                      onClick={onDuplicate}
+                      className="btn-secondary flex-1 px-3"
+                    >
+                      {t('Duplicar')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="btn-danger flex-1 px-3"
+                  >
+                    {t('Excluir')}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Confirmação: excluir plantão */}
+      {confirmDelete && (
+        <div className="modal-overlay z-[400] animate-fade-in" onClick={() => setConfirmDelete(false)}>
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label={t('Excluir plantão?')}
+            className="bg-white w-full max-w-xs rounded-3xl p-6 animate-scale-in"
+            style={{ boxShadow: MODAL_SHADOW }}
+            onClick={e => e.stopPropagation()}
+          >
+            <Trash2 size={20} strokeWidth={1.5} className="text-red-600" />
+            <h4 className="mt-4 text-[22px] font-light leading-[1.15] tracking-[-0.03em] text-slate-900">
+              {t('Excluir plantão?')}
+            </h4>
+            <p className="mt-1.5 text-[13px] text-slate-500">{t('Essa ação não pode ser desfeita.')}</p>
+            <div className="mt-6 flex gap-[10px]">
+              <button type="button" onClick={() => setConfirmDelete(false)} className="btn-secondary flex-1 px-3">
+                {t('Cancelar')}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setConfirmDelete(false); onDelete(); }}
+                className="btn-danger flex-1 px-3"
+              >
+                {t('Excluir')}
+              </button>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }

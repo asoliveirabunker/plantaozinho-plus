@@ -112,25 +112,27 @@ export const PLAN_META: Record<PlanId, PlanMeta> = {
     id: 'pro',
     name: 'Pro',
     tagline: 'Para o plantonista no controle total',
-    color: '#03bb85',
-    gradient: 'linear-gradient(135deg, #03bb85, #39d39b, #27c8fe)',
+    // Sistema Jade: sem gradiente verde→ciano. Ainda lido pelos cards de upsell
+    // (ScreenHelpSheet e ajuda de Locais); o UpgradeModal usa a placa de pedra.
+    color: '#0E6B55',
+    gradient: 'linear-gradient(160deg, #0E6B55, #0A5544)',
     priceLabel: 'R$ 14,90/mês',
     highlights: [
       'Locais e plantões ilimitados',
       'Edição completa de plantões',
       'Escalas recorrentes (12x36, 24x72…)',
-      'Gráficos, metas e alertas',
+      'Gráficos, metas e alertas de atraso',
     ],
   },
   max: {
     id: 'max',
     name: 'Max',
     tagline: 'Gestão completa para alta performance',
-    color: '#8b5cf6',
-    gradient: 'linear-gradient(135deg, #a855f7, #8b5cf6)',
+    color: '#0A5544',
+    gradient: 'linear-gradient(160deg, #0A5544, #07201B)',
     priceLabel: 'R$ 29,90/mês',
     highlights: [
-      'Relatório completo para o contador (PDF + planilha, por forma de recebimento)',
+      'Relatório completo em PDF e planilha',
       'Previsão tributária do seu regime',
       'Múltiplos CNPJs e relatórios anuais',
       'Envio ao contador via WhatsApp',
@@ -144,7 +146,7 @@ export const FEATURE_LABEL: Record<Feature, { title: string; description: string
   unlimited_workplaces: { title: 'Locais ilimitados', description: 'Cadastre quantos hospitais, UPAs e clínicas quiser.' },
   unlimited_shifts:     { title: 'Plantões ilimitados', description: 'Registre todos os seus plantões, sem limite mensal.' },
   recurrence:           { title: 'Escalas recorrentes', description: 'Crie séries automáticas como 12x36, 24x72 ou mensais.' },
-  charts:               { title: 'Gráficos de evolução', description: 'Acompanhe a evolução dos seus ganhos ao longo dos meses.' },
+  charts:               { title: 'Evolução dos seus ganhos', description: 'Veja quanto cresceu mês a mês, defina metas e receba alerta quando um pagamento atrasar.' },
   goals:                { title: 'Metas financeiras', description: 'Defina e acompanhe sua meta de faturamento do mês.' },
   overdue_alerts:       { title: 'Alertas de atrasos', description: 'Saiba exatamente quais pagamentos estão atrasados.' },
   fiscal_report:        { title: 'Relatório fiscal', description: 'Gere PDF/CSV completo para enviar ao seu contador.' },
@@ -156,7 +158,7 @@ export const FEATURE_LABEL: Record<Feature, { title: string; description: string
   whatsapp_accountant:  { title: 'Envio ao contador', description: 'Mande relatórios direto ao seu contador via WhatsApp.' },
   unlimited_history:    { title: 'Histórico ilimitado', description: 'Acesse todos os seus dados, sem limite de tempo.' },
   priority_support:     { title: 'Suporte prioritário', description: 'Atendimento preferencial sempre que precisar.' },
-  mixed_fiscal_report:  { title: 'Relatório para o contador', description: 'Relatório do mês em PDF e planilha, com separação por forma de recebimento (PJ/Autônomo) ou local.' },
+  mixed_fiscal_report:  { title: 'Relatório para o contador', description: 'O mês fechado em PDF e planilha, separado por forma de recebimento, pronto para enviar.' },
 };
 
 /** Retorna true se o plano atual tem acesso à feature. */

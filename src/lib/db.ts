@@ -1,4 +1,4 @@
-import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, addDays, addWeeks, addMonths } from 'date-fns';
+import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, addDays, subDays, addWeeks, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type {
   User, Workplace, Shift, ShiftTemplate, RecurrenceRule, PaymentBatch, Report,
@@ -510,7 +510,7 @@ export function seedDemoData(userId: string): void {
     user_id: userId,
     name: 'Hospital São Marcos',
     type: 'hospital',
-    color: '#03bb85',
+    color: '#0E6B55',
     default_shift_value: 1400,
     default_duration_hours: 12,
     payment_day: 10,
@@ -522,7 +522,7 @@ export function seedDemoData(userId: string): void {
     user_id: userId,
     name: 'UPA Leste',
     type: 'upa',
-    color: '#22c55e',
+    color: '#12A87F',
     default_shift_value: 1100,
     default_duration_hours: 12,
     payment_day: 15,
@@ -534,7 +534,7 @@ export function seedDemoData(userId: string): void {
     user_id: userId,
     name: 'Hospital Primavera',
     type: 'hospital',
-    color: '#8b5cf6',
+    color: '#6FA89A',
     default_shift_value: 2000,
     default_duration_hours: 24,
     payment_day: 5,
@@ -561,7 +561,7 @@ export function seedDemoData(userId: string): void {
     { workplace_id: wp1.id, date: d(13), start: dt(13, 19), end: dt(14, 7), status: 'previsto' as ShiftStatus, expected: 1400, received: undefined },
     { workplace_id: wp2.id, date: d(13), start: dt(13, 7), end: dt(13, 19), status: 'previsto' as ShiftStatus, expected: 1100, received: undefined },
     { workplace_id: wp1.id, date: d(16), start: dt(16, 7), end: dt(16, 19), status: 'previsto' as ShiftStatus, expected: 1400, received: undefined },
-    { workplace_id: wp2.id, date: d(20), start: dt(20, 7), end: dt(20, 19), status: 'atrasado' as ShiftStatus, expected: 1100, received: undefined },
+    { workplace_id: wp2.id, date: d(3), start: dt(3, 7), end: dt(3, 19), status: 'atrasado' as ShiftStatus, expected: 1100, received: undefined },
     { workplace_id: wp3.id, date: d(22), start: dt(22, 7), end: dt(23, 7), status: 'previsto' as ShiftStatus, expected: 2000, received: undefined },
     { workplace_id: wp1.id, date: d(27), start: dt(27, 7), end: dt(27, 19), status: 'previsto' as ShiftStatus, expected: 1400, received: undefined },
   ];
@@ -571,7 +571,10 @@ export function seedDemoData(userId: string): void {
     const start = new Date(s.start);
     const end = new Date(s.end);
     const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    const paymentDue = new Date(year, month, s.workplace_id === wp1.id ? 10 : s.workplace_id === wp2.id ? 15 : 5);
+    // O atrasado vence há 12 dias, para o aviso mostrar o tempo de atraso.
+    const paymentDue = s.status === 'atrasado'
+      ? subDays(new Date(), 12)
+      : new Date(year, month, s.workplace_id === wp1.id ? 10 : s.workplace_id === wp2.id ? 15 : 5);
     const wp = s.workplace_id === wp1.id ? wp1 : s.workplace_id === wp2.id ? wp2 : wp3;
 
     shiftsList.push({

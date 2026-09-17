@@ -2,45 +2,212 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/*
- * Paleta de marca (Plantão Pro) — substitui a escala azul padrão do Tailwind.
- * Como quase todo o app usa utilitários `blue-*` (bg-blue-600, text-blue-500...),
- * remapear a escala aqui reskina o app inteiro sem tocar em cada componente.
- * Cores principais: #03bb85 (teal, primária) · #39d39b (mint) · #27c8fe (ciano).
- */
+/* ============================================================================
+ * SISTEMA JADE CLARO MARMOREADO — camada de tokens
+ * ============================================================================
+ * Estratégia de migração: o app usa utilitários Tailwind em ~15 telas
+ * (text-slate-900, bg-emerald-500, rounded-2xl, font-black...). Em vez de
+ * editar cada tela, remapeamos as ESCALAS aqui. Uma vez feito isso, toda
+ * tela que usa `slate` recebe o cinza-jade, toda `emerald`/`blue` recebe
+ * jade, `red` recebe terracota, e ciano/indigo/violeta/âmbar deixam de
+ * existir como hues distintos — colapsam para a família jade.
+ *
+ * Paleta canônica (a mesma dos 5 blocos de redesign):
+ *   tinta      #0C2A24      corpo       #40544E
+ *   apoio      #5F736D      linha       #E3EAE7
+ *   papel      #F6F8F7      jade        #0E6B55
+ *   sinal      #12A87F      3º local    #6FA89A
+ *   a receber  #A8CFC4      atraso      #A9512F
+ * ========================================================================= */
+
 @theme {
-  --color-blue-50:  #e6fcf5;
-  --color-blue-100: #c9f8e9;
-  --color-blue-200: #9df2d6;
-  --color-blue-300: #7de4c3;
-  --color-blue-400: #39d39b;
-  --color-blue-500: #27c8fe;
-  --color-blue-600: #03bb85;
-  --color-blue-700: #029b6e;
-  --color-blue-800: #027a57;
-  --color-blue-900: #015a40;
+  /* --- Tipografia -------------------------------------------------------- */
+  --font-sans: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Teto de peso: `font-black`/`font-extrabold`/`font-bold` espalhados pelas
+     telas passam a render 600. Mata o Inter-900 sem tocar em cada classe. */
+  --font-weight-extralight: 200;
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+  --font-weight-black: 600;
+
+  /* --- Geometria: raio 4 · 12 · 20 · 28 · 999 ---------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 4px;
+  --radius-md: 12px;
+  --radius-lg: 12px;
+  --radius-xl: 12px;
+  --radius-2xl: 20px;
+  --radius-3xl: 28px;
+  --radius-4xl: 28px;
+
+  /* --- Sombras: duas no app inteiro, nenhuma colorida ------------------- */
+  --shadow-2xs: 0 1px 2px rgba(12, 42, 36, .04);
+  --shadow-xs: 0 1px 2px rgba(12, 42, 36, .04);
+  --shadow-sm: 0 1px 2px rgba(12, 42, 36, .04);
+  --shadow-md: 0 1px 2px rgba(12, 42, 36, .04);
+  --shadow-lg: 0 18px 44px -18px rgba(7, 56, 45, .3);
+  --shadow-xl: 0 40px 80px -30px rgba(7, 56, 45, .5);
+  --shadow-2xl: 0 40px 80px -30px rgba(7, 56, 45, .5);
+
+  /* --- Neutros: slate e gray viram cinza-jade --------------------------- */
+  --color-slate-50:  #F6F8F7;
+  --color-slate-100: #EFF3F1;
+  --color-slate-200: #E3EAE7;
+  --color-slate-300: #CBD6D2;
+  --color-slate-400: #5F736D;   /* era o cinza fraco de rótulo: sobe p/ 5:1 */
+  --color-slate-500: #5F736D;
+  --color-slate-600: #40544E;
+  --color-slate-700: #40544E;
+  --color-slate-800: #0C2A24;
+  --color-slate-900: #0C2A24;
+  --color-slate-950: #07201B;
+
+  --color-gray-50:  #F6F8F7;
+  --color-gray-100: #EFF3F1;
+  --color-gray-200: #E3EAE7;
+  --color-gray-300: #CBD6D2;
+  --color-gray-400: #5F736D;
+  --color-gray-500: #5F736D;
+  --color-gray-600: #40544E;
+  --color-gray-700: #40544E;
+  --color-gray-800: #0C2A24;
+  --color-gray-900: #0C2A24;
+
+  /* --- Primária: blue e emerald apontam para o mesmo jade --------------- */
+  --color-blue-50:  #EFF3F1;
+  --color-blue-100: #D8E6E1;
+  --color-blue-200: #A8CFC4;
+  --color-blue-300: #6FA89A;
+  --color-blue-400: #12A87F;
+  --color-blue-500: #0E6B55;
+  --color-blue-600: #0E6B55;
+  --color-blue-700: #0A5544;
+  --color-blue-800: #084438;
+  --color-blue-900: #07201B;
+
+  --color-emerald-50:  #EFF3F1;
+  --color-emerald-100: #D8E6E1;
+  --color-emerald-200: #A8CFC4;
+  --color-emerald-300: #6FA89A;
+  --color-emerald-400: #12A87F;
+  --color-emerald-500: #0E6B55;
+  --color-emerald-600: #0E6B55;
+  --color-emerald-700: #0A5544;
+  --color-emerald-800: #084438;
+  --color-emerald-900: #07201B;
+
+  --color-green-50:  #EFF3F1;
+  --color-green-100: #D8E6E1;
+  --color-green-400: #12A87F;
+  --color-green-500: #0E6B55;
+  --color-green-600: #0E6B55;
+  --color-green-700: #0A5544;
+
+  --color-teal-400: #12A87F;
+  --color-teal-500: #0E6B55;
+  --color-teal-600: #0E6B55;
+
+  /* --- Atenção: red vira terracota (única exceção ao jade) -------------- */
+  --color-red-50:  #F9F2EF;
+  --color-red-100: #F5E9E3;
+  --color-red-200: #EBDDD7;
+  --color-red-300: #D9B8A7;
+  --color-red-400: #A9512F;
+  --color-red-500: #A9512F;
+  --color-red-600: #A9512F;
+  --color-red-700: #8E4227;
+  --color-red-800: #6F3320;
+  --color-red-900: #5A2A1A;
+
+  /* --- Hues que somem: colapsam no jade / no neutro --------------------- */
+  --color-cyan-50:  #EFF3F1;
+  --color-cyan-100: #D8E6E1;
+  --color-cyan-400: #6FA89A;
+  --color-cyan-500: #A8CFC4;
+  --color-cyan-600: #0E6B55;
+
+  --color-sky-50:  #EFF3F1;
+  --color-sky-100: #D8E6E1;
+  --color-sky-500: #0E6B55;
+  --color-sky-600: #0E6B55;
+
+  --color-indigo-50:  #EFF3F1;
+  --color-indigo-100: #D8E6E1;
+  --color-indigo-500: #0E6B55;
+  --color-indigo-600: #0E6B55;
+
+  --color-violet-50:  #EFF3F1;
+  --color-violet-100: #D8E6E1;
+  --color-violet-500: #6FA89A;
+  --color-violet-600: #0E6B55;
+
+  --color-purple-50:  #EFF3F1;
+  --color-purple-100: #D8E6E1;
+  --color-purple-500: #6FA89A;
+  --color-purple-600: #0E6B55;
+
+  /* Âmbar/laranja eram "coroa Pro" e avisos — viram terracota ou apoio. */
+  --color-amber-50:  #F9F2EF;
+  --color-amber-100: #F5E9E3;
+  --color-amber-400: #A9512F;
+  --color-amber-500: #A9512F;
+  --color-amber-600: #A9512F;
+  --color-amber-700: #8E4227;
+  --color-amber-800: #6F3320;
+
+  --color-orange-50:  #F9F2EF;
+  --color-orange-100: #F5E9E3;
+  --color-orange-500: #A9512F;
+  --color-orange-600: #A9512F;
+  --color-orange-800: #6F3320;
+
+  --color-yellow-400: #A9512F;
+  --color-yellow-500: #A9512F;
+  --color-yellow-600: #8E4227;
 }
 
 @layer base {
   :root {
-    --color-primary: #03bb85;
-    --color-primary-dark: #029b6e;
-    --color-primary-light: #c9f8e9;
-    --color-brand-teal: #03bb85;
-    --color-brand-mint: #39d39b;
-    --color-brand-cyan: #27c8fe;
-    --color-brand-skyblue: #79adef;
-    --color-brand-blue: #1794d2;
-    --color-success: #22c55e;
-    --color-warning: #f59e0b;
-    --color-danger: #ef4444;
-    --color-purple: #8b5cf6;
-    --color-bg: #f5f7fa;
+    /* Variáveis semânticas — mesmos nomes de antes, valores novos. */
+    --color-primary: #0E6B55;
+    --color-primary-dark: #0A5544;
+    --color-primary-light: #EFF3F1;
+    --color-brand-jade: #0E6B55;
+    --color-brand-signal: #12A87F;
+    --color-brand-pale: #A8CFC4;
+    --color-brand-sage: #6FA89A;
+
+    /* Compat: nomes antigos apontando para a paleta nova, para nenhum
+       componente que ainda os leia quebrar durante a migração. */
+    --color-brand-teal: #0E6B55;
+    --color-brand-mint: #12A87F;
+    --color-brand-cyan: #6FA89A;
+    --color-brand-skyblue: #A8CFC4;
+    --color-brand-blue: #0E6B55;
+
+    --color-success: #0E6B55;
+    --color-warning: #A9512F;
+    --color-danger: #A9512F;
+    --color-purple: #6FA89A;
+
+    --color-bg: #F6F8F7;
     --color-surface: #ffffff;
-    --color-border: #e5e7eb;
-    --color-text: #111827;
-    --color-text-secondary: #6b7280;
-    --color-text-muted: #9ca3af;
+    --color-border: #E3EAE7;
+    --color-text: #0C2A24;
+    --color-text-secondary: #40544E;
+    --color-text-muted: #5F736D;
+
+    /* Véu padrão da pedra — um só valor no app inteiro. */
+    --marble-veil: linear-gradient(168deg,
+      rgba(6, 48, 39, .52) 0%,
+      rgba(6, 48, 39, .20) 44%,
+      rgba(6, 48, 39, .62) 100%);
+    --marble-filter: saturate(.84) contrast(1.03);
   }
 
   * {
@@ -55,12 +222,16 @@
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-sans);
     background-color: var(--color-bg);
     color: var(--color-text);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overscroll-behavior: none;
+    /* As pranchas do Claude Design não definem entrelinha (fica "normal");
+       o preflight do Tailwind imporia 1.5 e deixaria todas as telas mais altas.
+       Textos corridos declaram a própria entrelinha (1.55/1.6). */
+    line-height: normal;
   }
 
   #root {
@@ -69,30 +240,18 @@
     min-height: 100%;
   }
 
-  input, select, textarea {
-    font-family: inherit;
-  }
+  /* Todo valor, data, hora e porcentagem alinhado em coluna. */
+  .tabular-nums, [class*="tabular"] { font-variant-numeric: tabular-nums; }
 
-  button {
-    cursor: pointer;
-  }
+  input, select, textarea { font-family: inherit; }
+  button { cursor: pointer; }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #d1d5db;
-    border-radius: 4px;
-  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD6D2; border-radius: 4px; }
 
   .hide-scrollbar::-webkit-scrollbar { display: none; }
   .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  
 }
 
 @layer components {
@@ -106,471 +265,637 @@
     overflow-x: hidden;
   }
 
+  /* Card: sem sombra difusa. A separação vem da cor do papel e do filete. */
   .card {
     background: var(--color-surface);
-    border-radius: 16px;
-    padding: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: none;
+  }
+
+  /* ---- Folha branca sobre a placa de pedra ----------------------------
+     A construção-assinatura do sistema: a folha sobe -28px sobre a placa
+     marmoreada e encosta nela com raio 28. Usar em Hoje, Login, Cadastro,
+     Perfil e detalhe de local. */
+  .jade-sheet {
+    position: relative;
+    margin-top: -28px;
+    background: var(--color-surface);
+    border-radius: 28px 28px 0 0;
+    padding: 32px 24px 118px;
+  }
+
+  /* ---- Seção com filete (substitui rótulo em CAIXA-ALTA) --------------- */
+  .section-rule {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 32px 0 18px;
+  }
+  .section-rule > span:first-child {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--color-text);
+    white-space: nowrap;
+  }
+  .section-rule::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+  }
+
+  /* ---- Treliça de dados 2×2 (detalhe do plantão, extrato, local) ------- */
+  .data-lattice {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--color-border);
+  }
+  .data-lattice > * {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .data-lattice > *:nth-child(odd) {
+    padding-left: 0;
+    border-right: 1px solid var(--color-border);
+  }
+  .data-lattice > *:nth-child(even) { padding-right: 0; }
+
+  /* ---- Aviso: uma peça para toda "atenção" do produto ------------------
+     Pagamento atrasado, erro de login, campo inválido. */
+  .notice {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px 14px 18px;
+    border-left: 2px solid var(--color-primary);
+    background: #EFF3F1;
+    border-radius: 0;
+  }
+  .notice-warn {
+    border-left-color: #A9512F;
+    background: #F9F2EF;
   }
 
   .btn-primary {
     background: var(--color-primary);
     color: white;
     border: none;
-    border-radius: 14px;
-    padding: 16px 24px;
-    font-size: 16px;
+    border-radius: 12px;
+    padding: 0 24px;
+    height: 52px;
+    font-size: 14.5px;
     font-weight: 600;
+    letter-spacing: -0.01em;
     width: 100%;
-    transition: all 0.2s ease;
+    transition: background .18s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
   }
-  .btn-primary:active {
-    transform: scale(0.98);
-    background: var(--color-primary-dark);
-  }
+  .btn-primary:hover { background: var(--color-primary-dark); }
+  .btn-primary:active { background: var(--color-primary-dark); }
 
   .btn-secondary {
-    background: transparent;
-    color: var(--color-text);
-    border: 1.5px solid var(--color-border);
-    border-radius: 14px;
-    padding: 15px 24px;
-    font-size: 16px;
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 0 24px;
+    height: 48px;
+    font-size: 13.5px;
     font-weight: 500;
     width: 100%;
-    transition: all 0.2s ease;
+    transition: border-color .18s ease, color .18s ease;
   }
-  .btn-secondary:active {
-    transform: scale(0.98);
-    background: var(--color-bg);
+  .btn-secondary:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
   }
 
+  /* Ação destrutiva: terracota com borda, nunca bloco vermelho. */
+  .btn-danger {
+    background: var(--color-surface);
+    color: #A9512F;
+    border: 1px solid #EBDDD7;
+    border-radius: 12px;
+    height: 48px;
+    font-size: 13.5px;
+    font-weight: 500;
+    width: 100%;
+    transition: background .18s ease;
+  }
+  .btn-danger:hover { background: #F9F2EF; }
+
+  /* Pílula de status: o ÚNICO versalete do produto. */
   .status-badge {
     display: inline-flex;
     align-items: center;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
+  .status-previsto  { background: #EFF3F1; color: #40544E; }
+  .status-realizado { background: #E9F2EF; color: #0E6B55; }
+  .status-recebido  { background: #E9F2EF; color: #0A5544; }
+  .status-atrasado  { background: #F9F2EF; color: #8E4227; }
+  .status-cancelado { background: #EFF3F1; color: #5F736D; }
 
-  .status-previsto { background: #dbeafe; color: #1d4ed8; }
-  .status-realizado { background: #dcfce7; color: #15803d; }
-  .status-recebido { background: #d1fae5; color: #065f46; }
-  .status-atrasado { background: #fee2e2; color: #991b1b; }
-  .status-cancelado { background: #f3f4f6; color: #6b7280; }
-
+  /* ---- Navegação: ilha flutuante -------------------------------------- */
   .bottom-nav {
     position: fixed;
-    bottom: 0;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
-    width: 100%;
-    max-width: 430px;
-    background: rgba(255,255,255,0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(0,0,0,0.06);
+    width: calc(100% - 28px);
+    max-width: 402px;
+    background: rgba(255, 255, 255, .84);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid rgba(227, 234, 231, .9);
+    border-radius: 24px;
+    box-shadow: 0 18px 44px -18px rgba(7, 56, 45, .3);
+    overflow: hidden;
     z-index: 30;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  .page-content {
-    padding-bottom: 90px;
+  .nav-item {
+    transition: color .18s ease;
+    position: relative;
+    color: #5F736D;
+    font-weight: 400;
   }
+  .nav-item.active {
+    color: var(--color-primary);
+    font-weight: 500;
+  }
+  /* A ilha não tem topo onde encostar uma barra: o ativo é cor + peso. */
+  .nav-indicator { display: none; }
+  .nav-item .nav-icon { transition: none; }
+  .nav-item.active .nav-icon { transform: none; }
 
+  /* Ilha de 70px + 18px de folga: o conteúdo precisa terminar em 118px. */
+  .page-content { padding-bottom: 118px; }
+
+  /* ---- Campos --------------------------------------------------------- */
   .input-field {
     width: 100%;
+    height: 52px;
     background: var(--color-bg);
-    border: 1.5px solid var(--color-border);
+    border: 1px solid var(--color-border);
     border-radius: 12px;
-    padding: 14px 16px;
+    padding: 0 16px;
     font-size: 15px;
+    font-weight: 400;
     color: var(--color-text);
-    transition: border-color 0.15s ease;
+    transition: border-color .15s ease, background .15s ease;
     outline: none;
   }
   .input-field:focus {
     border-color: var(--color-primary);
     background: white;
   }
+  .input-field[aria-invalid="true"] { border-color: #A9512F; }
+  textarea.input-field { height: auto; padding: 14px 16px; line-height: 1.5; }
 
+  /* Rótulo em sentença — sem caixa-alta, sem tracking largo. */
   .input-label {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 500;
     color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    margin-bottom: 6px;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-bottom: 8px;
     display: block;
+  }
+  .input-hint {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    line-height: 1.55;
+    margin-top: 8px;
+  }
+  .input-error {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #A9512F;
+    margin-top: 8px;
   }
 
   .section-title {
-    font-size: 20px;
-    font-weight: 700;
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: -0.035em;
     color: var(--color-text);
-    letter-spacing: -0.3px;
+    line-height: 1.05;
   }
-
   .section-subtitle {
     font-size: 13px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    margin-top: 8px;
+  }
+
+  /* Número herói — todo valor grande do app. */
+  .hero-value {
+    font-size: 42px;
+    font-weight: 200;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .hero-value-cents {
+    font-size: 24px;
+    font-weight: 300;
+    color: var(--color-text-muted);
+  }
+
+  /* ---- Chip de escolha (perfil, regime, forma, frequência, local) ----- */
+  .chip {
+    padding: 10px 15px;
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
     color: var(--color-text-secondary);
-    margin-top: 2px;
+    font-size: 13px;
+    font-weight: 400;
+    transition: border-color .15s ease;
+  }
+  .chip:hover { border-color: var(--color-primary); }
+  .chip[aria-pressed="true"], .chip.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+    font-weight: 600;
   }
 
-  /* ===========================
-     ANIMATIONS & TRANSITIONS
-  =========================== */
-
-  @keyframes slideUp {
-    from { transform: translateY(100%); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+  /* ---- Abas com filete (Painel/Extrato, Mês/Ano, Dia/Mês, Rápido...) --- */
+  .tab-rule {
+    display: flex;
+    gap: 26px;
+    border-bottom: 1px solid var(--color-border);
   }
-
-  @keyframes slideDown {
-    from { transform: translateY(-12px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+  .tab-rule > button {
+    padding: 0 0 12px;
+    border: 0;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    letter-spacing: -0.01em;
+    margin-bottom: -1px;
   }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  @keyframes fadeInFast {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.96) translateY(6px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
-  }
-
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+  .tab-rule > button[aria-selected="true"] {
+    border-bottom: 1.5px solid var(--color-primary);
+    font-weight: 600;
+    color: var(--color-text);
   }
 
   /* ============================================================
-   * Mármore animado — o marmoreio REAL da marca (marble.webp) com
-   * movimento lento de câmera (pan + rotação + zoom, estilo Ken Burns)
-   * e brilhos de cor derivando por cima ("cores em movimento").
-   * Uso: <MarbleBackground /> dentro de um pai relative + overflow-hidden.
+   * MÁRMORE — placa de pedra, não papel de parede.
+   * Sem animação, sem brilho de cor, sem blend mode. O que muda
+   * entre telas é só o enquadramento (background-position).
+   * Uso: <MarbleBackground /> em pai relative + overflow-hidden.
    * ============================================================ */
-  @keyframes marble-pan {
-    0%   { transform: translate(-53%, -53%) rotate(-2.5deg) scale(1); }
-    50%  { transform: translate(-49%, -47%) rotate(0.5deg) scale(1.07); }
-    100% { transform: translate(-46%, -51%) rotate(3deg) scale(1.12); }
-  }
-  @keyframes marble-glow-a {
-    0%   { transform: translate(-20%, -12%) scale(1); opacity: 0.35; }
-    100% { transform: translate(24%, 16%) scale(1.25); opacity: 0.55; }
-  }
-  @keyframes marble-glow-b {
-    0%   { transform: translate(18%, 14%) scale(1.15); opacity: 0.3; }
-    100% { transform: translate(-22%, -10%) scale(0.95); opacity: 0.5; }
-  }
-
   .marble-bg {
     position: absolute;
     inset: 0;
     overflow: hidden;
-    background: #2fc3a4; /* fallback enquanto a imagem carrega */
+    background: #2f6f60;
   }
   .marble-bg .marble-img {
     position: absolute;
-    left: 50%; top: 50%;
-    width: 165%; height: 165%;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
-    animation: marble-pan 48s ease-in-out infinite alternate;
-    will-change: transform;
+    object-position: 34% 46%;
+    filter: var(--marble-filter);
   }
-  /* Brilhos suaves de cor cruzando o mármore */
-  .marble-bg .marble-glow {
-    position: absolute;
-    border-radius: 9999px;
-    filter: blur(52px);
-    mix-blend-mode: soft-light;
-    will-change: transform, opacity;
-  }
-  .marble-bg .marble-glow-a {
-    width: 70%; height: 55%; left: -6%; top: -8%;
-    background: #d6fff1;
-    animation: marble-glow-a 26s ease-in-out infinite alternate;
-  }
-  .marble-bg .marble-glow-b {
-    width: 65%; height: 50%; right: -10%; bottom: -6%;
-    background: #21b9d8;
-    animation: marble-glow-b 30s ease-in-out infinite alternate;
-  }
-  /* Véu sutil de contraste — melhora a legibilidade do texto branco */
+  .marble-bg[data-frame="hero"]  .marble-img { object-position: 34% 46%; }
+  .marble-bg[data-frame="alt"]   .marble-img { object-position: 52% 58%; }
+  .marble-bg[data-frame="deep"]  .marble-img { object-position: 60% 30%; }
   .marble-bg .marble-contrast {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(6, 78, 59, 0.22) 0%, rgba(6, 78, 59, 0.06) 45%, rgba(6, 78, 59, 0.2) 100%);
+    background: var(--marble-veil);
   }
-  /* Texto sobre mármore — sombra dupla para leitura confortável */
-  .on-marble {
-    text-shadow: 0 1px 3px rgba(6, 78, 59, 0.45), 0 6px 18px rgba(6, 78, 59, 0.3);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .marble-bg .marble-img, .marble-bg .marble-glow { animation: none; }
-  }
+  /* Os brilhos animados saíram do sistema. Mantido como no-op para não
+     quebrar nenhum componente que ainda renderize o elemento. */
+  .marble-bg .marble-glow { display: none; }
 
+  /* O véu já entrega contraste > 7:1 — sombra de texto não é mais
+     necessária (e era o que dava o ar de "filtro" na tipografia). */
+  .on-marble { text-shadow: none; }
+
+  /* Pílula de vidro sobre a pedra: plano, idioma, selo de recurso. */
+  .glass-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, .3);
+    background: rgba(255, 255, 255, .12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 500;
+    transition: background .18s ease;
+  }
+  .glass-pill:hover { background: rgba(255, 255, 255, .22); }
+  .glass-icon-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, .28);
+    background: rgba(255, 255, 255, .12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .18s ease;
+  }
+  .glass-icon-btn:hover { background: rgba(255, 255, 255, .24); }
+
+  /* ============================================================
+     ANIMAÇÕES
+     ============================================================ */
+  @keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes slideDown {
+    from { transform: translateY(-12px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInFast {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(.96) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
   @keyframes pulse-dot {
     0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.3); opacity: 0.7; }
+    50% { transform: scale(1.3); opacity: .7; }
   }
-
   @keyframes tab-slide-in {
     from { opacity: 0; transform: translateX(16px); }
     to { opacity: 1; transform: translateX(0); }
   }
-
   @keyframes tab-slide-in-left {
     from { opacity: 0; transform: translateX(-16px); }
     to { opacity: 1; transform: translateX(0); }
   }
 
-  .animate-slide-up {
-    animation: slideUp 0.38s cubic-bezier(0.32, 0.72, 0, 1);
-  }
+  .animate-slide-up { animation: slideUp .38s cubic-bezier(.32, .72, 0, 1); }
+  .animate-fade-in { animation: fadeIn .28s cubic-bezier(.4, 0, .2, 1); }
+  .animate-scale-in { animation: scaleIn .25s cubic-bezier(.4, 0, .2, 1); }
+  .animate-tab-in { animation: tab-slide-in .25s cubic-bezier(.4, 0, .2, 1); }
+  .animate-tab-in-left { animation: tab-slide-in-left .25s cubic-bezier(.4, 0, .2, 1); }
 
-  .animate-fade-in {
-    animation: fadeIn 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .animate-scale-in {
-    animation: scaleIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .animate-tab-in {
-    animation: tab-slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .animate-tab-in-left {
-    animation: tab-slide-in-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-
-  /* ===========================
-     INTERACTIVE BUTTON STATES
-  =========================== */
-
-  /* All clickable elements get smooth transitions */
   button, a {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
 
-  /* Calendar day cells (CalendarScreen) */
+  /* ---- Calendário: 42 caixas brancas → zero caixas -------------------- */
   .calendar-day {
-    background: white;
-    border: 1px solid #f3f4f6;
-    color: #374151;
+    background: transparent;
+    border: 0;
+    color: var(--color-text);
+    height: 46px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
   }
+  .calendar-day .calendar-day-num {
+    font-size: 14.5px;
+    font-weight: 400;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Hoje = sublinhado jade. */
   .calendar-day[data-today="true"] {
-    background: var(--color-primary-light);
-    border: 1.5px solid var(--color-primary);
+    background: transparent;
+    border: 0;
   }
-  .calendar-day[data-today="true"] .calendar-day-num { color: var(--color-primary); }
+  .calendar-day[data-today="true"] .calendar-day-num {
+    color: var(--color-primary);
+    font-weight: 600;
+    border-bottom: 1.5px solid var(--color-primary);
+    padding-bottom: 2px;
+  }
+  /* Selecionado = disco de mármore (único elemento marmoreado da tela). */
   .calendar-day[data-selected="true"] {
-    background: var(--color-primary);
-    border: none;
+    background: transparent;
+    border: 0;
   }
-  .calendar-day[data-selected="true"] .calendar-day-num { color: white; }
-
-  html.dark .calendar-day {
-    background: #0f172a;
-    border-color: #1e293b;
-    color: #cbd5e1;
-  }
-  html.dark .calendar-day .calendar-day-num { color: #e2e8f0; }
-  html.dark .calendar-day[data-today="true"] {
-    background: rgba(59,130,246,0.15);
-    border: 1.5px solid #3b82f6;
-  }
-  html.dark .calendar-day[data-today="true"] .calendar-day-num { color: #93c5fd; }
-  html.dark .calendar-day[data-selected="true"] {
-    background: #2563eb;
-    border: none;
-  }
-  html.dark .calendar-day[data-selected="true"] .calendar-day-num { color: white; }
-
-  /* Quick action buttons (Atalhos) */
-  .quick-action-btn {
-    background: white;
-    border: 1px solid #f1f5f9;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05), 0 0 0 0 transparent;
-    border-radius: 18px;
-    padding: 14px;
-    text-align: left;
+  .calendar-day[data-selected="true"] .calendar-day-num {
+    position: relative;
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
-                box-shadow 0.15s ease,
-                background 0.12s ease;
+    justify-content: center;
+    border-radius: 999px;
+    overflow: hidden;
+    color: #fff;
+    font-weight: 500;
+    border-bottom: 0;
+    padding-bottom: 0;
+    background-image: linear-gradient(rgba(6, 48, 39, .46), rgba(6, 48, 39, .46)), url('/marble.webp');
+    background-size: cover, 260% auto;
+    background-position: center, 30% 40%;
+  }
+
+  /* ---- Atalhos: 4 círculos pastel → treliça de filetes ---------------- */
+  .quick-action-btn {
+    background: var(--color-surface);
+    border: 0;
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: none;
+    border-radius: 0;
+    padding: 18px 16px;
+    min-height: 96px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 14px;
+    transition: background .12s ease;
     cursor: pointer;
     width: 100%;
   }
   .quick-action-btn:hover {
-    background: #fafbff;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    transform: translateY(-1px);
+    background: var(--color-bg);
+    box-shadow: none;
+    transform: none;
   }
-  .quick-action-btn:active {
-    transform: scale(0.96);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  .quick-action-btn:active { transform: none; }
+  /* Envolva a grade 2×2 nesta classe para fechar a treliça. */
+  .quick-action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--color-border);
+    border-left: 1px solid var(--color-border);
+  }
+  /* Ícone do atalho: jade, traço 1.5, sem fundo, sem círculo pastel. */
+  .quick-action-btn svg { color: var(--color-primary); }
+  .quick-action-btn .icon-wrap {
+    background: transparent !important;
+    width: auto !important;
+    height: auto !important;
+    border-radius: 0 !important;
   }
 
-  /* Card interactive (shift cards, upcoming) */
+  /* ---- Linhas de lista: régua na cor do local ------------------------- */
+  .list-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--color-border);
+    background: transparent;
+    border-radius: 0;
+  }
+  .list-row:hover { background: var(--color-bg); }
+  .place-rule {
+    border-left: 2px solid var(--color-primary);
+    padding-left: 14px;
+  }
+
+  /* Cards deixam de levitar: sem transform, sem sombra difusa no hover. */
   .card-interactive {
-    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
-                box-shadow 0.15s ease;
+    transition: background .12s ease;
     cursor: pointer;
   }
   .card-interactive:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    transform: none;
+    box-shadow: none;
+    background: var(--color-bg);
   }
-  .card-interactive:active {
-    transform: scale(0.98);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  }
+  .card-interactive:active { transform: none; box-shadow: none; }
 
-  /* Next shift hero card */
-  .hero-shift-card {
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-                box-shadow 0.2s ease;
-  }
-  .hero-shift-card:hover {
-    transform: translateY(-3px) scale(1.005);
-    box-shadow: 0 20px 40px rgba(75,128,229,0.35);
-  }
-  .hero-shift-card:active {
-    transform: scale(0.97);
-    box-shadow: 0 8px 20px rgba(75,128,229,0.25);
-  }
+  /* O herói agora é a placa de pedra, não um card com sombra esmeralda. */
+  .hero-shift-card { transition: none; }
+  .hero-shift-card:hover { transform: none; box-shadow: none; }
+  .hero-shift-card:active { transform: none; box-shadow: none; }
 
-  /* Icon button (gear, close, bell) */
   .icon-btn {
-    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
-                background 0.12s ease;
-    border-radius: 50%;
+    transition: background .12s ease, color .12s ease;
+    border-radius: 999px;
+    color: var(--color-text-secondary);
   }
   .icon-btn:hover {
-    background: rgba(0,0,0,0.06);
-    transform: scale(1.1);
+    background: var(--color-bg);
+    color: var(--color-primary);
+    transform: none;
   }
-  .icon-btn:active {
-    transform: scale(0.9);
-  }
+  .icon-btn:active { transform: none; }
 
-  /* Gear settings button */
-  .gear-btn {
-    transition: transform 0.3s ease, background 0.15s ease;
-  }
-  .gear-btn:hover {
-    background: rgba(0,0,0,0.05);
-  }
-  .gear-btn:hover svg {
-    transform: rotate(60deg);
-  }
-  .gear-btn svg {
-    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  .gear-btn:active svg {
-    transform: rotate(120deg) scale(0.9);
-  }
+  .gear-btn { transition: background .15s ease; }
+  .gear-btn:hover { background: var(--color-bg); }
+  .gear-btn:hover svg { transform: none; }
+  .gear-btn svg { transition: none; }
+  .gear-btn:active svg { transform: none; }
 
-  /* Bottom nav items */
-  .nav-item {
-    transition: color 0.18s ease;
-    position: relative;
-    color: #9ca3af;
-  }
-  .nav-item.active { color: var(--color-primary); }
-  .nav-item .nav-icon {
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  .nav-item.active .nav-icon {
-    transform: scale(1.15) translateY(-1px);
-  }
-  .nav-item:not(.active):active .nav-icon {
-    transform: scale(0.9);
-  }
-
-  /* Nav indicator bar */
-  .nav-indicator {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 32px;
-    height: 3px;
-    background: var(--color-primary);
-    border-radius: 0 0 3px 3px;
-    transition: opacity 0.2s ease;
-  }
-
-  /* Modal central (antes "bottom sheet") — surge do centro, como um aviso.
-     Mantemos os nomes de classe para não quebrar os componentes existentes. */
+  /* ---- Modais e sheet ------------------------------------------------- */
   .bottom-sheet {
     background: white;
-    border-radius: 24px;
+    border-radius: 28px;
     width: 100%;
     max-width: 400px;
     margin: 0 auto;
-    padding: 20px 20px 24px;
-    animation: scaleIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 24px;
+    animation: scaleIn .25s cubic-bezier(.4, 0, .2, 1);
     max-height: 86vh;
     overflow-y: auto;
+    box-shadow: 0 40px 80px -30px rgba(7, 56, 45, .5);
   }
-
   .bottom-sheet-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.5);
+    background: rgba(7, 40, 33, .44);
     z-index: 200;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: 14px;
   }
+  .sheet-handle { display: none; }
 
-  /* Handle de arraste não faz sentido em um modal central. */
-  .sheet-handle {
-    display: none;
+  /* Sheet que sobe de baixo (Adicionar plantão): raio 28 no topo. */
+  .form-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 430px;
+    max-height: 92vh;
+    background: #fff;
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -20px 60px -20px rgba(7, 56, 45, .42);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 210;
+    animation: slideUp .38s cubic-bezier(.32, .72, 0, 1);
+  }
+  .form-sheet-grip {
+    display: block;
+    width: 38px;
+    height: 4px;
+    margin: 20px auto 18px;
+    border-radius: 4px;
+    background: #DCE4E1;
   }
 
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(7, 40, 33, .44);
     z-index: 300;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 14px;
   }
-
   .modal {
     background: white;
-    border-radius: 20px;
+    border-radius: 28px;
     width: 100%;
     max-width: 390px;
     padding: 24px;
-    animation: fadeIn 0.2s ease;
+    animation: scaleIn .25s cubic-bezier(.4, 0, .2, 1);
+    box-shadow: 0 40px 80px -30px rgba(7, 56, 45, .5);
   }
 
+  /* Avatar quadrado de iniciais saiu das listas; sobra o do perfil. */
   .hospital-avatar {
     width: 40px;
     height: 40px;
@@ -579,233 +904,206 @@
     align-items: center;
     justify-content: center;
     font-size: 15px;
-    font-weight: 700;
+    font-weight: 500;
     color: white;
     flex-shrink: 0;
   }
 
   .fab {
     position: fixed;
-    bottom: 80px;
-    right: calc(50% - 195px);
-    width: 56px;
-    height: 56px;
+    bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+    right: calc(50% - 191px);
+    width: 52px;
+    height: 52px;
     background: var(--color-primary);
-    border-radius: 18px;
+    border-radius: 16px;
     border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 20px rgba(24,119,242,0.4);
+    box-shadow: 0 18px 44px -18px rgba(7, 56, 45, .5);
     z-index: 99;
-    transition: all 0.2s ease;
+    transition: background .18s ease;
     color: white;
   }
-  .fab:active {
-    transform: scale(0.92);
-    box-shadow: 0 2px 10px rgba(24,119,242,0.3);
-  }
+  .fab:hover { background: var(--color-primary-dark); }
+  .fab:active { background: var(--color-primary-dark); }
 
   @media (max-width: 430px) {
-    .fab {
-      right: 16px;
-    }
+    .fab { right: 20px; }
   }
 
   /* ============================================================
-     DARK MODE — palette profissional
-     ============================================================
-     Hierarquia de superfícies:
-       page    #060B17  (background mais escuro)
-       card    #111827  (slate-900 — elevação 1)
-       raised  #1E293B  (slate-800 — elevação 2, hover, inputs)
-       border  #1E293B / #334155
-  */
+     MODO ESCURO — jade noturno (a mesma pedra, com a luz apagada).
+     Substitui o slate/azul do dark mode anterior.
+     ============================================================ */
   html.dark {
-    --color-bg: #060B17;
-    --color-surface: #111827;
-    --color-raised: #1e293b;
-    --color-border: #1f2937;
-    --color-border-strong: #334155;
-    --color-text: #f8fafc;
-    --color-text-secondary: #cbd5e1;
-    --color-text-muted: #94a3b8;
+    --color-bg: #07201B;
+    --color-surface: #0B2A23;
+    --color-raised: #103328;
+    --color-border: #1C3D34;
+    --color-border-strong: #295045;
+    --color-text: #F2F7F5;
+    --color-text-secondary: #C3D4CE;
+    --color-text-muted: #93A8A2;
+    --color-primary: #12A87F;
+    --color-primary-dark: #0E8A68;
+    --color-primary-light: #103328;
     color-scheme: dark;
   }
-  html.dark body {
-    background-color: #060B17;
-    color: #f8fafc;
-  }
-  html.dark .app-container {
-    background-color: #060B17;
-  }
+  html.dark body { background-color: #07201B; color: #F2F7F5; }
+  html.dark .app-container { background-color: #07201B; }
 
-  /* --- Surfaces --- */
-  html.dark .bg-white { background-color: #111827 !important; }
-  html.dark .bg-slate-50 { background-color: #0f172a !important; }
+  html.dark .bg-white { background-color: #0B2A23 !important; }
+  html.dark .bg-slate-50 { background-color: #092620 !important; }
   html.dark .bg-slate-50\/50,
   html.dark .bg-slate-50\/40,
-  html.dark .bg-slate-50\/30 { background-color: rgba(15,23,42,0.55) !important; }
+  html.dark .bg-slate-50\/30 { background-color: rgba(9, 38, 32, .55) !important; }
   html.dark .bg-slate-100,
-  html.dark .bg-slate-100\/50 { background-color: #1e293b !important; }
+  html.dark .bg-slate-100\/50 { background-color: #103328 !important; }
   html.dark .bg-slate-200,
-  html.dark .bg-slate-200\/50 { background-color: #334155 !important; }
-  html.dark .bg-gray-50 { background-color: #0f172a !important; }
-  html.dark .bg-gray-100 { background-color: #1e293b !important; }
+  html.dark .bg-slate-200\/50 { background-color: #1C3D34 !important; }
+  html.dark .bg-gray-50 { background-color: #092620 !important; }
+  html.dark .bg-gray-100 { background-color: #103328 !important; }
 
-  /* --- Borders --- */
-  html.dark .border-slate-100 { border-color: #1e293b !important; }
-  html.dark .border-slate-200 { border-color: #334155 !important; }
-  html.dark .border-slate-300 { border-color: #475569 !important; }
-  html.dark .ring-slate-200 { --tw-ring-color: #334155 !important; }
-  html.dark .divide-slate-100 > * + * { border-color: #1e293b !important; }
+  html.dark .border-slate-100 { border-color: #1C3D34 !important; }
+  html.dark .border-slate-200 { border-color: #295045 !important; }
+  html.dark .border-slate-300 { border-color: #36655a !important; }
+  html.dark .ring-slate-200 { --tw-ring-color: #295045 !important; }
+  html.dark .divide-slate-100 > * + * { border-color: #1C3D34 !important; }
 
-  /* --- Text contrast (escalas slate / gray) --- */
-  html.dark .text-slate-900 { color: #f8fafc !important; }
-  html.dark .text-slate-800 { color: #e2e8f0 !important; }
-  html.dark .text-slate-700 { color: #cbd5e1 !important; }
-  html.dark .text-slate-600 { color: #cbd5e1 !important; }
-  html.dark .text-slate-500 { color: #94a3b8 !important; }
-  html.dark .text-slate-400 { color: #64748b !important; }
-  html.dark .text-slate-300 { color: #475569 !important; }
-  html.dark .text-gray-900 { color: #f8fafc !important; }
-  html.dark .text-gray-700 { color: #cbd5e1 !important; }
-  html.dark .text-gray-600 { color: #cbd5e1 !important; }
-  html.dark .text-gray-500 { color: #94a3b8 !important; }
-  html.dark .text-gray-400 { color: #64748b !important; }
+  html.dark .text-slate-900, html.dark .text-gray-900 { color: #F2F7F5 !important; }
+  html.dark .text-slate-800 { color: #E4EDEA !important; }
+  html.dark .text-slate-700, html.dark .text-gray-700 { color: #C3D4CE !important; }
+  html.dark .text-slate-600, html.dark .text-gray-600 { color: #C3D4CE !important; }
+  html.dark .text-slate-500, html.dark .text-gray-500 { color: #93A8A2 !important; }
+  html.dark .text-slate-400, html.dark .text-gray-400 { color: #93A8A2 !important; }
+  html.dark .text-slate-300 { color: #6E847E !important; }
 
-  /* --- Tinted backgrounds (alerts / chips) — versões mais escuras + saturadas --- */
-  html.dark .bg-blue-50 { background-color: rgba(59,130,246,0.12) !important; }
-  html.dark .bg-blue-50\/50 { background-color: rgba(59,130,246,0.08) !important; }
-  html.dark .bg-blue-100 { background-color: rgba(59,130,246,0.18) !important; }
-  html.dark .border-blue-100 { border-color: rgba(59,130,246,0.25) !important; }
-  html.dark .text-blue-600 { color: #60a5fa !important; }
-  html.dark .text-blue-700 { color: #93c5fd !important; }
-  html.dark .text-blue-800 { color: #bfdbfe !important; }
-  html.dark .text-blue-500 { color: #60a5fa !important; }
-  html.dark .text-blue-400 { color: #93c5fd !important; }
-  html.dark .text-blue-600\/80 { color: rgba(147,197,253,0.85) !important; }
+  /* Jade (ex-blue/emerald) no escuro: sobe para o tom sinal. */
+  html.dark .bg-blue-50, html.dark .bg-emerald-50 { background-color: rgba(18, 168, 127, .12) !important; }
+  html.dark .bg-blue-50\/50, html.dark .bg-emerald-50\/30 { background-color: rgba(18, 168, 127, .08) !important; }
+  html.dark .bg-blue-100, html.dark .bg-emerald-100 { background-color: rgba(18, 168, 127, .18) !important; }
+  html.dark .border-blue-100, html.dark .border-emerald-100 { border-color: rgba(18, 168, 127, .28) !important; }
+  html.dark .text-blue-400, html.dark .text-emerald-400 { color: #6FD6B4 !important; }
+  html.dark .text-blue-500, html.dark .text-emerald-500 { color: #35C79C !important; }
+  html.dark .text-blue-600, html.dark .text-emerald-600 { color: #35C79C !important; }
+  html.dark .text-blue-700, html.dark .text-emerald-700 { color: #6FD6B4 !important; }
+  html.dark .text-blue-800 { color: #A8E5CF !important; }
+  html.dark .text-blue-600\/80 { color: rgba(111, 214, 180, .85) !important; }
 
-  html.dark .bg-emerald-50 { background-color: rgba(16,185,129,0.12) !important; }
-  html.dark .bg-emerald-50\/30 { background-color: rgba(16,185,129,0.08) !important; }
-  html.dark .bg-emerald-100 { background-color: rgba(16,185,129,0.18) !important; }
-  html.dark .border-emerald-100 { border-color: rgba(16,185,129,0.25) !important; }
-  html.dark .text-emerald-500 { color: #34d399 !important; }
-  html.dark .text-emerald-600 { color: #34d399 !important; }
-  html.dark .text-emerald-700 { color: #6ee7b7 !important; }
+  /* Terracota (ex-red/amber) no escuro. */
+  html.dark .bg-red-50, html.dark .bg-amber-50, html.dark .bg-orange-50 { background-color: rgba(200, 106, 68, .14) !important; }
+  html.dark .bg-red-50\/50 { background-color: rgba(200, 106, 68, .09) !important; }
+  html.dark .bg-red-100, html.dark .bg-red-100\/70 { background-color: rgba(200, 106, 68, .2) !important; }
+  html.dark .border-red-100, html.dark .border-amber-100, html.dark .border-orange-100 { border-color: rgba(200, 106, 68, .32) !important; }
+  html.dark .border-red-200\/50 { border-color: rgba(200, 106, 68, .26) !important; }
+  html.dark .text-red-400, html.dark .text-red-500, html.dark .text-red-600,
+  html.dark .text-amber-500, html.dark .text-amber-600,
+  html.dark .text-orange-500, html.dark .text-orange-600 { color: #E0906B !important; }
+  html.dark .text-red-700, html.dark .text-red-800,
+  html.dark .text-amber-700, html.dark .text-amber-800,
+  html.dark .text-orange-800 { color: #EFB394 !important; }
+  html.dark .text-red-600\/80 { color: rgba(224, 144, 107, .85) !important; }
 
-  html.dark .bg-red-50 { background-color: rgba(239,68,68,0.12) !important; }
-  html.dark .bg-red-50\/50 { background-color: rgba(239,68,68,0.08) !important; }
-  html.dark .bg-red-100 { background-color: rgba(239,68,68,0.18) !important; }
-  html.dark .bg-red-100\/70 { background-color: rgba(239,68,68,0.15) !important; }
-  html.dark .border-red-100 { border-color: rgba(239,68,68,0.3) !important; }
-  html.dark .border-red-200\/50 { border-color: rgba(239,68,68,0.25) !important; }
-  html.dark .text-red-500 { color: #f87171 !important; }
-  html.dark .text-red-600 { color: #f87171 !important; }
-  html.dark .text-red-700 { color: #fca5a5 !important; }
-  html.dark .text-red-800 { color: #fecaca !important; }
-  html.dark .text-red-400 { color: #fca5a5 !important; }
-  html.dark .text-red-600\/80 { color: rgba(252,165,165,0.85) !important; }
+  /* Hues extintos: qualquer resquício cai no sage. */
+  html.dark .bg-purple-100, html.dark .bg-violet-50, html.dark .bg-indigo-50 { background-color: rgba(111, 168, 154, .16) !important; }
+  html.dark .text-purple-600, html.dark .text-violet-500, html.dark .text-indigo-500 { color: #8FBCAF !important; }
 
-  html.dark .bg-amber-50 { background-color: rgba(245,158,11,0.12) !important; }
-  html.dark .border-amber-100 { border-color: rgba(245,158,11,0.25) !important; }
-  html.dark .text-amber-700 { color: #fcd34d !important; }
-  html.dark .text-amber-500 { color: #fbbf24 !important; }
-  html.dark .text-amber-600 { color: #fbbf24 !important; }
-  html.dark .text-amber-800 { color: #fde68a !important; }
-
-  html.dark .bg-purple-100 { background-color: rgba(168,85,247,0.18) !important; }
-  html.dark .bg-violet-50 { background-color: rgba(139,92,246,0.15) !important; }
-  html.dark .bg-indigo-50 { background-color: rgba(99,102,241,0.15) !important; }
-  html.dark .text-purple-600 { color: #c084fc !important; }
-  html.dark .text-violet-500 { color: #a78bfa !important; }
-  html.dark .text-indigo-500 { color: #818cf8 !important; }
-
-  html.dark .bg-orange-50 { background-color: rgba(249,115,22,0.12) !important; }
-  html.dark .border-orange-100 { border-color: rgba(249,115,22,0.25) !important; }
-  html.dark .text-orange-500 { color: #fb923c !important; }
-  html.dark .text-orange-600 { color: #fb923c !important; }
-  html.dark .text-orange-800 { color: #fdba74 !important; }
-
-  /* --- Components específicos --- */
   html.dark .bottom-nav {
-    background-color: rgba(11,17,32,0.85);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-top: 1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
+    background-color: rgba(11, 42, 35, .82);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, .08);
+    box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .6);
   }
-  html.dark .nav-item { color: #64748b; }
-  html.dark .nav-item.active { color: #60a5fa; }
-  html.dark .nav-indicator { background: #60a5fa; }
+  html.dark .nav-item { color: #93A8A2; }
+  html.dark .nav-item.active { color: #35C79C; }
+
+  html.dark .card { background: #0B2A23; border-color: #1C3D34; }
+  html.dark .jade-sheet { background: #0B2A23; }
   html.dark .bottom-sheet,
-  html.dark .bottom-sheet-overlay > div {
-    background-color: #111827;
-    border-top: 1px solid #1e293b;
-  }
-  html.dark .sheet-handle { background-color: #475569; }
+  html.dark .form-sheet,
+  html.dark .modal,
+  html.dark .bottom-sheet-overlay > div { background-color: #0B2A23; }
+  html.dark .form-sheet-grip { background-color: #295045; }
+  html.dark .notice { background: rgba(18, 168, 127, .12); border-left-color: #35C79C; }
+  html.dark .notice-warn { background: rgba(200, 106, 68, .14); border-left-color: #E0906B; }
+  /* Terracota #A9512F some no fundo escuro: sobe para o tom claro. */
+  html.dark .input-error { color: #E0906B; }
+  html.dark .input-field[aria-invalid="true"] { border-color: #E0906B !important; }
+  html.dark .btn-danger { background: transparent; color: #E0906B; border-color: rgba(200, 106, 68, .4); }
+  html.dark .btn-danger:hover { background: rgba(200, 106, 68, .14); }
+  html.dark .btn-secondary { background: transparent; color: #C3D4CE; border-color: #295045; }
+  html.dark .chip { background: transparent; color: #C3D4CE; border-color: #295045; }
+  html.dark .chip[aria-pressed="true"], html.dark .chip.active { background: #12A87F; border-color: #12A87F; color: #07201B; }
 
   html.dark .quick-action-btn {
-    background: #111827;
-    border-color: #1e293b;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    background: #0B2A23;
+    border-right-color: #1C3D34;
+    border-bottom-color: #1C3D34;
+    box-shadow: none;
   }
-  html.dark .quick-action-btn:hover {
-    background: #1e293b;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  }
+  html.dark .quick-action-btn:hover { background: #103328; box-shadow: none; }
+  html.dark .quick-action-grid { border-top-color: #1C3D34; border-left-color: #1C3D34; }
+  html.dark .quick-action-btn svg { color: #35C79C; }
 
-  /* Inputs */
+  html.dark .calendar-day .calendar-day-num { color: #E4EDEA; }
+  html.dark .calendar-day[data-today="true"] .calendar-day-num {
+    color: #35C79C;
+    border-bottom-color: #35C79C;
+  }
+  html.dark .list-row:hover { background: #103328; }
+  html.dark .place-rule { border-left-color: #35C79C; }
+
   html.dark input,
   html.dark select,
   html.dark textarea {
-    background-color: #0f172a !important;
-    color: #f8fafc !important;
-    border-color: #334155 !important;
+    background-color: #092620 !important;
+    color: #F2F7F5 !important;
+    border-color: #1C3D34 !important;
   }
   html.dark input::placeholder,
-  html.dark textarea::placeholder { color: #64748b !important; }
+  html.dark textarea::placeholder { color: #93A8A2 !important; }
   html.dark input:focus,
   html.dark textarea:focus,
   html.dark select:focus {
-    background-color: #1e293b !important;
-    border-color: #3b82f6 !important;
+    background-color: #103328 !important;
+    border-color: #35C79C !important;
   }
-  html.dark input[type="checkbox"]:not(:checked) { background-color: #1e293b !important; }
+  html.dark input[type="checkbox"]:not(:checked) { background-color: #103328 !important; }
 
-  /* Status pill backgrounds usadas em chips */
-  html.dark .status-previsto { background-color: rgba(148,163,184,0.18) !important; color: #cbd5e1 !important; }
-  html.dark .status-realizado { background-color: rgba(59,130,246,0.18) !important; color: #93c5fd !important; }
-  html.dark .status-recebido { background-color: rgba(16,185,129,0.18) !important; color: #6ee7b7 !important; }
-  html.dark .status-atrasado { background-color: rgba(239,68,68,0.18) !important; color: #fca5a5 !important; }
-  html.dark .status-cancelado { background-color: rgba(148,163,184,0.12) !important; color: #94a3b8 !important; }
+  html.dark .status-previsto  { background-color: rgba(147, 168, 162, .16) !important; color: #C3D4CE !important; }
+  html.dark .status-realizado { background-color: rgba(18, 168, 127, .18) !important; color: #6FD6B4 !important; }
+  html.dark .status-recebido  { background-color: rgba(18, 168, 127, .22) !important; color: #8FE2C4 !important; }
+  html.dark .status-atrasado  { background-color: rgba(200, 106, 68, .2) !important; color: #EFB394 !important; }
+  html.dark .status-cancelado { background-color: rgba(147, 168, 162, .12) !important; color: #93A8A2 !important; }
 
-  /* Hover states que assumem cores light */
-  html.dark .hover\:bg-slate-50:hover { background-color: #1e293b !important; }
-  html.dark .hover\:bg-slate-100:hover { background-color: #334155 !important; }
-  html.dark .hover\:bg-slate-200:hover { background-color: #475569 !important; }
-  html.dark .hover\:bg-blue-50:hover { background-color: rgba(59,130,246,0.18) !important; }
-  html.dark .hover\:bg-red-50:hover { background-color: rgba(239,68,68,0.15) !important; }
-  html.dark .hover\:bg-red-100:hover { background-color: rgba(239,68,68,0.22) !important; }
-  html.dark .hover\:bg-emerald-100:hover { background-color: rgba(16,185,129,0.22) !important; }
-  html.dark .hover\:border-blue-100:hover { border-color: rgba(59,130,246,0.4) !important; }
-  html.dark .hover\:border-red-200:hover { border-color: rgba(239,68,68,0.4) !important; }
-  html.dark .hover\:text-slate-700:hover { color: #f1f5f9 !important; }
-  html.dark .hover\:text-slate-800:hover { color: #f8fafc !important; }
+  html.dark .hover\:bg-slate-50:hover { background-color: #103328 !important; }
+  html.dark .hover\:bg-slate-100:hover { background-color: #1C3D34 !important; }
+  html.dark .hover\:bg-slate-200:hover { background-color: #295045 !important; }
+  html.dark .hover\:bg-blue-50:hover,
+  html.dark .hover\:bg-emerald-100:hover { background-color: rgba(18, 168, 127, .18) !important; }
+  html.dark .hover\:bg-red-50:hover,
+  html.dark .hover\:bg-red-100:hover { background-color: rgba(200, 106, 68, .18) !important; }
+  html.dark .hover\:border-blue-100:hover { border-color: rgba(18, 168, 127, .45) !important; }
+  html.dark .hover\:border-red-200:hover { border-color: rgba(200, 106, 68, .45) !important; }
+  html.dark .hover\:text-slate-700:hover { color: #E4EDEA !important; }
+  /* Lixeiras: `text-slate-400` tem !important no escuro e engolia o hover terracota. */
+  html.dark .hover\:text-red-500:hover,
+  html.dark .hover\:text-red-600:hover { color: #E0906B !important; }
+  html.dark .hover\:text-slate-800:hover { color: #F2F7F5 !important; }
 
-  /* Backdrop overlays */
   html.dark .bg-slate-900\/40,
-  html.dark .bg-slate-900\/50 { background-color: rgba(0,0,0,0.7) !important; }
+  html.dark .bg-slate-900\/50 { background-color: rgba(3, 16, 13, .72) !important; }
 
-  /* Shadows mais profundas */
-  html.dark .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important; }
-  html.dark .shadow-md { box-shadow: 0 4px 10px rgba(0,0,0,0.4) !important; }
-  html.dark .shadow-lg { box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important; }
-  html.dark .shadow-xl { box-shadow: 0 12px 40px rgba(0,0,0,0.6) !important; }
+  html.dark .shadow-sm { box-shadow: 0 1px 3px rgba(0, 0, 0, .35) !important; }
+  html.dark .shadow-md { box-shadow: 0 1px 3px rgba(0, 0, 0, .35) !important; }
+  html.dark .shadow-lg { box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .6) !important; }
+  html.dark .shadow-xl { box-shadow: 0 40px 80px -30px rgba(0, 0, 0, .7) !important; }
 
-  /* Recharts: grid lines mais sutis */
-  html.dark .recharts-cartesian-grid line { stroke: #1e293b !important; }
-  html.dark .recharts-text { fill: #94a3b8 !important; }
+  html.dark .recharts-cartesian-grid line { stroke: #1C3D34 !important; }
+  html.dark .recharts-text { fill: #93A8A2 !important; }
 
   html.dark .hide-scrollbar { color-scheme: dark; }
 }

@@ -8,7 +8,7 @@ interface ConfirmDialogProps {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** Estilo do ícone/botão de confirmar. 'danger' = vermelho (excluir/sair), 'default' = azul. */
+  /** Estilo do ícone/botão de confirmar. 'danger' = terracota (excluir/sair), 'default' = jade. */
   tone?: 'danger' | 'default';
   onConfirm: () => void;
   onCancel: () => void;
@@ -18,7 +18,11 @@ interface ConfirmDialogProps {
  * Modal de confirmação central e customizado — NUNCA usar `window.confirm()`:
  * o diálogo nativo é bloqueado/auto-dismissado (retorna `false` sempre) dentro
  * de iframes e webviews como o painel de preview, fazendo o botão "não funcionar".
- * Este componente segue o padrão visual já usado em EditShiftSheet/LocaisScreen.
+ *
+ * Sistema Jade: cartão centrado (raio 28, sombra elevada), ícone solto de traço
+ * 1.5 — sem círculo pastel — e botões lado a lado com as classes do sistema:
+ * `.btn-secondary` para cancelar e `.btn-danger` (terracota com borda, nunca
+ * bloco vermelho) ou `.btn-primary` (jade) para confirmar.
  */
 export default function ConfirmDialog({
   open, icon: Icon, title, description, confirmLabel, cancelLabel, tone = 'danger', onConfirm, onCancel,
@@ -26,27 +30,43 @@ export default function ConfirmDialog({
   const { t } = useLanguage();
   if (!open) return null;
 
-  const iconBg = tone === 'danger' ? 'bg-red-50' : 'bg-blue-50';
-  const iconColor = tone === 'danger' ? 'text-red-600' : 'text-blue-600';
-  const confirmBtn = tone === 'danger'
-    ? 'bg-red-600 hover:bg-red-700'
-    : 'bg-blue-600 hover:bg-blue-700';
+  const isDanger = tone === 'danger';
 
   return (
-    <div className="fixed inset-0 z-[400] bg-slate-900/50 flex items-center justify-center p-4" onClick={onCancel}>
-      <div className="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
-        <div className={`w-12 h-12 rounded-full ${iconBg} flex items-center justify-center mx-auto mb-3`}>
-          <Icon size={20} className={iconColor} />
-        </div>
-        <h4 className="text-center font-bold text-slate-900 text-[15px] mb-1">{title}</h4>
-        {description && <p className="text-center text-slate-500 text-[12px] mb-4">{description}</p>}
-        <div className="flex gap-2 mt-4">
-          <button onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
+    <div className="modal-overlay z-[400] animate-fade-in" onClick={onCancel}>
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        className="bg-white w-full max-w-sm rounded-3xl overflow-hidden p-6 animate-scale-in"
+        style={{ boxShadow: '0 40px 80px -30px rgba(7,56,45,.5)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <Icon
+          size={20}
+          strokeWidth={1.5}
+          aria-hidden="true"
+          className={isDanger ? 'text-red-600' : 'text-blue-600'}
+        />
+        <h4
+          id="confirm-dialog-title"
+          className="mt-4 text-[22px] font-light leading-[1.15] tracking-[-0.03em] text-slate-900"
+        >
+          {title}
+        </h4>
+        {description && (
+          <p className="mt-2 text-[13.5px] leading-[1.55] text-slate-500">{description}</p>
+        )}
+
+        <div className="flex gap-2.5 mt-6">
+          <button type="button" onClick={onCancel} className="btn-secondary flex-1 !px-3">
             {cancelLabel || t('Cancelar')}
           </button>
-          <button onClick={onConfirm}
-            className={`flex-1 py-2.5 rounded-xl text-white text-[13px] font-bold transition active:scale-[0.98] ${confirmBtn}`}>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`${isDanger ? 'btn-danger' : 'btn-primary !h-12'} flex-1 !px-3`}
+          >
             {confirmLabel || t('Confirmar')}
           </button>
         </div>

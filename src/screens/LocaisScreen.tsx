@@ -1,16 +1,218 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, X, Check, Building2, MapPin, ChevronRight, ChevronLeft, Pencil, HelpCircle, Zap, Sparkles, Palette, DollarSign, Wallet, Phone, Clock, Tag } from 'lucide-react';
+import { Plus, Trash2, X, Check, ChevronLeft, ChevronRight, HelpCircle, Zap, AlertCircle } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { createWorkplace, deleteWorkplace, createShiftTemplate, deleteShiftTemplate, getShiftTemplates, updateWorkplace, updateShiftTemplate } from '../lib/db';
 import type { Workplace, WorkplaceType, PaymentMethod, ShiftType, ShiftTemplate, FiscalNature } from '../types';
-import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER, STATUS_LABELS } from '../types';
+import { WORKPLACE_TYPE_LABELS, WORKPLACE_COLORS, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER, SHIFT_TYPE_LABELS, resolveFiscalNature } from '../types';
 import { format } from 'date-fns';
+import { ptBR, es } from 'date-fns/locale';
 import { useLanguage } from '../hooks/useLanguage';
 import { usePlan } from '../contexts/PlanContext';
-import { PLAN_META } from '../lib/plans';
+import JadePlate from '../components/JadePlate';
+import MarbleBackground from '../components/MarbleBackground';
+import ConfirmDialog from '../components/ConfirmDialog';
+import AddShiftModal from '../components/AddShiftModal';
 
+type TFn = (key: string) => string;
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+/** Número herói: "R$ 7.000" + ",00" (centavos sempre, em corpo menor — 40/200 + 22/300). */
+function heroMoney(v: number) {
+  const s = fmtCur(v);
+  const i = s.lastIndexOf(',');
+  return i < 0 ? { int: s, cents: '' } : { int: s.slice(0, i), cents: s.slice(i) };
+}
+
+function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+/** Horário do modelo no formato do design: "07:00 — 19:00". */
+function timeRange(start: string, end: string) { return `${start} — ${end}`; }
+
+/** Natureza fiscal curta, no vocabulário do design ("PJ · Simples"). */
+const FISCAL_NATURE_SHORT: Record<FiscalNature, string> = {
+  MEI: 'PJ · MEI',
+  SIMPLES: 'PJ · Simples',
+  LUCRO_PRESUMIDO: 'PJ · Lucro Presumido',
+  PJ: 'PJ',
+  AUTONOMO: 'PF · Autônomo',
+};
+
+function calcDuration(start: string, end: string) {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff <= 0) diff += 1440;
+  return diff / 60;
+}
+
+const PAYMENT_METHODS: PaymentMethod[] = ['PJ', 'PF', 'RPA', 'cooperativa', 'outro'];
+const SHIFT_TYPES: ShiftType[] = ['dia', 'noite', '24h', 'sobreaviso', 'sala_vermelha', 'UTI', 'anestesia', 'cirurgia', 'ambulatorio', 'outro'];
+
+/** Filete padrão (adapta ao modo escuro). */
+const RULE = '1px solid var(--color-border)';
+const MODAL_SHADOW = { boxShadow: '0 40px 80px -30px rgba(7,56,45,.5)' };
+
+const workplaceTypeOptions = (t: TFn) =>
+  (Object.keys(WORKPLACE_TYPE_LABELS) as WorkplaceType[]).map(k => ({ value: k, label: t(WORKPLACE_TYPE_LABELS[k]) }));
+const shiftTypeOptions = (t: TFn) =>
+  SHIFT_TYPES.map(k => ({ value: k, label: t(SHIFT_TYPE_LABELS[k]) }));
+
+// ============================================================
+// PEÇAS COMPARTILHADAS
+// ============================================================
+
+/** Escolha única em chips (`aria-pressed`). */
+function ChipGroup<T extends string>({ label, options, value, onChange }: {
+  label: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
+      {options.map(o => (
+        <button key={o.value} type="button" className="chip"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Paleta do local: as bolinhas são dado do usuário; a selecionada ganha anel jade. */
+function ColorPalette({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const { t } = useLanguage();
+  return (
+    <div className="flex flex-wrap gap-3" role="group" aria-label={t('Cor de identificação')}>
+      {WORKPLACE_COLORS.map(c => {
+        const selected = value === c;
+        return (
+          <button key={c} type="button" onClick={() => onChange(c)}
+            aria-pressed={selected} aria-label={c}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-shadow"
+            style={{
+              background: c,
+              boxShadow: selected ? '0 0 0 2px var(--color-surface), 0 0 0 3.5px var(--color-primary)' : 'none',
+            }}>
+            {selected && <Check size={14} strokeWidth={2.2} color="#fff" />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Erro de formulário — a peça única de "atenção" do sistema. */
+function FormNotice({ message, className = '' }: { message: string; className?: string }) {
+  return (
+    <div role="alert" className={`notice notice-warn items-start ${className}`}>
+      <AlertCircle size={17} strokeWidth={1.6} className="shrink-0 mt-0.5 text-red-600" />
+      <span className="text-[13.5px] leading-[1.45] text-slate-900">{message}</span>
+    </div>
+  );
+}
+
+/** Cabeçalho das telas de formulário (Novo local / Novo modelo). */
+function FormScreenHeader({ eyebrow, dotColor, title, subtitle, onClose }: {
+  eyebrow: string;
+  dotColor?: string;
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <header className="px-6 pt-8 pb-2 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-[13px] text-slate-500">
+          {dotColor && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dotColor }} />}
+          <span className="truncate">{eyebrow}</span>
+        </p>
+        <h1 className="section-title mt-1">{title}</h1>
+        <p className="section-subtitle">{subtitle}</p>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button type="button" onClick={onClose}
+          className="icon-btn w-10 h-10 flex items-center justify-center"
+          title={t('Fechar')} aria-label={t('Fechar')}>
+          <X size={19} strokeWidth={1.5} />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+/**
+ * Rodapé fixo dos formulários em tela. A placa branca desce até o rodapé e a
+ * ilha de navegação (z-30) flutua por cima dela; os botões ficam acima da ilha.
+ */
+function FormFooter({ onCancel, onSave, saveLabel, disabled }: {
+  onCancel: () => void;
+  onSave: () => void;
+  saveLabel: string;
+  disabled?: boolean;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div
+      className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-[25] px-6 pt-3 bg-white flex gap-3"
+      style={{ borderTop: RULE, paddingBottom: 'calc(100px + env(safe-area-inset-bottom, 0px))' }}
+    >
+      <button type="button" onClick={onCancel} className="btn-secondary flex-1 h-[52px]">
+        {t('Cancelar')}
+      </button>
+      <button type="button" onClick={onSave} disabled={disabled}
+        className="btn-primary flex-[2] disabled:opacity-50 disabled:cursor-not-allowed">
+        <Check size={17} strokeWidth={1.8} /> {saveLabel}
+      </button>
+    </div>
+  );
+}
+
+/** Cabeçalho do modal centrado padrão. */
+function ModalHeader({ eyebrow, dotColor, title, subtitle, onClose }: {
+  eyebrow: string;
+  dotColor?: string;
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div className="p-6 flex items-start justify-between gap-4 shrink-0">
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-[13px] text-slate-500">
+          {dotColor && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dotColor }} />}
+          <span className="truncate">{eyebrow}</span>
+        </p>
+        <h3 className="mt-1 text-[22px] font-light leading-tight tracking-[-0.03em] text-slate-900 truncate">{title}</h3>
+        {subtitle && <p className="mt-1 text-[13px] text-slate-500 tabular-nums truncate">{subtitle}</p>}
+      </div>
+      <button type="button" onClick={onClose}
+        className="icon-btn w-10 h-10 -mr-2 -mt-1 flex items-center justify-center shrink-0"
+        title={t('Fechar')} aria-label={t('Fechar')}>
+        <X size={18} strokeWidth={1.5} />
+      </button>
+    </div>
+  );
+}
+
+/** Célula da treliça 2×2 do detalhe (`.data-lattice`): rótulo 12/400, valor 15/400. */
+function LatticeCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[12px] text-slate-500">{label}</p>
+      <p className="mt-[5px] text-[15px] text-slate-900 tabular-nums break-words">{value}</p>
+    </div>
+  );
+}
+
+// ============================================================
+// TELA
+// ============================================================
 
 interface LocaisScreenProps {
   /** Quando true, abre direto no formulário de novo local (ex.: vindo do aviso do AddShiftModal). */
@@ -21,9 +223,13 @@ interface LocaisScreenProps {
 
 export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: LocaisScreenProps = {}) {
   const { user, workplaces, shifts, refreshWorkplaces, refreshShifts } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { limits, requireUpgrade, plan } = usePlan();
   const [showHelp, setShowHelp] = useState(false);
+  const [showAddShift, setShowAddShift] = useState(false);
+
+  // "Setembro" — mês corrente, com inicial maiúscula.
+  const monthName = cap(format(new Date(), 'MMMM', { locale: language === 'es-LATAM' ? es : ptBR }));
 
   // Porteiro de criação de local: respeita o limite do plano (Free = 1).
   function handleNewWorkplace() {
@@ -64,14 +270,6 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
   });
   const [tFormError, setTFormError] = useState('');
 
-  function calcDuration(start: string, end: string) {
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    let diff = (eh * 60 + em) - (sh * 60 + sm);
-    if (diff <= 0) diff += 1440;
-    return diff / 60;
-  }
-
   function handleCreateWp() {
     if (!user) return;
     if (!form.name.trim()) { setFormError('Informe o nome do local.'); return; }
@@ -97,11 +295,39 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
     setForm({ name:'', type:'hospital', color:WORKPLACE_COLORS[0], default_shift_value:'', default_duration_hours:'12', payment_day:'10', payment_method:'PJ', fiscal_nature:'PJ', contact_name:'', contact_phone:'', cnpj:'', address:'' });
   }
 
+  // confirm() nativo é bloqueado em iframes/webviews: a exclusão usa o ConfirmDialog.
+  // Excluir local só existe no detalhe (o design tirou a lixeira da lista);
+  // excluir modelo fica dentro do modal de edição do modelo.
+  const [pendingDeleteWpId, setPendingDeleteWpId] = useState<string | null>(null);
+
   function handleDeleteWp(id: string) {
-    if (!confirm('Excluir este local?')) return;
-    deleteWorkplace(id);
+    setPendingDeleteWpId(id);
+  }
+
+  function confirmPendingDelete() {
+    if (!pendingDeleteWpId) return;
+    deleteWorkplace(pendingDeleteWpId);
     refreshWorkplaces();
     setView('list');
+    setPendingDeleteWpId(null);
+  }
+
+  const deleteConfirm = (
+    <ConfirmDialog
+      open={!!pendingDeleteWpId}
+      icon={Trash2}
+      title={t('Excluir local?')}
+      description={t('O local sai da sua lista. Os plantões já lançados não são apagados.')}
+      confirmLabel={t('Excluir')}
+      tone="danger"
+      onCancel={() => setPendingDeleteWpId(null)}
+      onConfirm={confirmPendingDelete}
+    />
+  );
+
+  /** "Hospital · pagamento dia 10 · PJ" — linha de meta da lista e da placa. */
+  function wpMeta(wp: Workplace) {
+    return `${t(WORKPLACE_TYPE_LABELS[wp.type])} · ${t('pagamento dia')} ${wp.payment_day} · ${t(cap(wp.payment_method))}`;
   }
 
   function handleCreateTemplate() {
@@ -141,448 +367,314 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
 
   if (view === 'newTemplate' && selectedWp) {
     const tDuration = calcDuration(tForm.start_time, tForm.end_time);
-    const shiftTypes: ShiftType[] = ['dia', 'noite', '24h', 'sobreaviso', 'sala_vermelha', 'UTI', 'anestesia', 'cirurgia', 'ambulatorio', 'outro'];
-    const typeLabel = (ty: string) => ty.charAt(0).toUpperCase() + ty.slice(1).replace('_', ' ');
     return (
-      <div className="page-content bg-white min-h-screen pb-[150px]">
-        {/* Header — padrão do "Editar plantão" */}
-        <div className="px-5 pt-7 pb-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="hospital-avatar shrink-0" style={{ background: selectedWp.color }}>
-                {selectedWp.name.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 truncate">{selectedWp.name}</p>
-                <h1 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Novo modelo</h1>
-                <p className="text-[12px] text-slate-500 mt-0.5">Salve horário e valor para lançar em 1 toque.</p>
-              </div>
-            </div>
-            <button onClick={() => setView('detail')}
-              className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
+      <div className="bg-white min-h-screen pb-[190px]">
+        <FormScreenHeader
+          eyebrow={selectedWp.name}
+          dotColor={selectedWp.color}
+          title={t('Novo modelo')}
+          subtitle={t('Horário e valor salvos para lançar em um toque.')}
+          onClose={() => setView('detail')}
+        />
 
-        <div className="px-5 space-y-4">
-          {/* Identificação */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Tag size={11} strokeWidth={2.5} /> Modelo
-            </label>
-            <div>
-              <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Nome do modelo</p>
-              <input value={tForm.name}
-                onChange={e => { setTForm(f => ({ ...f, name: e.target.value })); if (tFormError) setTFormError(''); }}
-                placeholder='Ex: "Noite 19h–7h"'
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-            </div>
-            <div className="mt-2">
-              <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Tipo de escala</p>
-              <div className="flex flex-wrap gap-1.5">
-                {shiftTypes.map(ty => {
-                  const active = tForm.shift_type === ty;
-                  return (
-                    <button key={ty} type="button"
-                      onClick={() => setTForm(f => ({ ...f, shift_type: ty }))}
-                      className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-all active:scale-95 ${
-                        active ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:opacity-80'
-                      }`}
-                      style={active ? { background: selectedWp.color } : undefined}>
-                      {typeLabel(ty)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+        <div className="px-6">
+          {/* Modelo */}
+          <div className="section-rule !mt-6"><span>{t('Modelo')}</span></div>
+          <label className="input-label" htmlFor="tpl-new-name">{t('Nome do modelo')}</label>
+          <input id="tpl-new-name" className="input-field" value={tForm.name}
+            onChange={e => { setTForm(f => ({ ...f, name: e.target.value })); if (tFormError) setTFormError(''); }}
+            placeholder={t('Ex: "Noite 19h–7h"')}
+            aria-invalid={tFormError ? true : undefined} />
+
+          <p className="input-label mt-5">{t('Tipo de escala')}</p>
+          <ChipGroup
+            label={t('Tipo de escala')}
+            options={shiftTypeOptions(t)}
+            value={tForm.shift_type}
+            onChange={v => setTForm(f => ({ ...f, shift_type: v }))}
+          />
 
           {/* Horário */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Clock size={11} strokeWidth={2.5} /> Horário
-            </label>
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Início</p>
-                <input type="time" value={tForm.start_time}
-                  onChange={e => setTForm(f => ({ ...f, start_time: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
-              <span className="pb-3 text-slate-400 text-[11px] font-medium">até</span>
-              <div className="flex-1">
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Fim</p>
-                <input type="time" value={tForm.end_time}
-                  onChange={e => setTForm(f => ({ ...f, end_time: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
+          <div className="section-rule"><span>{t('Horário')}</span></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="input-label" htmlFor="tpl-new-start">{t('Início')}</label>
+              <input id="tpl-new-start" type="time" className="input-field tabular-nums" value={tForm.start_time}
+                onChange={e => setTForm(f => ({ ...f, start_time: e.target.value }))} />
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5 px-1">
-              Duração: <span className="font-semibold text-slate-600">{tDuration}h</span>
-            </p>
-          </div>
-
-          {/* Valor padrão */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <DollarSign size={11} strokeWidth={2.5} /> Valor padrão (R$)
-            </label>
-            <input type="number" inputMode="decimal" step="50" value={tForm.default_value}
-              onChange={e => setTForm(f => ({ ...f, default_value: e.target.value }))}
-              placeholder={selectedWp.default_shift_value.toString()}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-          </div>
-
-          {tFormError && (
-            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {tFormError}
+            <div>
+              <label className="input-label" htmlFor="tpl-new-end">{t('Fim')}</label>
+              <input id="tpl-new-end" type="time" className="input-field tabular-nums" value={tForm.end_time}
+                onChange={e => setTForm(f => ({ ...f, end_time: e.target.value }))} />
             </div>
-          )}
+          </div>
+          <p className="input-hint tabular-nums">
+            {t('Duração:')} <span className="font-semibold text-slate-700">{tDuration}h</span>
+          </p>
+
+          {/* Valor */}
+          <div className="section-rule"><span>{t('Valor')}</span></div>
+          <label className="input-label" htmlFor="tpl-new-value">{t('Valor padrão (R$)')}</label>
+          <input id="tpl-new-value" type="number" inputMode="decimal" step="50" className="input-field tabular-nums"
+            value={tForm.default_value}
+            onChange={e => setTForm(f => ({ ...f, default_value: e.target.value }))}
+            placeholder={selectedWp.default_shift_value.toString()} />
+          <p className="input-hint">
+            {t('Em branco, usa o valor padrão do local')} ({fmtCur(selectedWp.default_shift_value)}).
+          </p>
+
+          {tFormError && <FormNotice className="mt-6" message={t(tFormError)} />}
         </div>
 
-        {/* Footer */}
-        <div className="fixed bottom-[61px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-4 pt-3 bg-white border-t border-slate-100 z-[51] flex gap-2">
-          <button onClick={() => setView('detail')}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-            Cancelar
-          </button>
-          <button onClick={handleCreateTemplate}
-            disabled={!tForm.name.trim()}
-            className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-bold transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
-            style={{ background: selectedWp.color, boxShadow: `0 4px 12px ${selectedWp.color}40` }}>
-            <Check size={14} strokeWidth={3} /> Salvar modelo
-          </button>
-        </div>
+        <FormFooter
+          onCancel={() => setView('detail')}
+          onSave={handleCreateTemplate}
+          disabled={!tForm.name.trim()}
+          saveLabel={t('Salvar modelo')}
+        />
       </div>
     );
   }
 
   if (view === 'new') {
     return (
-      <div className="page-content bg-white min-h-screen pb-[150px]">
-        {/* Header — mesmo padrão do "Editar plantão": avatar + pretitle + título black */}
-        <div className="px-5 pt-7 pb-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="hospital-avatar shrink-0 transition-all duration-300" style={{ background: form.color }}>
-                {form.name.trim()
-                  ? form.name.trim().slice(0, 2).toUpperCase()
-                  : <Building2 size={17} color="white" strokeWidth={2.2} />}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Locais de Plantão')}</p>
-                <h1 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Novo local</h1>
-                <p className="text-[12px] text-slate-500 mt-0.5">Hospital, UPA ou clínica onde você atende.</p>
-              </div>
-            </div>
-            <button onClick={() => setView('list')}
-              className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
+      <div className="bg-white min-h-screen pb-[190px]">
+        <FormScreenHeader
+          eyebrow={t('Locais de plantão')}
+          title={t('Novo local')}
+          subtitle={t('Hospital, UPA ou clínica onde você atende.')}
+          onClose={() => setView('list')}
+        />
 
-        <div className="px-5 space-y-4">
+        <div className="px-6">
           {/* Identificação */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Building2 size={11} strokeWidth={2.5} /> Identificação
-            </label>
-            <div className="space-y-2">
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Nome do local</p>
-                <input value={form.name}
-                  onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (formError) setFormError(''); }}
-                  placeholder="Hospital São Marcos"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Tipo</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(WORKPLACE_TYPE_LABELS).map(([k, v]) => {
-                    const active = form.type === k;
-                    return (
-                      <button key={k} type="button"
-                        onClick={() => setForm(f => ({ ...f, type: k as WorkplaceType }))}
-                        className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-all active:scale-95 ${
-                          active ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:opacity-80'
-                        }`}
-                        style={active ? { background: form.color } : undefined}>
-                        {v}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
+          <div className="section-rule !mt-6"><span>{t('Identificação')}</span></div>
+          <label className="input-label" htmlFor="wp-new-name">{t('Nome do local')}</label>
+          <input id="wp-new-name" className="input-field" value={form.name}
+            onChange={e => { setForm(f => ({ ...f, name: e.target.value })); if (formError) setFormError(''); }}
+            placeholder="Hospital São Marcos"
+            aria-invalid={formError ? true : undefined} />
+
+          <p className="input-label mt-5">{t('Tipo')}</p>
+          <ChipGroup
+            label={t('Tipo')}
+            options={workplaceTypeOptions(t)}
+            value={form.type}
+            onChange={v => setForm(f => ({ ...f, type: v }))}
+          />
 
           {/* Cor de identificação */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-              <Palette size={11} strokeWidth={2.5} /> Cor de identificação
-            </label>
-            <div className="flex gap-2.5 flex-wrap">
-              {WORKPLACE_COLORS.map(c => (
-                <button key={c} type="button" onClick={() => setForm(f => ({ ...f, color: c }))}
-                  className="w-8 h-8 rounded-full transition-all flex items-center justify-center"
-                  style={{
-                    background: c,
-                    transform: form.color === c ? 'scale(1.15)' : 'scale(1)',
-                    boxShadow: form.color === c ? `0 0 0 2.5px white, 0 0 0 4.5px ${c}` : 'none',
-                  }}>
-                  {form.color === c && <Check size={12} color="white" strokeWidth={3} />}
-                </button>
-              ))}
-            </div>
-          </div>
+          <div className="section-rule"><span>{t('Cor de identificação')}</span></div>
+          <ColorPalette value={form.color} onChange={c => setForm(f => ({ ...f, color: c }))} />
 
           {/* Plantão padrão */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <DollarSign size={11} strokeWidth={2.5} /> Plantão padrão
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Valor (R$)</p>
-                <input type="number" inputMode="decimal" step="50" value={form.default_shift_value}
-                  onChange={e => setForm(f => ({ ...f, default_shift_value: e.target.value }))}
-                  placeholder="1400"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Duração (h)</p>
-                <input type="number" inputMode="decimal" step="0.5" value={form.default_duration_hours}
-                  onChange={e => setForm(f => ({ ...f, default_duration_hours: e.target.value }))}
-                  placeholder="12"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
+          <div className="section-rule"><span>{t('Plantão padrão')}</span></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="input-label" htmlFor="wp-new-value">{t('Valor (R$)')}</label>
+              <input id="wp-new-value" type="number" inputMode="decimal" step="50" className="input-field tabular-nums"
+                value={form.default_shift_value}
+                onChange={e => setForm(f => ({ ...f, default_shift_value: e.target.value }))}
+                placeholder="1400" />
+            </div>
+            <div>
+              <label className="input-label" htmlFor="wp-new-duration">{t('Duração (h)')}</label>
+              <input id="wp-new-duration" type="number" inputMode="decimal" step="0.5" className="input-field tabular-nums"
+                value={form.default_duration_hours}
+                onChange={e => setForm(f => ({ ...f, default_duration_hours: e.target.value }))}
+                placeholder="12" />
             </div>
           </div>
 
           {/* Pagamento */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Wallet size={11} strokeWidth={2.5} /> Pagamento
-            </label>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Dia do mês</p>
-                <input type="number" inputMode="numeric" min="1" max="31" value={form.payment_day}
-                  onChange={e => setForm(f => ({ ...f, payment_day: e.target.value }))}
-                  placeholder="10"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Método</p>
-                <select value={form.payment_method}
-                  onChange={e => setForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
-                  {(['PJ','PF','RPA','cooperativa','outro'] as PaymentMethod[]).map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
+          <div className="section-rule"><span>{t('Pagamento')}</span></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="input-label" htmlFor="wp-new-payday">{t('Dia do mês')}</label>
+              <input id="wp-new-payday" type="number" inputMode="numeric" min="1" max="31" className="input-field tabular-nums"
+                value={form.payment_day}
+                onChange={e => setForm(f => ({ ...f, payment_day: e.target.value }))}
+                placeholder="10" />
             </div>
-            <div className="space-y-2">
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Forma de recebimento (relatório do contador)</p>
-                <select value={form.fiscal_nature}
-                  onChange={e => setForm(f => ({ ...f, fiscal_nature: e.target.value as FiscalNature }))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
-                  {FISCAL_NATURE_ORDER.map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
-                </select>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">CNPJ/CPF da fonte pagadora</p>
-                <input value={form.cnpj}
-                  onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))}
-                  placeholder="Opcional"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
+            <div>
+              <label className="input-label" htmlFor="wp-new-method">{t('Método')}</label>
+              <select id="wp-new-method" className="input-field" value={form.payment_method}
+                onChange={e => setForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}>
+                {PAYMENT_METHODS.map(m => <option key={m} value={m}>{t(cap(m))}</option>)}
+              </select>
             </div>
           </div>
+
+          <label className="input-label mt-5" htmlFor="wp-new-fiscal">{t('Forma de recebimento')}</label>
+          <select id="wp-new-fiscal" className="input-field" value={form.fiscal_nature}
+            onChange={e => setForm(f => ({ ...f, fiscal_nature: e.target.value as FiscalNature }))}>
+            {FISCAL_NATURE_ORDER.map(n => <option key={n} value={n}>{t(FISCAL_NATURE_LABELS[n])}</option>)}
+          </select>
+          <p className="input-hint">{t('Usada no relatório do contador.')}</p>
+
+          <label className="input-label mt-5" htmlFor="wp-new-cnpj">{t('CNPJ/CPF da fonte pagadora')}</label>
+          <input id="wp-new-cnpj" className="input-field tabular-nums" value={form.cnpj}
+            onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))}
+            placeholder={t('Opcional')} />
 
           {/* Contato (opcional) */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Phone size={11} strokeWidth={2.5} /> Contato
-              <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-semibold normal-case tracking-normal">opcional</span>
-            </label>
-            <div className="space-y-2">
-              <input value={form.address}
-                onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                placeholder="Endereço (rua, número, cidade)"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              <div className="grid grid-cols-2 gap-2">
-                <input value={form.contact_name}
-                  onChange={e => setForm(f => ({ ...f, contact_name: e.target.value }))}
-                  placeholder="Responsável"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-                <input value={form.contact_phone}
-                  onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
-                  placeholder="(00) 00000-0000"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
+          <div className="section-rule">
+            <span>{t('Contato')}</span>
+            <span className="order-last text-[12.5px] text-slate-500">{t('opcional')}</span>
+          </div>
+          <label className="input-label" htmlFor="wp-new-address">{t('Endereço')}</label>
+          <input id="wp-new-address" className="input-field" value={form.address}
+            onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+            placeholder={t('Rua, número, cidade')} />
+          <div className="grid grid-cols-2 gap-3 mt-5">
+            <div>
+              <label className="input-label" htmlFor="wp-new-contact">{t('Responsável')}</label>
+              <input id="wp-new-contact" className="input-field" value={form.contact_name}
+                onChange={e => setForm(f => ({ ...f, contact_name: e.target.value }))}
+                placeholder={t('Nome')} />
+            </div>
+            <div>
+              <label className="input-label" htmlFor="wp-new-phone">{t('Telefone')}</label>
+              <input id="wp-new-phone" type="tel" className="input-field tabular-nums" value={form.contact_phone}
+                onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
+                placeholder="(00) 00000-0000" />
             </div>
           </div>
 
-          {formError && (
-            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {formError}
-            </div>
-          )}
+          {formError && <FormNotice className="mt-6" message={t(formError)} />}
         </div>
 
-        {/* Footer — CTA no padrão do "Editar plantão" */}
-        <div className="fixed bottom-[61px] left-1/2 -translate-x-1/2 w-full max-w-[430px] px-5 pb-4 pt-3 bg-white border-t border-slate-100 z-[51] flex gap-2">
-          <button onClick={() => setView('list')}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-            Cancelar
-          </button>
-          <button onClick={handleCreateWp}
-            className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition active:scale-[0.98] shadow-sm shadow-blue-600/20 flex items-center justify-center gap-1.5 disabled:opacity-50"
-            disabled={!form.name.trim()}>
-            <Check size={14} strokeWidth={3} /> Salvar local
-          </button>
-        </div>
+        <FormFooter
+          onCancel={() => setView('list')}
+          onSave={handleCreateWp}
+          disabled={!form.name.trim()}
+          saveLabel={t('Salvar local')}
+        />
       </div>
     );
   }
 
+  // Adicionar plantão a partir do detalhe do local ("Lançar plantão aqui"):
+  // o modal abre aqui mesmo, já com este local selecionado.
+  const addShiftModal = showAddShift && (
+    <AddShiftModal
+      initialWorkplaceId={selectedWp?.id}
+      onClose={() => setShowAddShift(false)}
+      onGoToLocais={() => { setShowAddShift(false); handleNewWorkplace(); }}
+    />
+  );
+
   if (view === 'detail' && selectedWp) {
     const templates = user ? getShiftTemplates(user.id, selectedWp.id) : [];
-    const wpShifts = shifts.filter(s => s.workplace_id === selectedWp.id);
-    const totalExpected = wpShifts.filter(s => s.status !== 'cancelado').reduce((a, s) => a + s.expected_value, 0);
-    const totalReceived = wpShifts.filter(s => s.status === 'recebido').reduce((a, s) => a + (s.received_value || s.expected_value), 0);
+    const stats = getWpStats(selectedWp);
+    const monthTotal = workplaces.reduce((a, w) => a + getWpStats(w).total, 0);
+    const share = monthTotal > 0 ? Math.round((stats.total / monthTotal) * 100) : 0;
+    const hero = heroMoney(stats.total);
+
+    // "Hospital São Marcos" → "Hospital" (300) / "São Marcos" (600)
+    const nameWords = selectedWp.name.trim().split(/\s+/);
+    const titleLight = nameWords.length > 1 ? nameWords[0] : undefined;
+    const titleBold = nameWords.length > 1 ? nameWords.slice(1).join(' ') : selectedWp.name;
+
+    // Treliça 2×2: valor padrão · duração · valor hora (padrão ÷ duração) · natureza fiscal.
+    const duration = selectedWp.default_duration_hours;
+    const durationLabel = duration > 0
+      ? `${duration.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${duration === 1 ? t('hora') : t('horas')}`
+      : '—';
+    const hourly = duration > 0 ? fmtCur(selectedWp.default_shift_value / duration) : '—';
+    const fiscal = resolveFiscalNature({ fiscal_nature: undefined }, selectedWp);
+    const facts = [
+      { label: t('Valor padrão'), value: fmtCur(selectedWp.default_shift_value) },
+      { label: t('Duração padrão'), value: durationLabel },
+      { label: t('Valor hora'), value: hourly },
+      { label: t('Natureza fiscal'), value: t(FISCAL_NATURE_SHORT[fiscal]) },
+    ];
 
     return (
-      <div className="page-content bg-white min-h-screen">
-        {/* Header — botão voltar + editar local */}
-        <div className="px-5 pt-7 pb-3 flex items-center justify-between">
-          <button onClick={() => setView('list')}
-            className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95">
-            <ChevronLeft size={18} strokeWidth={2.5} />
-          </button>
-          <button onClick={() => setEditWpSheet(selectedWp)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-[12px] font-bold hover:bg-blue-100 transition active:scale-95">
-            <Pencil size={12} strokeWidth={2.5} /> Editar local
-          </button>
-        </div>
+      <div className="bg-white min-h-screen">
+        <JadePlate
+          frame="hero"
+          // Design do detalhe: meta a 28px do topo e título em 28px (a placa padrão usa 26/30).
+          plateClassName="[&_p]:mt-[28px] [&_p]:text-white/[.82] [&_h1]:text-[28px] [&_h1]:break-words"
+          top={
+            <div className="flex items-start justify-between gap-4">
+              <button type="button" onClick={() => setView('list')} className="glass-icon-btn shrink-0"
+                aria-label={t('Voltar')} title={t('Voltar')}>
+                <ChevronLeft size={17} strokeWidth={1.5} />
+              </button>
+              <button type="button" onClick={() => setEditWpSheet(selectedWp)}
+                className="glass-pill shrink-0 border-white/[.28] hover:bg-white/[.24]"
+                aria-label={t('Editar local')} title={t('Editar local')}>
+                {t('Editar')}
+              </button>
+            </div>
+          }
+          eyebrow={wpMeta(selectedWp)}
+          titleLight={titleLight}
+          titleBold={titleBold}
+        >
+          {/* Previsto no mês — número herói 40/200 com centavos 22/300 */}
+          <p className="text-[13px] text-slate-500">{t('Previsto em')} {monthName}</p>
+          <p className="mt-2.5 text-[40px] font-extralight leading-none tracking-[-0.04em] text-slate-900 tabular-nums whitespace-nowrap">
+            {hero.int}<span className="text-[22px] font-light text-slate-500">{hero.cents}</span>
+          </p>
+          <p className="mt-2.5 text-[13px] text-slate-500 tabular-nums">
+            {stats.count} {stats.count !== 1 ? t('plantões') : t('plantão')} · {share}% {t('dos seus ganhos')}
+          </p>
 
-        {/* Identidade */}
-        <div className="px-5">
-          <div className="flex items-center gap-3.5 mb-4">
-            <div className="hospital-avatar shrink-0" style={{ background: selectedWp.color, width: 60, height: 60, fontSize: 20, borderRadius: 18 }}>
-              {selectedWp.name.slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <h1 className="font-black text-[22px] text-slate-900 tracking-tight leading-tight truncate">{selectedWp.name}</h1>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{WORKPLACE_TYPE_LABELS[selectedWp.type]}</span>
-              </div>
-              <p className="text-slate-500 text-[12px]">Pag. dia {selectedWp.payment_day} · {selectedWp.payment_method}</p>
-              {selectedWp.address && (
-                <p className="text-slate-400 text-[11px] flex items-center gap-1 mt-0.5 truncate">
-                  <MapPin size={10} className="shrink-0" /> <span className="truncate">{selectedWp.address}</span>
-                </p>
-              )}
-            </div>
+          <div className="data-lattice mt-[26px]">
+            {facts.map(f => <LatticeCell key={f.label} label={f.label} value={f.value} />)}
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-2 mb-5">
-            <div className="bg-slate-50 rounded-2xl border border-slate-100 px-3 py-3 text-center">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Padrão</p>
-              <p className="font-black text-slate-900 text-[14px] tracking-tight">{fmtCur(selectedWp.default_shift_value)}</p>
-            </div>
-            <div className="bg-slate-50 rounded-2xl border border-slate-100 px-3 py-3 text-center">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total</p>
-              <p className="font-black text-slate-900 text-[14px] tracking-tight">{fmtCur(totalExpected)}</p>
-            </div>
-            <div className="bg-slate-50 rounded-2xl border border-slate-100 px-3 py-3 text-center">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Recebido</p>
-              <p className="font-black text-emerald-600 text-[14px] tracking-tight">{fmtCur(totalReceived)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Modelos de Plantão */}
-        <div className="px-5 mb-5">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Modelos de plantão</h3>
-            <button onClick={() => setView('newTemplate')}
-              className="flex items-center gap-1 text-[12px] font-bold text-blue-600 hover:text-blue-700 transition active:scale-95">
-              <Plus size={13} strokeWidth={2.5} /> Novo
+          {/* Modelos de plantão */}
+          <div className="flex items-center gap-3.5 mt-8 mb-1.5">
+            <span className="text-[15px] font-semibold tracking-[-0.015em] text-slate-900 whitespace-nowrap">
+              {t('Modelos de plantão')}
+            </span>
+            <span aria-hidden="true" className="flex-1 h-px" style={{ background: 'var(--color-border)' }} />
+            <button type="button" onClick={() => setView('newTemplate')}
+              className="shrink-0 text-[12.5px] font-medium text-blue-600 whitespace-nowrap border-b border-[#C9DED6] hover:border-blue-600 transition-colors">
+              {t('Novo')}
             </button>
           </div>
+          <p className="mb-1.5 text-[12.5px] leading-[1.55] text-slate-500">
+            {t('Horário e valor salvos para lançar em um toque.')}
+          </p>
           {templates.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-dashed border-slate-200 text-center py-6 px-4">
-              <p className="text-slate-500 text-[12px] mb-2">Nenhum modelo criado ainda.</p>
-              <button onClick={() => setView('newTemplate')}
-                className="text-[12px] font-bold text-blue-600 hover:text-blue-700 transition">Criar primeiro modelo</button>
+            <div className="flex items-center justify-between gap-4 py-4" style={{ borderBottom: RULE }}>
+              <p className="min-w-0 text-[13px] text-slate-500">{t('Nenhum modelo criado ainda.')}</p>
+              <button type="button" onClick={() => setView('newTemplate')}
+                className="shrink-0 text-[12.5px] font-medium text-blue-600 whitespace-nowrap border-b border-[#C9DED6] hover:border-blue-600 transition-colors">
+                {t('Criar primeiro modelo')}
+              </button>
             </div>
           ) : (
-            <div className="space-y-2">
-              {templates.map(t => (
-                <div key={t.id} onClick={() => setEditTemplateSheet(t)}
-                  className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-2.5 flex items-center justify-between gap-2 cursor-pointer hover:border-slate-200 active:scale-[0.99] transition">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ background: selectedWp.color }}>
-                      {t.shift_type.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-900 text-[13px] truncate leading-tight">{t.name}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{t.start_time}–{t.end_time} · {t.duration_hours}h · {fmtCur(t.default_value)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={e => { e.stopPropagation(); setEditTemplateSheet(t); }}
-                      className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition active:scale-95"
-                      title="Editar modelo">
-                      <Pencil size={12} strokeWidth={2.5} />
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); if (confirm('Excluir modelo?')) { deleteShiftTemplate(t.id); refreshWorkplaces(); } }}
-                      className="w-7 h-7 rounded-full bg-slate-100 hover:bg-red-50 flex items-center justify-center transition active:scale-95"
-                      title="Excluir modelo">
-                      <Trash2 size={13} className="text-slate-400 hover:text-red-500 transition" />
-                    </button>
-                  </div>
-                </div>
+            <div>
+              {templates.map(tp => (
+                // Tocar na linha abre a edição (e dentro dela, a exclusão do modelo).
+                <button key={tp.id} type="button" onClick={() => setEditTemplateSheet(tp)}
+                  title="Editar modelo" aria-label={`${t('Editar modelo')}: ${tp.name}`}
+                  className="w-full flex items-center justify-between gap-4 py-4 text-left bg-transparent hover:bg-slate-50 transition-colors"
+                  style={{ borderBottom: RULE }}>
+                  <span className="min-w-0">
+                    <span className="block text-[14.5px] font-medium text-slate-900 truncate">{tp.name}</span>
+                    <span className="block mt-1 text-[12.5px] text-slate-500 tabular-nums">
+                      {timeRange(tp.start_time, tp.end_time)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[14.5px] text-slate-900 tabular-nums">{fmtCur(tp.default_value)}</span>
+                </button>
               ))}
             </div>
           )}
-        </div>
 
-        {/* Histórico de Plantões */}
-        <div className="px-5 mb-5">
-          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Histórico de plantões</h3>
-          {wpShifts.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-100 text-center py-6 text-slate-400 text-[12px]">Nenhum plantão registrado</div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.03)] px-3 divide-y divide-slate-50">
-              {wpShifts.slice(0, 8).map(s => (
-                <div key={s.id} className="flex items-center justify-between py-2.5">
-                  <div>
-                    <p className="text-[13px] font-bold text-slate-800 leading-tight">{format(new Date(s.date), 'dd/MM/yyyy')}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{format(new Date(s.start_datetime), 'HH:mm')}–{format(new Date(s.end_datetime), 'HH:mm')} · {s.duration_hours}h</p>
-                  </div>
-                  <div className="text-right flex flex-col items-end gap-1">
-                    <p className="font-bold text-slate-900 text-[13px] tracking-tight">{fmtCur(s.expected_value)}</p>
-                    <span className={`status-badge status-${s.status}`} style={{ fontSize: 9 }}>{STATUS_LABELS[s.status]}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Zona de perigo */}
-        <div className="px-5 pb-8">
-          <button onClick={() => handleDeleteWp(selectedWp.id)}
-            className="w-full py-3 rounded-2xl bg-white border border-red-100 text-red-600 text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-red-50 transition active:scale-[0.98]">
-            <Trash2 size={15} strokeWidth={2.5} /> Excluir local
+          <button type="button" onClick={() => setShowAddShift(true)} className="btn-primary mt-7">
+            {t('Lançar plantão aqui')}
           </button>
-        </div>
+          <button type="button" onClick={() => handleDeleteWp(selectedWp.id)} className="btn-danger mt-2.5">
+            {t('Excluir local')}
+          </button>
+        </JadePlate>
 
         {editWpSheet && (
           <EditWorkplaceSheet
@@ -602,177 +694,161 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
             onDelete={() => { deleteShiftTemplate(editTemplateSheet.id); setEditTemplateSheet(null); refreshWorkplaces(); }}
           />
         )}
+        {addShiftModal}
+        {deleteConfirm}
       </div>
     );
   }
 
   // LIST
+  const helpSteps = [
+    { title: 'Cadastre seu local', desc: 'Hospital, UPA ou clínica — com cor, valor padrão e dia de pagamento.' },
+    { title: 'Crie modelos de plantão', desc: 'Salve horários e valores recorrentes para lançar plantões em 1 toque.' },
+    { title: 'Acompanhe por local', desc: 'Veja quantos plantões e quanto faturou em cada lugar no mês.' },
+  ];
+
+  const listStats = workplaces.map(wp => ({ wp, stats: getWpStats(wp) }));
+  const listMonthTotal = listStats.reduce((a, r) => a + r.stats.total, 0);
+
   return (
     <div className="page-content bg-white min-h-screen">
-      <div className="px-5 pt-7 pb-2 bg-white">
-        <div className="flex items-center justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Cadastro</p>
-            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Locais de Plantão')}</h1>
-            <p className="text-[12px] text-slate-500 mt-0.5">{workplaces.length} {workplaces.length !== 1 ? t('locais cadastrados') : t('local cadastrado')}.</p>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0 ml-3">
-            <button onClick={() => setShowHelp(true)}
-              className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-all active:scale-95"
-              title="Como usar">
-              <HelpCircle size={16} strokeWidth={2.5} />
+      {/* Cabeçalho em papel — sem mármore na lista */}
+      <header className="bg-slate-50 px-6 pt-[56px] pb-[22px]">
+        <p className="text-[13px] text-slate-500">{t('Cadastro')}</p>
+        <div className="mt-2 flex items-end justify-between gap-4">
+          <h1 className="min-w-0 text-[28px] font-light leading-[1.05] tracking-[-0.035em] text-slate-900">
+            {t('Locais de')}<br /><span className="font-semibold">{t('plantão')}</span>
+          </h1>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button type="button" onClick={() => setShowHelp(true)}
+              className="w-[34px] h-[34px] rounded-[12px] border border-slate-200 bg-white text-slate-600 flex items-center justify-center p-0 transition-colors hover:border-blue-600 hover:text-blue-600"
+              title="Como usar" aria-label={t('Como usar')}>
+              <HelpCircle size={16} strokeWidth={1.5} />
             </button>
-            <button onClick={handleNewWorkplace}
-              className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95"
-              title="Novo local">
-              <Plus size={16} strokeWidth={2.5} />
+            <button type="button" onClick={handleNewWorkplace}
+              className="w-11 h-11 rounded-[14px] bg-blue-600 text-white flex items-center justify-center p-0 transition-colors hover:bg-blue-700"
+              title="Novo local" aria-label={t('Novo local')}>
+              <Plus size={20} strokeWidth={1.6} />
             </button>
           </div>
         </div>
-      </div>
+        <p className="mt-3.5 text-[13px] text-slate-500 tabular-nums">
+          {workplaces.length === 0
+            ? t('Hospital, UPA ou clínica onde você atende.')
+            : `${workplaces.length} ${workplaces.length !== 1 ? t('locais') : t('local')} · ${fmtCur(listMonthTotal)} ${t('previstos em')} ${monthName}`}
+        </p>
+      </header>
 
-      <div className="px-5 space-y-2">
+      <div className="px-6 pt-2">
         {workplaces.length === 0 ? (
-          <div className="bg-white rounded-2xl text-center py-8 border border-dashed border-slate-200">
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-2.5">
-              <Building2 size={22} className="text-blue-500" />
-            </div>
-            <p className="font-semibold text-slate-900 text-sm mb-1">{t('Nenhum local cadastrado')}</p>
-            <p className="text-slate-500 text-[12px] mb-3 px-6">{t('Adicione hospitais, UPAs e clínicas onde você faz plantões.')}</p>
-            <button onClick={handleNewWorkplace} className="bg-blue-600 text-white text-[12px] font-bold px-4 py-2 rounded-lg active:scale-95 transition">
+          <div className="pt-[60px] pb-10 text-center">
+            <p className="text-[19px] font-light tracking-[-0.025em] text-slate-900">{t('Nenhum local cadastrado')}</p>
+            <p className="mt-2.5 mx-auto max-w-[280px] text-[13.5px] leading-[1.6] text-slate-500">
+              {t('Adicione hospitais, UPAs e clínicas onde você faz plantões.')}
+            </p>
+            <button type="button" onClick={handleNewWorkplace} className="btn-primary mt-[22px]">
               {t('Adicionar primeiro local')}
             </button>
           </div>
         ) : (
-          workplaces.map(wp => {
-            const stats = getWpStats(wp);
-            return (
-              <div key={wp.id} onClick={() => { setSelectedWp(wp); setView('detail'); }}
-                className="w-full bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.03)] text-left transition-all active:scale-[0.99] overflow-hidden relative cursor-pointer">
-                {/* Top color stripe — distintivo de local */}
-                <div className="h-1 w-full" style={{ background: wp.color }} />
-                <div className="p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${wp.color}18`, color: wp.color }}>
-                      <Building2 size={20} strokeWidth={2.2} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-bold text-slate-900 text-[14px] leading-tight truncate">{wp.name}</p>
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{WORKPLACE_TYPE_LABELS[wp.type]}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
-                        <span>{t('Pag. dia')} {wp.payment_day} · {wp.payment_method}</span>
-                      </div>
-                      {wp.address && (
-                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400 truncate">
-                          <MapPin size={10} />
-                          <span className="truncate">{wp.address}</span>
-                        </div>
-                      )}
-                    </div>
-                    <ChevronRight size={16} className="text-slate-300 shrink-0" />
-                  </div>
-                  <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-50">
-                    <div className="flex-1">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Padrão')}</p>
-                      <p className="font-bold text-slate-900 text-[12px] tracking-tight">{fmtCur(wp.default_shift_value)}</p>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Plant./mês')}</p>
-                      <p className="font-bold text-blue-600 text-[12px]">{stats.count}</p>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Total')}</p>
-                      <p className="font-bold text-slate-900 text-[12px] tracking-tight">{fmtCur(stats.total)}</p>
-                    </div>
-                    <button onClick={e => { e.stopPropagation(); handleDeleteWp(wp.id); }}
-                      className="w-7 h-7 rounded-lg bg-slate-50 hover:bg-red-50 flex items-center justify-center transition shrink-0">
-                      <Trash2 size={13} className="text-slate-400 hover:text-red-500 transition" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          <div>
+            {listStats.map(({ wp, stats }) => {
+              const cells = [
+                { label: t('Valor padrão'), value: fmtCur(wp.default_shift_value) },
+                { label: t('No mês'), value: String(stats.count) },
+                { label: t('Total'), value: fmtCur(stats.total) },
+              ];
+              return (
+                <button key={wp.id} type="button" onClick={() => { setSelectedWp(wp); setView('detail'); }}
+                  className="block w-full text-left py-[22px] bg-transparent hover:bg-slate-50 transition-colors"
+                  style={{ borderBottom: RULE }}>
+                  <span className="flex items-start justify-between gap-4">
+                    <span className="place-rule block min-w-0" style={{ borderLeftColor: wp.color }}>
+                      <span className="block text-[16px] font-medium tracking-[-0.015em] text-slate-900 truncate">{wp.name}</span>
+                      <span className="block mt-[5px] text-[12.5px] text-slate-500 truncate">{wpMeta(wp)}</span>
+                    </span>
+                    <ChevronRight size={18} strokeWidth={1.5} className="shrink-0 mt-0.5 text-slate-500" aria-hidden="true" />
+                  </span>
+                  {/* Treliça de 3 dados: valor padrão · no mês · total */}
+                  <span className="mt-4 pl-4 flex">
+                    {cells.map((c, i) => (
+                      <span key={c.label}
+                        className={`block flex-1 min-w-0 ${i > 0 ? 'pl-4' : ''}`}
+                        style={i > 0 ? { borderLeft: RULE } : undefined}>
+                        <span className="block text-[12px] text-slate-500 truncate">{c.label}</span>
+                        <span className="block mt-[5px] text-[14.5px] text-slate-900 tabular-nums whitespace-nowrap overflow-hidden text-ellipsis">
+                          {c.value}
+                        </span>
+                      </span>
+                    ))}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
 
       {/* ============================================================ */}
-      {/* DRILLDOWN: COMO USAR + UPSELL PRO                            */}
+      {/* COMO USAR + UPSELL PRO (modal centrado)                      */}
       {/* ============================================================ */}
       {showHelp && (
-        <div className="bottom-sheet-overlay" onClick={() => setShowHelp(false)}>
-          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-            <div className="sheet-handle" />
+        <div className="modal-overlay animate-fade-in" onClick={() => setShowHelp(false)}>
+          <div
+            role="dialog" aria-modal="true" aria-label={t('Como usar')}
+            className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-scale-in max-h-[90vh] overflow-y-auto hide-scrollbar"
+            style={MODAL_SHADOW}
+            onClick={e => e.stopPropagation()}
+          >
+            <ModalHeader eyebrow={t('Locais de plantão')} title={t('Como usar')} onClose={() => setShowHelp(false)} />
 
-            {/* Header */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
-                  <Building2 size={20} className="text-blue-600" />
+            <div className="px-6 pb-6">
+              {/* Passos numerados, em linhas de filete */}
+              <ol style={{ borderTop: RULE }}>
+                {helpSteps.map((step, i) => (
+                  <li key={step.title} className="flex items-start gap-4 py-3.5" style={{ borderBottom: RULE }}>
+                    <span className="w-6 shrink-0 text-[15px] font-light leading-[1.3] text-blue-600 tabular-nums">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-semibold leading-[1.3] text-slate-900">{t(step.title)}</span>
+                      <span className="block mt-1 text-[12.5px] leading-[1.5] text-slate-500">{t(step.desc)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+
+              {/* Upsell: no Free só cabe 1 local */}
+              {plan === 'free' && (
+                <div className="relative overflow-hidden rounded-2xl p-5 mt-6">
+                  <MarbleBackground frame="deep" />
+                  <div className="relative">
+                    {/* Sem caixa-alta: o único versalete do sistema é o cabeçalho de grupo do extrato. */}
+                    <span className="glass-pill h-[30px] px-3 border-white/[.28]">
+                      <Zap size={12} strokeWidth={1.8} /> {t('Plano Pro')}
+                    </span>
+                    <p className="mt-5 text-[22px] font-light leading-[1.1] tracking-[-0.03em] text-white">
+                      {t('Mais de um local')}
+                    </p>
+                    <p className="mt-2 text-[13px] leading-[1.55] text-white/[0.86]">
+                      {t('No plano Free você cadastra 1 local. Com o Pro, cadastre hospitais, UPAs e clínicas ilimitados e gerencie toda a sua escala em um só lugar.')}
+                    </p>
+                    {/* Fundo branco fixo (inline): `bg-white` vira escuro no modo escuro. */}
+                    <button type="button"
+                      onClick={() => { setShowHelp(false); requireUpgrade('unlimited_workplaces'); }}
+                      className="mt-5 w-full h-12 rounded-xl text-[14px] font-semibold text-[#0C2A24] flex items-center justify-center transition-opacity hover:opacity-90"
+                      style={{ background: '#fff' }}>
+                      {t('Conhecer o Plano Pro')}
+                    </button>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Locais de Plantão</p>
-                  <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">Como usar</h3>
-                </div>
-              </div>
-              <button onClick={() => setShowHelp(false)}
-                className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
-                <X size={16} />
+              )}
+
+              <button type="button" onClick={() => setShowHelp(false)}
+                className={`btn-secondary ${plan === 'free' ? 'mt-3' : 'mt-6'}`}>
+                {t('Entendi')}
               </button>
             </div>
-
-            {/* Passos de uso */}
-            <div className="space-y-2.5 mb-4">
-              {[
-                { n: '1', title: 'Cadastre seu local', desc: 'Hospital, UPA ou clínica — com cor, valor padrão e dia de pagamento.' },
-                { n: '2', title: 'Crie modelos de plantão', desc: 'Salve horários e valores recorrentes para lançar plantões em 1 toque.' },
-                { n: '3', title: 'Acompanhe por local', desc: 'Veja quantos plantões e quanto faturou em cada lugar no mês.' },
-              ].map(step => (
-                <div key={step.n} className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 text-[11px] font-bold">
-                    {step.n}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-bold text-slate-900 leading-tight">{step.title}</p>
-                    <p className="text-[12px] text-slate-500 leading-snug mt-0.5">{step.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Aviso explícito: Pro permite múltiplos locais */}
-            {plan === 'free' && (
-              <div className="rounded-2xl p-4 mb-3" style={{ background: PLAN_META.pro.gradient }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                    <Zap size={15} className="text-white" strokeWidth={2.5} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/80 leading-none mb-0.5">Plano Pro</p>
-                    <p className="text-[15px] font-black text-white leading-none">Mais de um local</p>
-                  </div>
-                </div>
-                <p className="text-[12.5px] text-white/90 leading-snug mb-3">
-                  No plano <strong>Free</strong> você cadastra <strong>1 local</strong>. Com o <strong>Pro</strong>, cadastre
-                  hospitais, UPAs e clínicas <strong>ilimitados</strong> e gerencie toda a sua escala em um só lugar.
-                </p>
-                <button
-                  onClick={() => { setShowHelp(false); requireUpgrade('unlimited_workplaces'); }}
-                  className="w-full py-2.5 rounded-xl bg-white text-[13px] font-bold transition active:scale-[0.98] flex items-center justify-center gap-1.5"
-                  style={{ color: PLAN_META.pro.color }}
-                >
-                  <Sparkles size={14} strokeWidth={2.5} />
-                  Conhecer o Plano Pro
-                </button>
-              </div>
-            )}
-
-            <button onClick={() => setShowHelp(false)}
-              className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-              Entendi
-            </button>
           </div>
         </div>
       )}
@@ -781,13 +857,14 @@ export default function LocaisScreen({ autoOpenNew, onAutoOpenNewHandled }: Loca
 }
 
 // ============================================================
-// BOTTOM SHEET: EDITAR LOCAL
+// MODAL: EDITAR LOCAL
 // ============================================================
 function EditWorkplaceSheet({ workplace, onClose, onSaved }: {
   workplace: Workplace;
   onClose: () => void;
   onSaved: (updated: Workplace) => void;
 }) {
+  const { t } = useLanguage();
   const [name, setName] = useState(workplace.name);
   const [type, setType] = useState<WorkplaceType>(workplace.type);
   const [color, setColor] = useState(workplace.color);
@@ -831,146 +908,116 @@ function EditWorkplaceSheet({ workplace, onClose, onSaved }: {
   }
 
   return (
-    <div className="bottom-sheet-overlay" onClick={onClose}>
-      <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-        <div className="sheet-handle" />
+    <div className="modal-overlay animate-fade-in" onClick={onClose}>
+      <div
+        role="dialog" aria-modal="true" aria-label={t('Editar local')}
+        className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]"
+        style={MODAL_SHADOW}
+        onClick={e => e.stopPropagation()}
+      >
+        <ModalHeader
+          eyebrow={t('Editar local')}
+          dotColor={color}
+          title={name.trim() || t('Local')}
+          subtitle={t(WORKPLACE_TYPE_LABELS[type])}
+          onClose={onClose}
+        />
 
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-white text-[13px]"
-              style={{ background: color }}>
-              {name.slice(0, 2).toUpperCase() || '??'}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Editar local</p>
-              <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight truncate">{name || 'Local'}</h3>
-              <p className="text-[12px] text-slate-500 mt-0.5">{WORKPLACE_TYPE_LABELS[type]}</p>
-            </div>
-          </div>
-          <button onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto hide-scrollbar -mx-1 px-1">
+        <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar px-6 pb-6">
           {/* Identificação */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Identificação</label>
-            <div className="space-y-2">
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do local"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              <select value={type} onChange={e => setType(e.target.value as WorkplaceType)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
-                {Object.entries(WORKPLACE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-          </div>
+          <div className="section-rule !mt-0 !mb-3"><span>{t('Identificação')}</span></div>
+          <label className="input-label" htmlFor="wp-edit-name">{t('Nome do local')}</label>
+          <input id="wp-edit-name" className="input-field" value={name}
+            onChange={e => setName(e.target.value)} placeholder={t('Nome do local')}
+            aria-invalid={error && !name.trim() ? true : undefined} />
+          <p className="input-label mt-4">{t('Tipo')}</p>
+          <ChipGroup label={t('Tipo')} options={workplaceTypeOptions(t)} value={type} onChange={setType} />
 
           {/* Cor */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Cor de identificação</label>
-            <div className="flex gap-2.5 flex-wrap">
-              {WORKPLACE_COLORS.map(c => (
-                <button key={c} onClick={() => setColor(c)}
-                  className="w-8 h-8 rounded-full transition-all flex items-center justify-center"
-                  style={{
-                    background: c,
-                    transform: color === c ? 'scale(1.15)' : 'scale(1)',
-                    boxShadow: color === c ? `0 0 0 2.5px white, 0 0 0 4.5px ${c}` : 'none',
-                  }}>
-                  {color === c && <Check size={12} color="white" strokeWidth={3} />}
-                </button>
-              ))}
-            </div>
-          </div>
+          <div className="section-rule !mt-6 !mb-3"><span>{t('Cor de identificação')}</span></div>
+          <ColorPalette value={color} onChange={setColor} />
 
           {/* Plantão padrão */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Plantão padrão</label>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Valor (R$)</p>
-                <input type="number" inputMode="decimal" step="0.01" value={defaultValue}
-                  onChange={e => setDefaultValue(e.target.value)} placeholder="1400"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Duração (h)</p>
-                <input type="number" inputMode="decimal" step="0.5" value={defaultDuration}
-                  onChange={e => setDefaultDuration(e.target.value)} placeholder="12"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
+          <div className="section-rule !mt-6 !mb-3"><span>{t('Plantão padrão')}</span></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="input-label" htmlFor="wp-edit-value">{t('Valor (R$)')}</label>
+              <input id="wp-edit-value" type="number" inputMode="decimal" step="0.01" className="input-field tabular-nums"
+                value={defaultValue} onChange={e => setDefaultValue(e.target.value)} placeholder="1400" />
+            </div>
+            <div>
+              <label className="input-label" htmlFor="wp-edit-duration">{t('Duração (h)')}</label>
+              <input id="wp-edit-duration" type="number" inputMode="decimal" step="0.5" className="input-field tabular-nums"
+                value={defaultDuration} onChange={e => setDefaultDuration(e.target.value)} placeholder="12" />
             </div>
           </div>
 
           {/* Pagamento */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Pagamento</label>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Dia do mês</p>
-                <input type="number" inputMode="numeric" min="1" max="31" value={paymentDay}
-                  onChange={e => setPaymentDay(e.target.value)} placeholder="10"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Método</p>
-                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
-                  {(['PJ', 'PF', 'RPA', 'cooperativa', 'outro'] as PaymentMethod[]).map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
+          <div className="section-rule !mt-6 !mb-3"><span>{t('Pagamento')}</span></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="input-label" htmlFor="wp-edit-payday">{t('Dia do mês')}</label>
+              <input id="wp-edit-payday" type="number" inputMode="numeric" min="1" max="31" className="input-field tabular-nums"
+                value={paymentDay} onChange={e => setPaymentDay(e.target.value)} placeholder="10" />
             </div>
-            <div className="mt-2">
-              <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Forma de recebimento (relatório do contador)</p>
-              <select value={fiscalNature} onChange={e => setFiscalNature(e.target.value as FiscalNature)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
-                {FISCAL_NATURE_ORDER.map(n => <option key={n} value={n}>{FISCAL_NATURE_LABELS[n]}</option>)}
+            <div>
+              <label className="input-label" htmlFor="wp-edit-method">{t('Método')}</label>
+              <select id="wp-edit-method" className="input-field" value={paymentMethod}
+                onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}>
+                {PAYMENT_METHODS.map(m => <option key={m} value={m}>{t(cap(m))}</option>)}
               </select>
             </div>
-            <input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="CNPJ/CPF (opcional)"
-              className="w-full mt-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
           </div>
+          <label className="input-label mt-4" htmlFor="wp-edit-fiscal">{t('Forma de recebimento')}</label>
+          <select id="wp-edit-fiscal" className="input-field" value={fiscalNature}
+            onChange={e => setFiscalNature(e.target.value as FiscalNature)}>
+            {FISCAL_NATURE_ORDER.map(n => <option key={n} value={n}>{t(FISCAL_NATURE_LABELS[n])}</option>)}
+          </select>
+          <p className="input-hint">{t('Usada no relatório do contador.')}</p>
+          <label className="input-label mt-4" htmlFor="wp-edit-cnpj">{t('CNPJ/CPF')}</label>
+          <input id="wp-edit-cnpj" className="input-field tabular-nums" value={cnpj}
+            onChange={e => setCnpj(e.target.value)} placeholder={t('Opcional')} />
 
           {/* Contato */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Contato (opcional)</label>
-            <div className="space-y-2">
-              <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Endereço"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              <div className="grid grid-cols-2 gap-2">
-                <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Responsável"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-                <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Telefone"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              </div>
+          <div className="section-rule !mt-6 !mb-3">
+            <span>{t('Contato')}</span>
+            <span className="order-last text-[12.5px] text-slate-500">{t('opcional')}</span>
+          </div>
+          <label className="input-label" htmlFor="wp-edit-address">{t('Endereço')}</label>
+          <input id="wp-edit-address" className="input-field" value={address}
+            onChange={e => setAddress(e.target.value)} placeholder={t('Rua, número, cidade')} />
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div>
+              <label className="input-label" htmlFor="wp-edit-contact">{t('Responsável')}</label>
+              <input id="wp-edit-contact" className="input-field" value={contactName}
+                onChange={e => setContactName(e.target.value)} placeholder={t('Nome')} />
+            </div>
+            <div>
+              <label className="input-label" htmlFor="wp-edit-phone">{t('Telefone')}</label>
+              <input id="wp-edit-phone" type="tel" className="input-field tabular-nums" value={contactPhone}
+                onChange={e => setContactPhone(e.target.value)} placeholder="(00) 00000-0000" />
             </div>
           </div>
 
           {/* Observações */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Observações</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-              placeholder="Notas internas sobre este local..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition resize-none" />
-          </div>
-
-          {error && (
-            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
-          )}
+          <div className="section-rule !mt-6 !mb-3"><span>{t('Observações')}</span></div>
+          <textarea className="input-field resize-none" value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+            aria-label={t('Observações')}
+            placeholder={t('Notas internas sobre este local...')} />
         </div>
 
-        <div className="flex gap-2 pt-3 mt-2 border-t border-slate-100">
-          <button onClick={onClose}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-            Cancelar
+        {error && (
+          <div className="px-6 pt-4 shrink-0" style={{ borderTop: RULE }}>
+            <FormNotice message={t(error)} />
+          </div>
+        )}
+
+        <div className="px-6 pt-4 pb-6 flex gap-3 shrink-0" style={error ? undefined : { borderTop: RULE }}>
+          <button type="button" onClick={onClose} className="btn-secondary flex-1 h-[52px]">
+            {t('Cancelar')}
           </button>
-          <button onClick={handleSave}
-            className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-bold transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5"
-            style={{ background: color, boxShadow: `0 4px 12px ${color}40` }}>
-            <Check size={14} strokeWidth={3} /> Salvar alterações
+          <button type="button" onClick={handleSave} className="btn-primary flex-[2]">
+            <Check size={17} strokeWidth={1.8} /> {t('Salvar alterações')}
           </button>
         </div>
       </div>
@@ -979,7 +1026,7 @@ function EditWorkplaceSheet({ workplace, onClose, onSaved }: {
 }
 
 // ============================================================
-// BOTTOM SHEET: EDITAR MODELO DE PLANTÃO
+// MODAL: EDITAR MODELO DE PLANTÃO
 // ============================================================
 function EditTemplateSheet({ template, workplaceColor, onClose, onSaved, onDelete }: {
   template: ShiftTemplate;
@@ -988,6 +1035,7 @@ function EditTemplateSheet({ template, workplaceColor, onClose, onSaved, onDelet
   onSaved: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useLanguage();
   const [name, setName] = useState(template.name);
   const [shiftType, setShiftType] = useState<ShiftType>(template.shift_type);
   const [startTime, setStartTime] = useState(template.start_time);
@@ -996,14 +1044,6 @@ function EditTemplateSheet({ template, workplaceColor, onClose, onSaved, onDelet
   const [notes, setNotes] = useState(template.notes || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
-
-  function calcDuration(s: string, e: string) {
-    const [sh, sm] = s.split(':').map(Number);
-    const [eh, em] = e.split(':').map(Number);
-    let diff = (eh * 60 + em) - (sh * 60 + sm);
-    if (diff <= 0) diff += 1440;
-    return diff / 60;
-  }
 
   const duration = calcDuration(startTime, endTime);
 
@@ -1025,120 +1065,107 @@ function EditTemplateSheet({ template, workplaceColor, onClose, onSaved, onDelet
   }
 
   return (
-    <div className="bottom-sheet-overlay" onClick={onClose}>
-      <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-        <div className="sheet-handle" />
+    <>
+      <div className="modal-overlay animate-fade-in" onClick={onClose}>
+        <div
+          role="dialog" aria-modal="true" aria-label={t('Editar modelo')}
+          className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]"
+          style={MODAL_SHADOW}
+          onClick={e => e.stopPropagation()}
+        >
+          <ModalHeader
+            eyebrow={t('Editar modelo')}
+            dotColor={workplaceColor}
+            title={name.trim() || t('Modelo')}
+            subtitle={`${timeRange(startTime, endTime)} · ${duration}h`}
+            onClose={onClose}
+          />
 
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-white text-[12px]"
-              style={{ background: workplaceColor }}>
-              {shiftType.slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Editar modelo</p>
-              <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight truncate">{name || 'Modelo'}</h3>
-              <p className="text-[12px] text-slate-500 mt-0.5">{startTime}–{endTime} · {duration}h</p>
-            </div>
-          </div>
-          <button onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
-            <X size={16} />
-          </button>
-        </div>
+          <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar px-6 pb-6">
+            {/* Identificação */}
+            <div className="section-rule !mt-0 !mb-3"><span>{t('Identificação')}</span></div>
+            <label className="input-label" htmlFor="tpl-edit-name">{t('Nome do modelo')}</label>
+            <input id="tpl-edit-name" className="input-field" value={name}
+              onChange={e => setName(e.target.value)} placeholder={t('Ex: "Noite 19h–7h"')}
+              aria-invalid={error && !name.trim() ? true : undefined} />
+            <p className="input-label mt-4">{t('Tipo de escala')}</p>
+            <ChipGroup label={t('Tipo de escala')} options={shiftTypeOptions(t)} value={shiftType} onChange={setShiftType} />
 
-        <div className="space-y-4">
-          {/* Identificação */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Identificação</label>
-            <div className="space-y-2">
-              <input value={name} onChange={e => setName(e.target.value)} placeholder='Ex: "Noite 19h–7h"'
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-              <select value={shiftType} onChange={e => setShiftType(e.target.value as ShiftType)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition">
-                {(['dia', 'noite', '24h', 'sobreaviso', 'sala_vermelha', 'UTI', 'anestesia', 'cirurgia', 'ambulatorio', 'outro'] as ShiftType[]).map(t => (
-                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Horário */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Horário</label>
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Início</p>
-                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+            {/* Horário */}
+            <div className="section-rule !mt-6 !mb-3"><span>{t('Horário')}</span></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="input-label" htmlFor="tpl-edit-start">{t('Início')}</label>
+                <input id="tpl-edit-start" type="time" className="input-field tabular-nums" value={startTime}
+                  onChange={e => setStartTime(e.target.value)} />
               </div>
-              <span className="pb-3 text-slate-400 text-[11px] font-medium">até</span>
-              <div className="flex-1">
-                <p className="text-[10px] text-slate-500 mb-1 ml-0.5">Fim</p>
-                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
+              <div>
+                <label className="input-label" htmlFor="tpl-edit-end">{t('Fim')}</label>
+                <input id="tpl-edit-end" type="time" className="input-field tabular-nums" value={endTime}
+                  onChange={e => setEndTime(e.target.value)} />
               </div>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5 px-1">
-              Duração: <span className="font-semibold text-slate-600">{duration}h</span>
+            <p className="input-hint tabular-nums">
+              {t('Duração:')} <span className="font-semibold text-slate-700">{duration}h</span>
             </p>
-          </div>
 
-          {/* Valor */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Valor padrão (R$)</label>
-            <input type="number" inputMode="decimal" step="0.01" value={defaultValue}
-              onChange={e => setDefaultValue(e.target.value)} placeholder="1400"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition" />
-          </div>
+            {/* Valor */}
+            <div className="section-rule !mt-6 !mb-3"><span>{t('Valor')}</span></div>
+            <label className="input-label" htmlFor="tpl-edit-value">{t('Valor padrão (R$)')}</label>
+            <input id="tpl-edit-value" type="number" inputMode="decimal" step="0.01" className="input-field tabular-nums"
+              value={defaultValue} onChange={e => setDefaultValue(e.target.value)} placeholder="1400"
+              aria-invalid={error && name.trim() ? true : undefined} />
 
-          {/* Observações */}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Observações</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-              placeholder="Anotações sobre este modelo..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition resize-none" />
+            {/* Observações */}
+            <div className="section-rule !mt-6 !mb-3"><span>{t('Observações')}</span></div>
+            <textarea className="input-field resize-none" value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              aria-label={t('Observações')}
+              placeholder={t('Anotações sobre este modelo...')} />
           </div>
 
           {error && (
-            <div className="text-[12px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
+            <div className="px-6 pt-4 shrink-0" style={{ borderTop: RULE }}>
+              <FormNotice message={t(error)} />
+            </div>
           )}
 
-          <div className="flex gap-2 pt-1">
-            <button onClick={() => setConfirmDelete(true)}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-50 text-red-600 text-[12.5px] font-semibold hover:bg-red-100 transition active:scale-[0.98]">
-              <Trash2 size={13} strokeWidth={2.5} /> Excluir
+          <div className="px-6 pt-4 pb-6 flex gap-3 shrink-0" style={error ? undefined : { borderTop: RULE }}>
+            <button type="button" onClick={() => setConfirmDelete(true)}
+              className="btn-danger flex-1 h-[52px] flex items-center justify-center gap-2">
+              <Trash2 size={16} strokeWidth={1.5} /> {t('Excluir')}
             </button>
-            <button onClick={handleSave}
-              className="flex-1 py-2.5 rounded-xl text-white text-[13px] font-bold transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5"
-              style={{ background: workplaceColor, boxShadow: `0 4px 12px ${workplaceColor}40` }}>
-              <Check size={14} strokeWidth={3} /> Salvar alterações
+            <button type="button" onClick={handleSave} className="btn-primary flex-[2]">
+              <Check size={17} strokeWidth={1.8} /> {t('Salvar alterações')}
             </button>
           </div>
         </div>
+      </div>
 
-        {confirmDelete && (
-          <div className="fixed inset-0 z-[400] bg-slate-900/50 flex items-center justify-center p-4" onClick={() => setConfirmDelete(false)}>
-            <div className="bg-white w-full max-w-xs rounded-2xl p-5 shadow-xl animate-fade-in" onClick={e => e.stopPropagation()}>
-              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-                <Trash2 size={20} className="text-red-600" />
-              </div>
-              <h4 className="text-center font-bold text-slate-900 text-[15px] mb-1">Excluir modelo?</h4>
-              <p className="text-center text-slate-500 text-[12px] mb-4">Essa ação não pode ser desfeita.</p>
-              <div className="flex gap-2">
-                <button onClick={() => setConfirmDelete(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-                  Cancelar
-                </button>
-                <button onClick={() => { setConfirmDelete(false); onDelete(); }}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-[13px] font-bold hover:bg-red-700 transition active:scale-[0.98]">
-                  Excluir
-                </button>
-              </div>
+      {/* Confirmação interna — irmã do modal, para o clique não fechar a edição */}
+      {confirmDelete && (
+        <div className="modal-overlay z-[400] animate-fade-in" onClick={() => setConfirmDelete(false)}>
+          <div
+            role="alertdialog" aria-modal="true" aria-labelledby="tpl-delete-title"
+            className="bg-white w-full max-w-xs rounded-3xl p-6 animate-scale-in"
+            style={MODAL_SHADOW}
+            onClick={e => e.stopPropagation()}
+          >
+            <Trash2 size={20} strokeWidth={1.5} className="text-red-600" />
+            <h4 id="tpl-delete-title" className="mt-4 text-[22px] font-light leading-tight tracking-[-0.03em] text-slate-900">
+              {t('Excluir modelo?')}
+            </h4>
+            <p className="mt-2 text-[13px] leading-[1.55] text-slate-500">{t('Essa ação não pode ser desfeita.')}</p>
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={() => setConfirmDelete(false)} className="btn-secondary flex-1 px-0">
+                {t('Cancelar')}
+              </button>
+              <button type="button" onClick={() => { setConfirmDelete(false); onDelete(); }} className="btn-danger flex-1">
+                {t('Excluir')}
+              </button>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }

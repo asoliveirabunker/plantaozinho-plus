@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { X, Sparkles, Zap } from 'lucide-react';
 import { usePlan } from '../contexts/PlanContext';
-import { PLAN_META, type Feature } from '../lib/plans';
+import { useLanguage } from '../hooks/useLanguage';
+import type { Feature } from '../lib/plans';
+import MarbleBackground from './MarbleBackground';
 
 export interface HelpItem {
   title: string;
@@ -11,7 +13,7 @@ export interface HelpItem {
 interface ScreenHelpSheetProps {
   open: boolean;
   onClose: () => void;
-  /** Ícone exibido no avatar do cabeçalho. */
+  /** Ícone exibido ao lado do pretítulo (solto, sem fundo). */
   icon: ReactNode;
   /** Pretítulo (ex.: nome da tela). */
   pretitle: string;
@@ -26,82 +28,108 @@ interface ScreenHelpSheetProps {
 }
 
 /**
- * Drilldown de ajuda reutilizável — uma folha (bottom-sheet) que explica
- * a função da tela e, para usuários Free, exibe um card de upsell Pro.
- * Padrão visual idêntico ao restante do app.
+ * Drilldown de ajuda reutilizável — modal centrado que explica a função da
+ * tela e, para usuários Free, exibe um card de upsell Pro.
+ *
+ * Sistema Jade: cabeçalho 22/300 com ícone solto (sem quadrado pastel), itens
+ * numerados com numeral jade simples separados por filete, e o upsell deixa o
+ * gradiente de `PLAN_META.pro` para virar um cartão de pedra (`deep`) com
+ * pílula de vidro — a mesma linguagem do UpgradeModal.
  */
 export default function ScreenHelpSheet({
   open, onClose, icon, pretitle, title, items, proPitch, proFeature,
 }: ScreenHelpSheetProps) {
   const { plan, requireUpgrade } = usePlan();
+  const { t } = useLanguage();
 
   if (!open) return null;
 
   return (
-    <div className="bottom-sheet-overlay" onClick={onClose}>
-      <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-        <div className="sheet-handle" />
-
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
-              {icon}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{pretitle}</p>
-              <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">{title}</h3>
-            </div>
+    <div className="bottom-sheet-overlay animate-fade-in" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="screen-help-title"
+        className="bg-white w-full max-w-sm max-h-[86vh] rounded-3xl overflow-hidden flex flex-col animate-scale-in"
+        style={{ boxShadow: '0 40px 80px -30px rgba(7,56,45,.5)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Cabeçalho */}
+        <div className="p-6 pb-4 flex items-start justify-between gap-4 shrink-0">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-[13px] text-slate-500 [&_svg]:w-[18px] [&_svg]:h-[18px] [&_svg]:[stroke-width:1.5]">
+              <span className="flex shrink-0 text-blue-600" aria-hidden="true">{icon}</span>
+              <span className="truncate">{t(pretitle)}</span>
+            </p>
+            <h3
+              id="screen-help-title"
+              className="mt-2 text-[22px] font-light leading-[1.15] tracking-[-0.03em] text-slate-900"
+            >
+              {t(title)}
+            </h3>
           </div>
-          <button onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-all active:scale-95 shrink-0 ml-3">
-            <X size={16} />
+          <button
+            type="button"
+            onClick={onClose}
+            className="icon-btn w-9 h-9 -mr-2 -mt-1 flex items-center justify-center shrink-0"
+            title={t('Fechar')}
+            aria-label={t('Fechar')}
+          >
+            <X size={18} strokeWidth={1.5} />
           </button>
         </div>
 
-        {/* Passos / funções */}
-        <div className="space-y-2.5 mb-4">
-          {items.map((item, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 text-[11px] font-bold">
-                {i + 1}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[13px] font-bold text-slate-900 leading-tight">{item.title}</p>
-                <p className="text-[12px] text-slate-500 leading-snug mt-0.5">{item.desc}</p>
+        <div className="px-6 pb-6 overflow-y-auto hide-scrollbar">
+          {/* Passos / funções — numeral jade, filete entre itens */}
+          <ol>
+            {items.map((item, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-4 py-3.5"
+                style={i > 0 ? { borderTop: '1px solid var(--color-border)' } : undefined}
+              >
+                <span className="w-5 shrink-0 pt-px text-[13px] font-semibold text-blue-600 tabular-nums">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[14.5px] font-semibold leading-tight tracking-[-0.01em] text-slate-900">{t(item.title)}</p>
+                  <p className="mt-1 text-[13px] leading-[1.5] text-slate-500">{t(item.desc)}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          {/* Upsell Pro — apenas para usuários Free. Cartão de pedra. */}
+          {plan === 'free' && (
+            <div className="relative overflow-hidden rounded-2xl p-5 mt-4">
+              <MarbleBackground frame="deep" />
+
+              <div className="relative">
+                <span className="glass-pill !h-auto py-1.5 !text-[11px] uppercase tracking-[0.08em]">
+                  <Zap size={12} strokeWidth={2} aria-hidden="true" />
+                  {t('Plano Pro')}
+                </span>
+                <p className="mt-4 text-[20px] font-light leading-[1.15] tracking-[-0.03em] text-white">
+                  {t('Desbloqueie tudo')}
+                </p>
+                <p className="mt-2 text-[13.5px] leading-[1.55] text-white/[0.86]">{t(proPitch)}</p>
+                {/* Branco fixo (não `bg-white`, que o modo escuro repinta) sobre a pedra. */}
+                <button
+                  type="button"
+                  onClick={() => { onClose(); requireUpgrade(proFeature); }}
+                  className="mt-4 w-full h-12 rounded-xl bg-[#fff] hover:bg-white/90 text-[14px] font-semibold text-[#0C2A24] flex items-center justify-center gap-2 transition"
+                >
+                  <Sparkles size={15} strokeWidth={1.6} aria-hidden="true" />
+                  {t('Conhecer o Plano Pro')}
+                </button>
               </div>
             </div>
-          ))}
+          )}
+
+          <button type="button" onClick={onClose} className="btn-secondary mt-4">
+            {t('Entendi')}
+          </button>
         </div>
-
-        {/* Upsell Pro — apenas para usuários Free */}
-        {plan === 'free' && (
-          <div className="rounded-2xl p-4 mb-3" style={{ background: PLAN_META.pro.gradient }}>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                <Zap size={15} className="text-white" strokeWidth={2.5} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/80 leading-none mb-0.5">Plano Pro</p>
-                <p className="text-[15px] font-black text-white leading-none">Desbloqueie tudo</p>
-              </div>
-            </div>
-            <p className="text-[12.5px] text-white/90 leading-snug mb-3">{proPitch}</p>
-            <button
-              onClick={() => { onClose(); requireUpgrade(proFeature); }}
-              className="w-full py-2.5 rounded-xl bg-white text-[13px] font-bold transition active:scale-[0.98] flex items-center justify-center gap-1.5"
-              style={{ color: PLAN_META.pro.color }}
-            >
-              <Sparkles size={14} strokeWidth={2.5} />
-              Conhecer o Plano Pro
-            </button>
-          </div>
-        )}
-
-        <button onClick={onClose}
-          className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 transition active:scale-[0.98]">
-          Entendi
-        </button>
       </div>
     </div>
   );

@@ -4,17 +4,83 @@ import { getMonthlyStats } from '../lib/db';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  FileText, Download, Mail, Settings, ChevronLeft, ChevronDown, X, Loader2, Crown, HelpCircle, BarChart2
+  FileText, Download, Mail, ChevronLeft, ChevronRight, ChevronDown, X, Loader2, Crown, Lock, BarChart2, Layers
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { useLanguage } from '../hooks/useLanguage';
 import { usePlan } from '../contexts/PlanContext';
 import { useGuest } from '../hooks/useGuest';
 import ScreenHelpSheet from '../components/ScreenHelpSheet';
-import { Layers } from 'lucide-react';
 import { resolveFiscalNature, FISCAL_NATURE_LABELS, FISCAL_NATURE_ORDER, isPJNature, type FiscalNature, type Shift } from '../types';
 
 function fmtCur(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+/** "Dra. Carla Mendes" → "Carla Mendes": o relatório já prefixa "Dr(a).". */
+function nomeSemTitulo(name?: string) {
+  return (name || '').trim().replace(/^(dra?|doutora?)\.?\s+/i, '');
+}
+
+/** Separa "R$ 14.300" de ",00" para o centavo ir em corpo menor (`.hero-value-cents`). */
+function splitCur(v: number): [string, string] {
+  const full = fmtCur(v);
+  const i = full.lastIndexOf(',');
+  return i === -1 ? [full, ''] : [full.slice(0, i), full.slice(i)];
+}
+
+/** Sombra padrão dos modais centrados do sistema. */
+const MODAL_SHADOW = { boxShadow: '0 40px 80px -30px rgba(7,56,45,.5)' };
+/** Filete da treliça sobre a pedra. */
+const STONE_RULE = '1px solid rgba(255,255,255,.26)';
+/** Pedra do extrato fiscal: enquadramento próprio do design (190% · 60% 40%). */
+const STONE_TEXTURE: React.CSSProperties = {
+  backgroundColor: '#2f6f60',
+  backgroundImage: "url('/marble.webp')",
+  backgroundSize: '190% auto',
+  backgroundPosition: '60% 40%',
+  filter: 'var(--marble-filter)',
+};
+/** Véu do extrato fiscal. */
+const STONE_VEIL: React.CSSProperties = {
+  background: 'linear-gradient(160deg, rgba(6,48,39,.5), rgba(6,48,39,.68))',
+};
+/** Filete padrão do sistema (remapeado no modo escuro via variável). */
+const RULE = '1px solid var(--color-border)';
+
+/** Regime por extenso → forma curta da treliça ("Simples · 6%"). */
+const REGIME_CURTO: Record<string, string> = {
+  'MEI': 'MEI',
+  'Simples Nacional': 'Simples',
+  'Lucro Presumido': 'Presumido',
+  'PF': 'PF',
+};
+
+/** "PJ" / "cooperativa" → "PJ" / "Cooperativa" (mesmo rótulo da tela de Locais). */
+function capMetodo(m: string) { return m.charAt(0).toUpperCase() + m.slice(1); }
+
+/**
+ * Opção de escolha única em modal: `.list-row` com marcador de seleção jade.
+ * O `<input type="radio">` continua no DOM (acessível), só fica visualmente oculto.
+ */
+function ChoiceRow({ name, value, checked, onSelect, title, desc }: {
+  name: string; value: string; checked: boolean; onSelect: () => void; title: string; desc: string;
+}) {
+  return (
+    <label className="list-row cursor-pointer has-[:focus-visible]:bg-slate-50">
+      <input type="radio" name={name} value={value} checked={checked} onChange={onSelect} className="sr-only" />
+      <span
+        aria-hidden="true"
+        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors"
+        style={{ border: `1.5px solid ${checked ? 'var(--color-primary)' : 'var(--color-border-strong, #CBD6D2)'}` }}
+      >
+        {checked && <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--color-primary)' }} />}
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className={`block text-[14.5px] text-slate-900 ${checked ? 'font-semibold' : 'font-medium'}`}>{title}</span>
+        <span className="block mt-0.5 text-[12.5px] text-slate-500 leading-snug">{desc}</span>
+      </span>
+    </label>
+  );
+}
 
 /** Como o relatório separa os ganhos. */
 type GroupBy = 'none' | 'forma' | 'local';
@@ -300,7 +366,7 @@ export default function RelatoriosScreen() {
       const pjLines: [string, string][] = [
         [userNameOrRazao, user?.company_name || `${user?.name || ''}${user?.tax_regime === 'PF' ? '' : ' Serviços Médicos LTDA'}`],
         [userDocLabel, fmtUserDoc(user?.cnpj)],
-        ['Responsável Técnico:', `Dr(a). ${user?.name || ''}`],
+        ['Responsável Técnico:', `Dr(a). ${nomeSemTitulo(user?.name)}`],
         ...(user?.crm ? [['CRM:', user.crm] as [string, string]] : []),
         ['Regime Tributário:', `${user?.tax_regime || 'Simples Nacional'}${!useFixedMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`],
       ];
@@ -544,7 +610,7 @@ export default function RelatoriosScreen() {
     lines.push([profileSectionTitle]);
     lines.push([user?.tax_regime === 'PF' ? 'Nome' : 'Razão Social', user?.company_name || `${user?.name || ''}${user?.tax_regime === 'PF' ? '' : ' Serviços Médicos LTDA'}`]);
     lines.push([user?.tax_regime === 'PF' ? 'CPF' : 'CNPJ', fmtUserDoc(user?.cnpj)]);
-    lines.push(['Responsável Técnico', `Dr(a). ${user?.name || ''}`]);
+    lines.push(['Responsável Técnico', `Dr(a). ${nomeSemTitulo(user?.name)}`]);
     if (user?.crm) lines.push(['CRM', user.crm]);
     lines.push(['Regime Tributário', `${user?.tax_regime || 'Simples Nacional'}${!useFixedMei ? ` (${(taxRate * 100).toFixed(2)}%)` : ''}`]);
     lines.push(sep);
@@ -620,208 +686,251 @@ export default function RelatoriosScreen() {
     URL.revokeObjectURL(url);
   }, [selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel, groupBy, groupSummary, groupSummaryTitle, detailGroups, wpById, formaOf, deducoesOf, totalDeducoes, totalLiquido]);
 
-  return (
-    <div className="page-content bg-white relative overflow-hidden h-full min-h-screen">
+  // ---- Apresentação ----
+  const [brutoInt, brutoCents] = splitCur(stats?.expected || 0);
+  const canTaxForecast = can('tax_forecast') || isGuest;
+  const totalShiftsCount = stats?.totalShifts || 0;
 
-      {/* HEADER */}
-      <header className="bg-white px-5 pt-7 pb-2 shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Contabilidade')}</p>
-            <h1 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">{t('Relatórios')}</h1>
-            <p className="text-[12px] text-slate-500 mt-0.5">{t('Exporte para o contador em segundos.')}</p>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0 ml-3">
+  // "Extrato fiscal · Setembro 2026"
+  const mesNome = format(selectedMonth, 'MMMM', { locale: ptBR });
+  const mesLabel = `${mesNome.charAt(0).toUpperCase()}${mesNome.slice(1)} ${year}`;
+
+  // Treliça do extrato: rótulo curto do imposto conforme o regime
+  const taxShortLabel = (() => {
+    const r = user?.tax_regime || 'Simples Nacional';
+    if (r === 'MEI') return t('DAS MEI');
+    if (r === 'Lucro Presumido') return t('Provisão de impostos');
+    if (r === 'PF') return t('Carnê-Leão estimado');
+    return t('Provisão DAS');
+  })();
+  // "Simples · 6%" · "MEI · valor fixo"
+  const regimeAtual = user?.tax_regime || 'Simples Nacional';
+  const regimeLabel = `${REGIME_CURTO[regimeAtual] ?? regimeAtual} · ${
+    useFixedMei ? t('valor fixo') : `${userRate.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+  }`;
+  // "10 · 144 h"
+  const plantoesLabel = `${totalShiftsCount} · ${(stats?.totalHours || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`;
+
+  // Por fonte pagadora — na ordem de cadastro dos locais
+  const fontes = workplaces.filter(w => wpBreakdown[w.id]);
+
+  const formatOptions: { key: PreviewFormat; title: string; desc: string }[] = [
+    { key: 'completo', title: 'Relatório completo', desc: 'Resumo do CNPJ + tabela dia a dia' },
+    { key: 'resumido', title: 'Apenas resumo fiscal', desc: 'Ideal para o contador (sem tabela)' },
+    { key: 'pendentes', title: 'Extrato de cobrança', desc: 'Mostra apenas plantões não pagos' },
+  ];
+
+  const groupOptions: { key: GroupBy; title: string; desc: string }[] = [
+    { key: 'forma', title: 'Por forma de recebimento', desc: 'Separa por PJ e Autônomo (RPA) — ideal quando o regime varia por local.' },
+    { key: 'local', title: 'Por local', desc: 'Agrupa os plantões por hospital / fonte pagadora.' },
+    { key: 'none', title: 'Consolidado', desc: 'Lista única, sem separação.' },
+  ];
+
+  return (
+    <div className="page-content pb-0 bg-white relative overflow-hidden h-full min-h-screen">
+
+      {/* Cabeçalho em papel — pretítulo, título e abas Mês/Ano */}
+      <header className="bg-slate-50 px-6 pt-[56px] pb-[22px] shrink-0">
+        <p className="text-[13px] font-normal text-slate-500">{t('Contabilidade')}</p>
+        <div className="mt-2 flex items-end justify-between gap-4">
+          <h1 className="text-[28px] font-light leading-none tracking-[-0.035em] text-slate-900">{t('Relatórios')}</h1>
+          <div className="flex items-center gap-2 shrink-0">
             <button onClick={() => setShowHelp(true)}
-              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-95"
-              title="Sobre esta tela">
-              <HelpCircle size={16} strokeWidth={2.5} />
+              className="w-[34px] h-[34px] shrink-0 rounded-xl border border-slate-200 bg-white text-slate-600 flex items-center justify-center p-0 transition-colors hover:border-blue-600 hover:text-blue-600"
+              title="Sobre esta tela"
+              aria-label={t('Sobre esta tela')}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3v1.1" />
+                <circle cx="12" cy="16.6" r=".7" fill="currentColor" />
+              </svg>
             </button>
             <button onClick={() => setShowSettingsModal(true)}
-              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all active:scale-95"
-              title="Configurações">
-              <Settings size={16} />
+              className="w-[34px] h-[34px] shrink-0 rounded-xl border border-slate-200 bg-white text-slate-600 flex items-center justify-center p-0 transition-colors hover:border-blue-600 hover:text-blue-600"
+              title="Configurações"
+              aria-label={t('Configurações')}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" />
+              </svg>
             </button>
           </div>
         </div>
-      </header>
 
-      <main className="flex-1 overflow-y-auto overflow-x-hidden pb-24 hide-scrollbar px-5">
-        
-        {/* Toggle Mês/Ano */}
-        <div className="bg-slate-100 p-1 rounded-xl flex my-3">
-          <button
-            onClick={() => setActiveTab('mes')}
-            className={`flex-1 font-semibold text-sm py-2 rounded-lg transition-all ${activeTab === 'mes' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+        {/* Mês / Ano — abas com filete de 1.5px (o filete de 1px fica abaixo do papel) */}
+        <div className="tab-rule border-b-0 mt-6" role="tablist">
+          <button role="tab" aria-selected={activeTab === 'mes'} onClick={() => setActiveTab('mes')}>
             {t('Mês')}
           </button>
-          <button
+          <button role="tab" aria-selected={activeTab === 'ano'}
             onClick={() => gate('annual_reports', () => setActiveTab('ano'))}
-            className={`flex-1 font-semibold text-sm py-2 rounded-lg transition-all flex items-center justify-center gap-1 ${activeTab === 'ano' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+            className="flex items-center gap-1.5">
             {t('Ano')}
-            {!can('annual_reports') && <Crown size={11} className="text-amber-400" strokeWidth={2.5} />}
+            {!can('annual_reports') && <Crown size={11} strokeWidth={1.8} className="text-slate-400" />}
           </button>
         </div>
+      </header>
+      <div className="h-px" style={{ background: 'var(--color-border)' }} aria-hidden="true" />
+
+      <main className="flex-1 overflow-y-auto overflow-x-hidden hide-scrollbar bg-white px-6 pt-[22px] pb-[118px]">
 
         {activeTab === 'mes' && (
           <>
-            {/* Extrato Card (com Previsão Tributária integrada no canto superior direito) */}
-            <div className="bg-blue-600 rounded-2xl p-5 text-white relative mb-4">
-              <div className="flex justify-between items-start gap-3 mb-4">
-                <div className="min-w-0">
-                  <p className="text-blue-100 text-xs font-bold tracking-wider uppercase mb-1 flex items-center gap-1">
-                    <FileText size={12} />
-                    Extrato Fiscal
-                  </p>
-                  <label className="flex items-center gap-2 relative cursor-pointer">
-                    <h2 className="text-2xl font-bold capitalize">
-                      {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
-                    </h2>
-                    <ChevronDown size={18} className="text-blue-200" />
-                    {/* input type="month" → ativa o picker nativo do smartphone (iOS/Android) */}
-                    <input
-                      type="month"
-                      value={`${year}-${String(month).padStart(2, '0')}`}
-                      max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
-                      onChange={e => {
-                        if (!e.target.value) return;
-                        const [y, m] = e.target.value.split('-').map(Number);
-                        if (!isNaN(y) && !isNaN(m)) setSelectedMonth(new Date(y, m - 1, 1));
-                      }}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      aria-label="Selecionar mês de competência"
-                    />
-                  </label>
-                </div>
+            {/* Extrato fiscal — cartão de pedra, raio 24 (única superfície marmoreada da tela) */}
+            <section className="relative overflow-hidden rounded-[24px]">
+              <div className="absolute inset-0" style={STONE_TEXTURE} aria-hidden="true" />
+              <div className="absolute inset-0" style={STONE_VEIL} aria-hidden="true" />
 
-                {/* Previsão Tributária — compacta, canto superior direito (contabilidade = Max) */}
-                {(can('tax_forecast') || isGuest) ? (
-                  <div
-                    className="bg-white/15 rounded-xl px-3 py-2 text-right shrink-0"
-                    title="*Valores para planejamento. Consulte seu contador para emissão da guia oficial."
+              <div className="relative p-6 text-white">
+                {/* Linha de topo: "Extrato fiscal · mês" + seletor de mês (botão redondo de chevron) */}
+                <div className="group relative flex items-start justify-between gap-4 cursor-pointer">
+                  <h2 className="min-w-0 text-[13.5px] font-medium text-white/[.82]">
+                    {t('Extrato fiscal')} · {mesLabel}
+                  </h2>
+                  <span
+                    className="w-[30px] h-[30px] shrink-0 rounded-full border border-white/[.28] bg-white/[.12] text-white flex items-center justify-center transition-colors group-hover:bg-white/[.24]"
+                    aria-hidden="true"
                   >
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-blue-100 leading-none mb-1">⚖️ {t('Previsão Tributária')}</p>
-                    <p className="text-[16px] font-bold text-white leading-tight">{fmtCur(taxAmount)}</p>
-                    <p className="text-[9px] text-blue-100 leading-tight">
-                      {user?.tax_regime || 'Simples Nacional'}{useFixedMei ? ` · ${t('Valor Fixo')}` : ` · ${(taxRate * 100).toFixed(1)}%`}
-                    </p>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => gate('tax_forecast')}
-                    className="bg-white/15 rounded-xl px-3 py-2 text-right shrink-0 hover:bg-white/25 transition active:scale-95"
-                  >
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-blue-100 leading-none mb-1">⚖️ {t('Previsão Tributária')}</p>
-                    <p className="text-[14px] font-bold text-white leading-tight flex items-center justify-end gap-1">
-                      <Crown size={12} className="text-amber-300" strokeWidth={2.5} /> Max
-                    </p>
-                    <p className="text-[9px] text-blue-100 leading-tight">{t('Toque para desbloquear')}</p>
-                  </button>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between items-end border-b border-blue-500 pb-3">
-                  <span className="text-blue-100 text-sm">{t('Faturamento Bruto Total')}</span>
-                  <span className="text-2xl font-bold text-white">{fmtCur(stats?.expected || 0)}</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </span>
+                  {/* input type="month" → ativa o picker nativo do smartphone (iOS/Android) */}
+                  <input
+                    type="month"
+                    value={`${year}-${String(month).padStart(2, '0')}`}
+                    max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
+                    onChange={e => {
+                      if (!e.target.value) return;
+                      const [y, m] = e.target.value.split('-').map(Number);
+                      if (!isNaN(y) && !isNaN(m)) setSelectedMonth(new Date(y, m - 1, 1));
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    aria-label="Selecionar mês de competência"
+                  />
                 </div>
 
-                <div className="flex justify-between text-sm pt-1">
-                  <span className="text-blue-100">{t('Plantões realizados')}</span>
-                  <span className="font-medium">{stats?.totalShifts || 0} plantões ({stats?.totalHours || 0}h)</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-blue-100">Status dos pagamentos</span>
-                  <div className="text-right">
-                    <span className="text-white font-medium text-xs">Pago: {fmtCur(stats?.received || 0)}</span>
-                    <span className="text-blue-100 mx-1">•</span>
-                    <span className="text-yellow-200 font-medium text-xs">Pendente: {fmtCur(stats?.pending || 0)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+                {/* Faturamento bruto — 38/200 com centavos 22/300 */}
+                <p className="mt-[22px] text-[13.5px] font-medium text-white/80">{t('Faturamento bruto')}</p>
+                <p className="mt-2 text-[38px] font-extralight leading-none tracking-[-0.04em] text-white tabular-nums">
+                  {brutoInt}
+                  <span className="text-[22px] font-light text-white/80">{brutoCents}</span>
+                </p>
 
-            {/* ====== RELATÓRIO PARA O CONTADOR (unificado · Max) ====== */}
-            <div className="mb-4">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">{t('Relatórios')}</h3>
-              <button
-                onClick={openReport}
-                className="w-full text-left bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:border-violet-200 hover:shadow-[0_2px_12px_rgba(139,92,246,0.08)] transition active:scale-[0.99] flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #a855f7, #8b5cf6)' }}>
-                  <FileText size={20} className="text-white" strokeWidth={2.2} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="font-bold text-slate-900 text-sm">{t('Relatório para o contador')}</h4>
-                    {!canFiscalReport && (
-                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-500">
-                        <Crown size={10} strokeWidth={2.5} /> MAX
+                {/* Treliça 2×2 de filetes brancos translúcidos */}
+                <div className="grid grid-cols-2 mt-6" style={{ borderTop: STONE_RULE }}>
+                  {canTaxForecast ? (
+                    <div
+                      className="py-3.5 pr-4 min-w-0"
+                      style={{ borderRight: STONE_RULE, borderBottom: STONE_RULE }}
+                      title="*Valores para planejamento. Consulte seu contador para emissão da guia oficial."
+                    >
+                      <p className="text-[12.5px] font-medium text-white/[.76]">{taxShortLabel}</p>
+                      <p className="mt-[5px] text-[16px] text-white tabular-nums">{fmtCur(taxAmount)}</p>
+                    </div>
+                  ) : (
+                    /* Previsão tributária é recurso Max: bloqueio discreto dentro da célula */
+                    <button
+                      type="button"
+                      onClick={() => gate('tax_forecast')}
+                      className="py-3.5 pr-4 min-w-0 text-left"
+                      style={{ borderRight: STONE_RULE, borderBottom: STONE_RULE }}
+                      title={t('Toque para desbloquear')}
+                    >
+                      <span className="block text-[12.5px] font-medium text-white/[.76]">{taxShortLabel}</span>
+                      <span className="mt-[5px] flex items-center gap-1.5 text-[16px] text-white">
+                        <Lock size={14} strokeWidth={1.6} className="shrink-0" aria-hidden="true" />
+                        {t('Recurso')} Max
                       </span>
-                    )}
+                      <span className="sr-only">{t('Toque para desbloquear')}</span>
+                    </button>
+                  )}
+                  <div className="py-3.5 pl-4 min-w-0" style={{ borderBottom: STONE_RULE }}>
+                    <p className="text-[12.5px] font-medium text-white/[.76]">{t('Regime')}</p>
+                    <p className="mt-[5px] text-[16px] text-white tabular-nums">{regimeLabel}</p>
                   </div>
-                  <p className="text-[11.5px] text-slate-500 leading-snug mt-0.5">
-                    {t('PDF e planilha do mês, com separação por forma de recebimento (PJ/Autônomo) ou local.')}
-                  </p>
+                  <div className="pt-3.5 pr-4 min-w-0" style={{ borderRight: STONE_RULE }}>
+                    <p className="text-[12.5px] font-medium text-white/[.76]">{t('Plantões')}</p>
+                    <p className="mt-[5px] text-[16px] text-white tabular-nums">{plantoesLabel}</p>
+                  </div>
+                  <div className="pt-3.5 pl-4 min-w-0">
+                    <p className="text-[12.5px] font-medium text-white/[.76]">{t('Pendente')}</p>
+                    <p className="mt-[5px] text-[16px] text-white tabular-nums">{fmtCur(stats?.pending || 0)}</p>
+                  </div>
                 </div>
-                <ChevronLeft size={16} className="text-slate-300 rotate-180 shrink-0" />
+              </div>
+            </section>
+
+            {/* Relatório para o contador (unificado · Max) — cartão em papel, raio 20 */}
+            <button
+              onClick={openReport}
+              className="mt-[22px] w-full flex items-center gap-[14px] p-[18px] rounded-[20px] border border-slate-200 bg-slate-50 text-left transition-colors hover:border-blue-600"
+            >
+              <span className="flex-1 min-w-0">
+                <span className="flex items-center gap-2">
+                  <span className="text-[14.5px] font-medium text-slate-900">{t('Relatório para o contador')}</span>
+                  {!canFiscalReport && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 shrink-0">
+                      <Crown size={11} strokeWidth={1.8} className="text-slate-400" /> Max
+                    </span>
+                  )}
+                </span>
+                <span className="block mt-1 text-[12.5px] text-slate-500 leading-[1.55]">
+                  {t('PDF e planilha do mês, separados por forma de recebimento ou por local.')}
+                </span>
+              </span>
+              <ChevronRight size={18} strokeWidth={1.5} className="text-slate-500 shrink-0" />
+            </button>
+
+            {/* Compartilhar — par de botões de 48px, sem título */}
+            <div className="flex gap-2.5 mt-2.5">
+              <button
+                onClick={() => gate('whatsapp_accountant', () => requireSignup('Compartilhar via WhatsApp', handleSharePDF))}
+                className="btn-secondary flex-1 min-w-0 px-3 flex items-center justify-center gap-[9px]">
+                <WhatsAppIcon size={17} className="shrink-0" />
+                WhatsApp
+                {!can('whatsapp_accountant') && <Crown size={12} strokeWidth={1.8} className="text-slate-400 shrink-0" />}
+              </button>
+              <button
+                onClick={() => requireSignup('Enviar por e-mail', handleEmail)}
+                className="btn-secondary flex-1 min-w-0 px-3 flex items-center justify-center gap-[9px]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0" aria-hidden="true">
+                  <rect x="3" y="5.5" width="18" height="13" rx="2" />
+                  <path d="M3.5 7l8.5 6 8.5-6" />
+                </svg>
+                E-mail
               </button>
             </div>
 
-            {/* ====== COMPARTILHAR ====== */}
-            <div className="mb-4">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">{t('Compartilhar')}</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => gate('whatsapp_accountant', () => requireSignup('Compartilhar via WhatsApp', handleSharePDF))}
-                  className="bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
-                  <WhatsAppIcon size={16} className="text-emerald-500" />
-                  WhatsApp
-                  {!can('whatsapp_accountant') && <Crown size={12} className="text-amber-400" strokeWidth={2.5} />}
-                </button>
-                <button
-                  onClick={() => requireSignup('Enviar por e-mail', handleEmail)}
-                  className="bg-white border border-slate-200 text-slate-700 font-medium py-3 rounded-xl hover:bg-slate-50 transition flex justify-center items-center gap-2 text-sm shadow-sm">
-                  <Mail size={16} className="text-slate-500" />
-                  E-mail
-                </button>
-              </div>
-            </div>
-
-            {/* Fontes Pagadoras (Hospitais) */}
-            <div className="mb-4">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">{t('Detalhamento por CNPJ/Local')}</h3>
-              <div className="space-y-3">
-                {Object.entries(wpBreakdown).map(([wpId, data]) => {
-                  const wp = workplaces.find(w => w.id === wpId);
-                  if (!wp) return null;
-                  return (
-                    <div key={wpId} className="bg-white p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] border border-slate-100 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold text-sm">
-                          {wp.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-slate-900 text-sm">{wp.name}</h4>
-                          <p className="text-xs text-slate-500">{data.shifts} {data.shifts !== 1 ? 'plantões' : 'plantão'} realizados</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-bold text-slate-900 block">{fmtCur(data.total)}</span>
-                      </div>
+            {/* Por fonte pagadora — régua na cor do local */}
+            <div className="section-rule mt-[34px] mb-2"><span>{t('Por fonte pagadora')}</span></div>
+            <div>
+              {fontes.map(wp => {
+                const data = wpBreakdown[wp.id];
+                return (
+                  <div key={wp.id} className="flex items-start justify-between gap-4 py-4" style={{ borderBottom: RULE }}>
+                    <div className="place-rule min-w-0" style={{ borderLeftColor: wp.color }}>
+                      <p className="text-[14.5px] font-medium tracking-[-0.01em] text-slate-900 truncate">{wp.name}</p>
+                      <p className="mt-1 text-[12.5px] text-slate-500 tabular-nums truncate">
+                        {data.shifts} {data.shifts !== 1 ? t('plantões') : t('plantão')} · {t(capMetodo(wp.payment_method))}
+                      </p>
                     </div>
-                  );
-                })}
-                {Object.keys(wpBreakdown).length === 0 && (
-                  <p className="text-center text-slate-400 text-sm py-6">Nenhum plantão neste mês</p>
-                )}
-              </div>
+                    <p className="shrink-0 text-[15px] text-slate-900 tabular-nums">{fmtCur(data.total)}</p>
+                  </div>
+                );
+              })}
+              {fontes.length === 0 && (
+                <p className="py-6 text-center text-[13px] text-slate-500">{t('Nenhum plantão neste mês')}</p>
+              )}
             </div>
           </>
         )}
 
         {activeTab === 'ano' && (
-          <div className="py-10 text-center text-slate-500 text-sm">
-            Visualização anual será disponibilizada em breve.
+          <div className="notice">
+            <p className="text-[13.5px] text-slate-600 leading-[1.55]">
+              Visualização anual será disponibilizada em breve.
+            </p>
           </div>
         )}
       </main>
@@ -833,113 +942,122 @@ export default function RelatoriosScreen() {
         className="fixed inset-0 z-50 flex justify-center transform transition-transform duration-300 ease-in-out"
         style={{ transform: showPreview ? 'translateX(0)' : 'translateX(100%)', background: 'var(--color-bg)' }}
       >
-       <div className="w-full max-w-[430px] h-full bg-slate-100 flex flex-col relative shadow-xl overflow-hidden">
-        {/* Header do Preview */}
-        <header className="bg-white px-4 pt-7 pb-4 shadow-sm z-20 shrink-0 flex items-center gap-3">
-          <button 
-            onClick={() => setShowPreview(false)} 
-            className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 transition active:scale-95"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          <div>
-            <h1 className="text-base font-bold text-slate-900 leading-tight">Pré-visualização</h1>
-            <p className="text-xs text-slate-500">Relatório Fiscal - {format(selectedMonth, 'MMM/yyyy', { locale: ptBR })}</p>
-          </div>
-        </header>
+       {/* Sombra só com a prévia aberta: fechada (translateX 100%) ela vazava pela borda direita da tela. */}
+       <div className={`w-full max-w-[430px] h-full bg-slate-50 flex flex-col relative overflow-hidden ${showPreview ? 'shadow-xl' : ''}`}>
+        {/* Cabeçalho + filtros */}
+        <div className="bg-white shrink-0 z-20" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <header className="px-4 pt-7 pb-3 flex items-center gap-2">
+            <button
+              onClick={() => setShowPreview(false)}
+              className="icon-btn w-10 h-10 flex items-center justify-center shrink-0"
+              aria-label={t('Voltar')}
+            >
+              <ChevronLeft size={22} strokeWidth={1.5} />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-[22px] font-light leading-tight tracking-[-0.03em] text-slate-900">Pré-visualização</h1>
+              <p className="mt-0.5 text-[12.5px] text-slate-500 tabular-nums">Relatório fiscal · {format(selectedMonth, 'MMM/yyyy', { locale: ptBR })}</p>
+            </div>
+          </header>
 
-        {/* Barra de Filtros */}
-        <div className="bg-white border-b border-slate-200 px-4 py-3 z-10 shrink-0 flex gap-3 overflow-x-auto hide-scrollbar">
-          <button
-            onClick={() => setShowFormatModal(true)}
-            className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shrink-0 hover:bg-slate-100 transition active:scale-95"
-          >
-            <FileText size={16} className="text-emerald-600" />
-            <div className="text-left">
-              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">Formato</span>
-              <span className="block text-xs font-semibold text-slate-800 leading-none">{formatLabels[previewFormat]}</span>
-            </div>
-            <ChevronDown size={14} className="text-slate-400 ml-1" />
-          </button>
-          <button
-            onClick={() => setShowGroupModal(true)}
-            className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shrink-0 hover:bg-slate-100 transition active:scale-95"
-          >
-            <Layers size={16} className="text-violet-600" />
-            <div className="text-left">
-              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">Separar por</span>
-              <span className="block text-xs font-semibold text-slate-800 leading-none">{GROUP_LABELS[groupBy]}</span>
-            </div>
-            <ChevronDown size={14} className="text-slate-400 ml-1" />
-          </button>
+          {/* Barra de filtros — botões contornados */}
+          <div className="px-4 pb-3 flex gap-2 overflow-x-auto hide-scrollbar">
+            <button
+              onClick={() => setShowFormatModal(true)}
+              className="flex items-center gap-2.5 h-12 pl-3 pr-2.5 rounded-xl border border-slate-200 bg-white shrink-0 hover:border-blue-600 transition-colors"
+            >
+              <FileText size={17} strokeWidth={1.5} className="text-blue-600 shrink-0" />
+              <span className="text-left">
+                <span className="block text-[11px] text-slate-500 leading-none">Formato</span>
+                <span className="block mt-1 text-[13px] font-medium text-slate-900 leading-none">{formatLabels[previewFormat]}</span>
+              </span>
+              <ChevronDown size={15} strokeWidth={1.5} className="text-slate-400 ml-1 shrink-0" />
+            </button>
+            <button
+              onClick={() => setShowGroupModal(true)}
+              className="flex items-center gap-2.5 h-12 pl-3 pr-2.5 rounded-xl border border-slate-200 bg-white shrink-0 hover:border-blue-600 transition-colors"
+            >
+              <Layers size={17} strokeWidth={1.5} className="text-blue-600 shrink-0" />
+              <span className="text-left">
+                <span className="block text-[11px] text-slate-500 leading-none">Separar por</span>
+                <span className="block mt-1 text-[13px] font-medium text-slate-900 leading-none">{GROUP_LABELS[groupBy]}</span>
+              </span>
+              <ChevronDown size={15} strokeWidth={1.5} className="text-slate-400 ml-1 shrink-0" />
+            </button>
+          </div>
         </div>
 
         {/* Área de Rolagem do Documento */}
-        <main className="flex-1 overflow-y-auto bg-slate-100 hide-scrollbar">
-          {/* Documento (Folha "A4") — sem flex-1 para acompanhar o tamanho real do conteúdo */}
-          <div className="bg-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1)] m-4 p-5 rounded-md text-[0.75rem] leading-[1.4] text-slate-700">
-            
-            <div className="text-center mb-6">
-              <h2 className="font-bold text-sm uppercase tracking-wider text-slate-900">{docTitle}</h2>
-              <p className="text-xs text-slate-500 mt-1">Mês de Competência: {format(selectedMonth, 'MMMM / yyyy', { locale: ptBR })}</p>
-              <p className="text-[10px] text-slate-400 mt-1">Gerado em: {format(new Date(), 'dd/MM/yyyy')} às {format(new Date(), 'HH:mm')} via Plantão Pro</p>
+        <main className="flex-1 overflow-y-auto hide-scrollbar">
+          {/* Documento (folha de papel) — sem flex-1 para acompanhar o tamanho real do conteúdo */}
+          <div
+            className="bg-white m-4 p-5 rounded-sm text-[12px] leading-[1.5] text-slate-700"
+            style={{ border: '1px solid var(--color-border)', boxShadow: '0 18px 44px -26px rgba(7,56,45,.22)' }}
+          >
+
+            <div className="text-center mb-5">
+              <h2 className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-slate-900">{docTitle}</h2>
+              <p className="mt-1.5 text-[12px] text-slate-500">Mês de Competência: {format(selectedMonth, 'MMMM / yyyy', { locale: ptBR })}</p>
+              <p className="mt-0.5 text-[10.5px] text-slate-500">Gerado em: {format(new Date(), 'dd/MM/yyyy')} às {format(new Date(), 'HH:mm')} via Plantão Pro</p>
             </div>
 
-            <hr className="border-slate-200 mb-4" />
+            <hr className="border-slate-200 mb-5" />
 
             {/* 1. Dados do Profissional */}
-            <div className="mb-5">
-              <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">
+            <div className="mb-6">
+              <h3 className="mb-2 text-[13px] font-semibold tracking-[-0.01em] text-slate-900">
                 1. {user?.tax_regime === 'PF' ? 'Dados do Profissional (PF)' : 'Dados do Profissional (PJ)'}
               </h3>
-              <div className="grid grid-cols-1 gap-1 pl-2">
-                <p><span className="font-semibold">{user?.tax_regime === 'PF' ? 'Nome:' : 'Razão Social:'}</span> {user?.company_name || `${user?.name || ''}${user?.tax_regime === 'PF' ? '' : ' Serviços Médicos LTDA'}`}</p>
-                <p>
-                  <span className="font-semibold">{user?.tax_regime === 'PF' ? 'CPF:' : 'CNPJ:'}</span>{' '}
-                  {user?.cnpj
-                    ? (user.tax_regime === 'PF'
-                        ? user.cnpj.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')
-                        : user.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5'))
-                    : 'Não informado'}
+              <div className="grid grid-cols-1 gap-1">
+                <p><span className="text-slate-500">{user?.tax_regime === 'PF' ? 'Nome:' : 'Razão Social:'}</span> <span className="text-slate-900">{user?.company_name || `${user?.name || ''}${user?.tax_regime === 'PF' ? '' : ' Serviços Médicos LTDA'}`}</span></p>
+                <p className="tabular-nums">
+                  <span className="text-slate-500">{user?.tax_regime === 'PF' ? 'CPF:' : 'CNPJ:'}</span>{' '}
+                  <span className="text-slate-900">
+                    {user?.cnpj
+                      ? (user.tax_regime === 'PF'
+                          ? user.cnpj.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')
+                          : user.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5'))
+                      : 'Não informado'}
+                  </span>
                 </p>
-                <p><span className="font-semibold">Responsável Técnico:</span> Dr(a). {user?.name}</p>
-                {user?.crm && <p><span className="font-semibold">CRM:</span> {user.crm}</p>}
-                <p><span className="font-semibold">Regime Tributário:</span> {user?.tax_regime || 'Simples Nacional'}{!useFixedMei && ` (${(taxRate * 100).toFixed(2)}%)`}</p>
+                <p><span className="text-slate-500">Responsável Técnico:</span> <span className="text-slate-900">Dr(a). {nomeSemTitulo(user?.name)}</span></p>
+                {user?.crm && <p><span className="text-slate-500">CRM:</span> <span className="text-slate-900">{user.crm}</span></p>}
+                <p><span className="text-slate-500">Regime Tributário:</span> <span className="text-slate-900">{user?.tax_regime || 'Simples Nacional'}{!useFixedMei && ` (${(taxRate * 100).toFixed(2)}%)`}</span></p>
               </div>
             </div>
 
-            {/* 2. Resumo Financeiro (oculto se Extrato de Cobrança) */}
+            {/* 2. Resumo Financeiro (oculto se Extrato de Cobrança) — treliça de dados */}
             {!isPendentes && (
-              <div className="mb-5 transition-all">
-                <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">2. Resumo Financeiro</h3>
-                <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                  <div className="flex justify-between mb-1">
-                    <span className="font-semibold">Faturamento Bruto (Competência):</span>
-                    <span className="font-bold text-slate-900">{fmtCur(stats?.expected || 0)}</span>
+              <div className="mb-6 transition-all">
+                <h3 className="mb-1 text-[13px] font-semibold tracking-[-0.01em] text-slate-900">2. Resumo Financeiro</h3>
+                <div className="data-lattice">
+                  <div>
+                    <p className="text-[11px] leading-snug text-slate-500">Faturamento Bruto (Competência)</p>
+                    <p className="mt-1 text-[14px] font-semibold text-slate-900 tabular-nums">{fmtCur(stats?.expected || 0)}</p>
                   </div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-slate-600">Total Efetivamente Recebido (Caixa):</span>
-                    <span className="font-medium text-slate-700">{fmtCur(stats?.received || 0)}</span>
+                  <div>
+                    <p className="text-[11px] leading-snug text-slate-500">Total Efetivamente Recebido (Caixa)</p>
+                    <p className="mt-1 text-[14px] text-slate-900 tabular-nums">{fmtCur(stats?.received || 0)}</p>
                   </div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-slate-600">Total Pendente / A Receber:</span>
-                    <span className="font-medium text-slate-700">{fmtCur(stats?.pending || 0)}</span>
+                  <div>
+                    <p className="text-[11px] leading-snug text-slate-500">Total Pendente / A Receber</p>
+                    <p className="mt-1 text-[14px] text-slate-900 tabular-nums">{fmtCur(stats?.pending || 0)}</p>
                   </div>
                   {totalDeducoes > 0 && (
                     <>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-slate-600">Deduções / Retenções (ISS, INSS, IRRF…):</span>
-                        <span className="font-medium text-red-600">− {fmtCur(totalDeducoes)}</span>
+                      <div>
+                        <p className="text-[11px] leading-snug text-slate-500">Deduções / Retenções (ISS, INSS, IRRF…)</p>
+                        <p className="mt-1 text-[14px] text-red-600 tabular-nums">− {fmtCur(totalDeducoes)}</p>
                       </div>
-                      <div className="flex justify-between mb-3">
-                        <span className="font-semibold">Líquido após retenções:</span>
-                        <span className="font-bold text-emerald-700">{fmtCur(totalLiquido)}</span>
+                      <div>
+                        <p className="text-[11px] leading-snug text-slate-500">Líquido após retenções</p>
+                        <p className="mt-1 text-[14px] font-semibold text-blue-700 tabular-nums">{fmtCur(totalLiquido)}</p>
                       </div>
                     </>
                   )}
-                  <div className="flex justify-between border-t border-slate-200 pt-2 text-[11px]">
-                    <span className="italic text-slate-600">{taxLabel}{!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}:</span>
-                    <span className="font-bold text-slate-900">{fmtCur(taxAmount)}</span>
+                  <div>
+                    <p className="text-[11px] leading-snug text-slate-500">{taxLabel}{!useFixedMei ? ` (${(taxRate * 100).toFixed(1)}%)` : ''}</p>
+                    <p className="mt-1 text-[14px] font-semibold text-slate-900 tabular-nums">{fmtCur(taxAmount)}</p>
                   </div>
                 </div>
               </div>
@@ -947,24 +1065,24 @@ export default function RelatoriosScreen() {
 
             {/* 3. Resumo conforme a separação (oculto se Extrato de Cobrança) */}
             {!isPendentes && groupSummary.length > 0 && (
-              <div className="mb-5 transition-all">
-                <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">3. {groupSummaryTitle}</h3>
+              <div className="mb-6 transition-all">
+                <h3 className="mb-1 text-[13px] font-semibold tracking-[-0.01em] text-slate-900">3. {groupSummaryTitle}</h3>
                 {groupSummary.map(g => (
-                  <div key={g.key} className="mb-3 pl-2">
-                    <p className="font-bold text-slate-800">
+                  <div key={g.key} className="py-2.5 border-b border-slate-200">
+                    <p className="font-medium text-slate-900">
                       {g.label}
                       {groupBy !== 'forma' && (
-                        <span className="font-normal text-slate-500"> (CNPJ: {wpById.get(g.key)?.cnpj || 'Não informado'})</span>
+                        <span className="font-normal text-slate-500 tabular-nums"> (CNPJ: {wpById.get(g.key)?.cnpj || 'Não informado'})</span>
                       )}
                     </p>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Composição: {g.count} {g.count !== 1 ? 'plantões' : 'plantão'}</span>
-                      <span className="font-semibold">{fmtCur(g.bruto)}</span>
+                    <div className="mt-0.5 flex justify-between gap-3">
+                      <span className="text-slate-500">Composição: {g.count} {g.count !== 1 ? 'plantões' : 'plantão'}</span>
+                      <span className="font-semibold text-slate-900 tabular-nums whitespace-nowrap">{fmtCur(g.bruto)}</span>
                     </div>
                     {g.deducoes > 0 && (
-                      <div className="flex justify-between text-[11px] text-slate-500">
-                        <span>Deduções − {fmtCur(g.deducoes)}</span>
-                        <span className="font-semibold text-emerald-700">Líquido {fmtCur(g.liquido)}</span>
+                      <div className="mt-0.5 flex justify-between gap-3 text-[11px] tabular-nums">
+                        <span className="text-red-600">Deduções − {fmtCur(g.deducoes)}</span>
+                        <span className="font-semibold text-blue-700">Líquido {fmtCur(g.liquido)}</span>
                       </div>
                     )}
                   </div>
@@ -975,17 +1093,17 @@ export default function RelatoriosScreen() {
             {/* 4. Tabela de Plantões (agrupada conforme a separação; oculta se Resumido) */}
             {!isResumido && (
               <div className="mb-2 transition-all duration-300">
-                <h3 className="font-bold text-xs uppercase text-slate-800 mb-2">
+                <h3 className="mb-2 text-[13px] font-semibold tracking-[-0.01em] text-slate-900">
                   {isPendentes ? '2. Plantões Pendentes de Pagamento' : '4. Extrato Detalhado de Plantões'}
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse tabular-nums">
                     <thead>
                       <tr>
-                        <th className="py-1.5 border-b border-slate-300 text-slate-500">Data</th>
-                        <th className="py-1.5 border-b border-slate-300 text-slate-500">Local</th>
-                        <th className="py-1.5 border-b border-slate-300 text-slate-500 text-right">Valor</th>
-                        <th className="py-1.5 border-b border-slate-300 text-slate-500 text-right">Status</th>
+                        <th className="py-2 border-b border-slate-300 text-[11px] font-medium text-slate-500">Data</th>
+                        <th className="py-2 border-b border-slate-300 text-[11px] font-medium text-slate-500">Local</th>
+                        <th className="py-2 border-b border-slate-300 text-[11px] font-medium text-slate-500 text-right">Valor</th>
+                        <th className="py-2 border-b border-slate-300 text-[11px] font-medium text-slate-500 text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -993,23 +1111,23 @@ export default function RelatoriosScreen() {
                         <React.Fragment key={group.key}>
                           {groupBy !== 'none' && (
                             <tr>
-                              <td colSpan={4} className="pt-3 pb-1 font-bold text-[11px] uppercase tracking-wide text-violet-700">{group.label}</td>
+                              <td colSpan={4} className="pt-3.5 pb-1 text-[12px] font-semibold text-blue-600">{group.label}</td>
                             </tr>
                           )}
                           {group.shifts.map(s => {
                             const wp = workplaces.find(w => w.id === s.workplace_id);
                             const isPending = s.status !== 'recebido';
                             return (
-                              <tr key={s.id} className={`border-b border-slate-100 ${isPendentes || isPending ? 'bg-red-50/20' : ''}`}>
-                                <td className="py-1.5 pl-1">{format(new Date(s.date), 'dd/MM')}</td>
-                                <td className="py-1.5 truncate max-w-[100px] text-slate-700">{wp?.name}</td>
-                                <td className="py-1.5 text-right">
-                                  <span className={`font-medium ${isPending ? 'text-red-600' : 'text-slate-800'}`}>{fmtCur(s.expected_value)}</span>
+                              <tr key={s.id} className="border-b border-slate-100">
+                                <td className="py-2 pl-0.5">{format(new Date(s.date), 'dd/MM')}</td>
+                                <td className="py-2 truncate max-w-[100px] text-slate-700">{wp?.name}</td>
+                                <td className="py-2 text-right">
+                                  <span className={isPending ? 'text-red-600' : 'text-slate-900'}>{fmtCur(s.expected_value)}</span>
                                   {deducoesOf(s) > 0 && (
-                                    <span className="block text-[9px] text-slate-400 leading-none mt-0.5">líq {fmtCur(s.expected_value - deducoesOf(s))}</span>
+                                    <span className="block text-[10px] text-slate-500 leading-none mt-0.5">líq {fmtCur(s.expected_value - deducoesOf(s))}</span>
                                   )}
                                 </td>
-                                <td className={`py-1.5 text-right pr-1 font-medium ${isPending ? 'text-red-500' : 'text-emerald-600'}`}>
+                                <td className={`py-2 text-right pr-0.5 ${isPending ? 'text-red-600' : 'text-blue-600'}`}>
                                   {isPending ? 'Pendente' : 'Pago'}
                                 </td>
                               </tr>
@@ -1017,8 +1135,8 @@ export default function RelatoriosScreen() {
                           })}
                           {groupBy !== 'none' && (
                             <tr>
-                              <td colSpan={2} className="py-1 text-right text-slate-500 text-[11px]">Subtotal {group.label}</td>
-                              <td className="py-1 text-right font-semibold text-[11px] text-slate-700">{fmtCur(group.shifts.reduce((a, b) => a + b.expected_value, 0))}</td>
+                              <td colSpan={2} className="py-1.5 text-right text-slate-500 text-[11px]">Subtotal {group.label}</td>
+                              <td className="py-1.5 text-right font-semibold text-[11px] text-slate-700">{fmtCur(group.shifts.reduce((a, b) => a + b.expected_value, 0))}</td>
                               <td></td>
                             </tr>
                           )}
@@ -1026,25 +1144,25 @@ export default function RelatoriosScreen() {
                       ))}
                       {shiftsToShow.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="py-4 text-center text-slate-400">Nenhum plantão encontrado.</td>
+                          <td colSpan={4} className="py-5 text-center text-slate-500">Nenhum plantão encontrado.</td>
                         </tr>
                       )}
 
                       {/* Linha final / Total */}
                       <tr className="bg-slate-50">
-                        <td colSpan={2} className="py-2 font-bold text-right border-t border-slate-200">TOTAL:</td>
-                        <td className="py-2 font-bold text-right border-t border-slate-200 pr-1 text-slate-900">
+                        <td colSpan={2} className="py-2.5 font-semibold text-right border-t border-slate-300 text-slate-900">Total</td>
+                        <td className="py-2.5 font-semibold text-right border-t border-slate-300 pr-0.5 text-slate-900">
                           {fmtCur(totalTableValue)}
                         </td>
-                        <td className="border-t border-slate-200"></td>
+                        <td className="border-t border-slate-300"></td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
-            
-            <div className="mt-8 text-center text-[9px] text-slate-400">
+
+            <div className="mt-8 text-center text-[10.5px] leading-snug text-slate-500">
               <p>Este documento é um relatório gerencial e não substitui notas fiscais ou recibos oficiais.</p>
             </div>
 
@@ -1053,33 +1171,33 @@ export default function RelatoriosScreen() {
           {/* Ações no Rodapé — sticky bottom:0 garante que fique visível durante o scroll,
               mas naturalmente próximo do documento quando o conteúdo é curto */}
           <div
-            className="sticky bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20"
-            style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+            className="sticky bottom-0 left-0 w-full bg-white px-4 pt-4 z-20"
+            style={{ borderTop: '1px solid var(--color-border)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
           >
-            <div className="flex gap-3">
-              <button
-                onClick={() => requireSignup('Baixar PDF', handleDownloadPDF)}
-                disabled={pdfLoading}
-                className="flex-1 bg-blue-600 text-white font-semibold py-3.5 rounded-xl shadow-sm hover:bg-blue-700 transition active:scale-95 flex justify-center items-center gap-2 text-sm disabled:opacity-60"
-              >
-                {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                {pdfLoading ? t('Gerando...') : t('Baixar PDF')}
-              </button>
+            <button
+              onClick={() => requireSignup('Baixar PDF', handleDownloadPDF)}
+              disabled={pdfLoading}
+              className="btn-primary disabled:opacity-60"
+            >
+              {pdfLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} strokeWidth={1.6} />}
+              {pdfLoading ? t('Gerando...') : t('Baixar PDF')}
+            </button>
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <button
                 onClick={() => requireSignup('Exportar CSV', handleExportCSV)}
-                className="flex-1 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
+                className="btn-secondary px-3 flex items-center justify-center gap-2"
               >
-                <FileText size={18} className="text-emerald-500" />
+                <FileText size={17} strokeWidth={1.5} className="text-blue-600 shrink-0" />
                 {t('Exportar CSV')}
               </button>
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="btn-secondary px-3 flex items-center justify-center gap-2"
+              >
+                <WhatsAppIcon size={16} className="text-blue-600 shrink-0" />
+                {t('Compartilhar')}
+              </button>
             </div>
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="w-full mt-3 bg-white border border-slate-200 text-slate-700 font-semibold py-3.5 rounded-xl shadow-sm hover:bg-slate-50 transition active:scale-95 flex justify-center items-center gap-2 text-sm"
-            >
-              <WhatsAppIcon size={16} className="text-emerald-500" />
-              {t('Compartilhar')}
-            </button>
           </div>
         </main>
        </div>
@@ -1089,72 +1207,36 @@ export default function RelatoriosScreen() {
       {/* MODAL DE SELEÇÃO DE FORMATO                                 */}
       {/* ========================================================= */}
       {showFormatModal && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/40 flex items-start justify-center p-4 pt-[15vh] transition-opacity">
-          <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-slate-900">Formato do Documento</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Defina o nível de detalhamento do PDF</p>
+        <div className="modal-overlay z-[60] animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-scale-in" style={MODAL_SHADOW}>
+            <div className="p-6 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-[22px] font-light leading-tight tracking-[-0.03em] text-slate-900">Formato do documento</h3>
+                <p className="mt-1.5 text-[13px] text-slate-500">Defina o nível de detalhamento do PDF</p>
               </div>
-              <button 
-                onClick={() => setShowFormatModal(false)} 
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-500 hover:bg-slate-100"
+              <button
+                onClick={() => setShowFormatModal(false)}
+                className="icon-btn w-9 h-9 -mr-2 -mt-1 flex items-center justify-center shrink-0"
+                aria-label={t('Fechar')}
               >
-                <X size={16} />
+                <X size={18} strokeWidth={1.5} />
               </button>
             </div>
-            
-            <div className="p-5 space-y-3">
-              <label className="flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition">
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="radio" 
-                    name="formato" 
-                    value="completo" 
-                    checked={previewFormat === 'completo'}
-                    onChange={() => { setPreviewFormat('completo'); setShowFormatModal(false); }}
-                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 border-gray-300" 
-                  />
-                  <div>
-                    <span className="block text-sm font-bold text-slate-700">Relatório Completo</span>
-                    <span className="block text-xs text-slate-500">Resumo CNPJ + Tabela dia a dia</span>
-                  </div>
-                </div>
-              </label>
 
-              <label className="flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition">
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="radio" 
-                    name="formato" 
-                    value="resumido" 
-                    checked={previewFormat === 'resumido'}
-                    onChange={() => { setPreviewFormat('resumido'); setShowFormatModal(false); }}
-                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 border-gray-300" 
+            <div className="px-6 pb-6">
+              <div role="radiogroup" className="border-t border-slate-200">
+                {formatOptions.map(opt => (
+                  <ChoiceRow
+                    key={opt.key}
+                    name="formato"
+                    value={opt.key}
+                    checked={previewFormat === opt.key}
+                    onSelect={() => { setPreviewFormat(opt.key); setShowFormatModal(false); }}
+                    title={opt.title}
+                    desc={opt.desc}
                   />
-                  <div>
-                    <span className="block text-sm font-bold text-slate-700">Apenas Resumo Fiscal</span>
-                    <span className="block text-xs text-slate-500">Ideal para Contador (Sem tabela)</span>
-                  </div>
-                </div>
-              </label>
-
-               <label className="flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition">
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="radio" 
-                    name="formato" 
-                    value="pendentes" 
-                    checked={previewFormat === 'pendentes'}
-                    onChange={() => { setPreviewFormat('pendentes'); setShowFormatModal(false); }}
-                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 border-gray-300" 
-                  />
-                  <div>
-                    <span className="block text-sm font-bold text-slate-700">Extrato de Cobrança</span>
-                    <span className="block text-xs text-slate-500">Mostra apenas plantões não pagos</span>
-                  </div>
-                </div>
-              </label>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -1164,44 +1246,36 @@ export default function RelatoriosScreen() {
       {/* MODAL: SEPARAR OS GANHOS POR                                */}
       {/* ========================================================= */}
       {showGroupModal && (
-        <div className="fixed inset-0 z-[60] bg-slate-900/40 flex items-start justify-center p-4 pt-[15vh] transition-opacity">
-          <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-slate-900">Separar os ganhos</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Como o relatório agrupa os plantões</p>
+        <div className="modal-overlay z-[60] animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-scale-in" style={MODAL_SHADOW}>
+            <div className="p-6 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-[22px] font-light leading-tight tracking-[-0.03em] text-slate-900">Separar os ganhos</h3>
+                <p className="mt-1.5 text-[13px] text-slate-500">Como o relatório agrupa os plantões</p>
               </div>
               <button
                 onClick={() => setShowGroupModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-500 hover:bg-slate-100"
+                className="icon-btn w-9 h-9 -mr-2 -mt-1 flex items-center justify-center shrink-0"
+                aria-label={t('Fechar')}
               >
-                <X size={16} />
+                <X size={18} strokeWidth={1.5} />
               </button>
             </div>
 
-            <div className="p-5 space-y-3">
-              {([
-                { key: 'forma' as GroupBy, title: 'Por forma de recebimento', desc: 'Separa por PJ e Autônomo (RPA) — ideal quando o regime varia por local.' },
-                { key: 'local' as GroupBy, title: 'Por local', desc: 'Agrupa os plantões por hospital / fonte pagadora.' },
-                { key: 'none' as GroupBy, title: 'Consolidado', desc: 'Lista única, sem separação.' },
-              ]).map(opt => (
-                <label key={opt.key} className="flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="radio"
-                      name="groupby"
-                      value={opt.key}
-                      checked={groupBy === opt.key}
-                      onChange={() => { setGroupBy(opt.key); setShowGroupModal(false); }}
-                      className="w-4 h-4 text-violet-600 focus:ring-violet-500 border-gray-300"
-                    />
-                    <div>
-                      <span className="block text-sm font-bold text-slate-700">{opt.title}</span>
-                      <span className="block text-xs text-slate-500">{opt.desc}</span>
-                    </div>
-                  </div>
-                </label>
-              ))}
+            <div className="px-6 pb-6">
+              <div role="radiogroup" className="border-t border-slate-200">
+                {groupOptions.map(opt => (
+                  <ChoiceRow
+                    key={opt.key}
+                    name="groupby"
+                    value={opt.key}
+                    checked={groupBy === opt.key}
+                    onSelect={() => { setGroupBy(opt.key); setShowGroupModal(false); }}
+                    title={opt.title}
+                    desc={opt.desc}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -1211,72 +1285,55 @@ export default function RelatoriosScreen() {
       {/* MODAL DE CONFIGURAÇÕES CONTÁBEIS                            */}
       {/* ========================================================= */}
       {showSettingsModal && (
-        <div className="fixed inset-0 z-[70] bg-slate-900/40 flex items-start justify-center p-4 pt-[12vh] transition-opacity">
-          <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in max-h-[80vh] flex flex-col">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
-              <div>
-                <h3 className="font-bold text-slate-900">Configurações Contábeis</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Ajuste seus parâmetros fiscais</p>
+        <div className="modal-overlay z-[70] animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-scale-in max-h-[86vh] flex flex-col" style={MODAL_SHADOW}>
+            <div className="p-6 pb-4 flex items-start justify-between gap-4 shrink-0">
+              <div className="min-w-0">
+                <h3 className="text-[22px] font-light leading-tight tracking-[-0.03em] text-slate-900">Configurações contábeis</h3>
+                <p className="mt-1.5 text-[13px] text-slate-500">Ajuste seus parâmetros fiscais</p>
               </div>
-              <button 
-                onClick={() => setShowSettingsModal(false)} 
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-500 hover:bg-slate-100"
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="icon-btn w-9 h-9 -mr-2 -mt-1 flex items-center justify-center shrink-0"
+                aria-label={t('Fechar')}
               >
-                <X size={16} />
+                <X size={18} strokeWidth={1.5} />
               </button>
             </div>
-            
-            <div className="p-5 space-y-4 overflow-y-auto flex-1 hide-scrollbar">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">{t('Regime Tributário')}</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['MEI', 'Simples Nacional', 'Lucro Presumido', 'PF'] as const).map(regime => {
-                    const isSel = settingsData.tax_regime === regime;
-                    // Valor de alíquota recomendado para cada regime (ponto inicial sugerido)
-                    const recommendedRate: Record<typeof regime, number> = {
-                      'MEI': 0,
-                      'Simples Nacional': 6,
-                      'Lucro Presumido': 13.33,
-                      'PF': 27.5,
-                    };
-                    return (
-                      <button
-                        key={regime}
-                        onClick={() => setSettingsData(p => ({
-                          ...p,
-                          tax_regime: regime,
-                          tax_rate: recommendedRate[regime],
-                        }))}
-                        className={`py-2.5 rounded-xl text-sm font-semibold transition active:scale-[0.98] ${
-                          isSel
-                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-                        }`}
-                      >
-                        {regime}
-                      </button>
-                    );
-                  })}
-                </div>
+
+            <div className="px-6 pb-2 overflow-y-auto flex-1 hide-scrollbar">
+              <p className="input-label" id="rel-regime-label">{t('Regime Tributário')}</p>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="rel-regime-label">
+                {(['MEI', 'Simples Nacional', 'Lucro Presumido', 'PF'] as const).map(regime => {
+                  const isSel = settingsData.tax_regime === regime;
+                  // Valor de alíquota recomendado para cada regime (ponto inicial sugerido)
+                  const recommendedRate: Record<typeof regime, number> = {
+                    'MEI': 0,
+                    'Simples Nacional': 6,
+                    'Lucro Presumido': 13.33,
+                    'PF': 27.5,
+                  };
+                  return (
+                    <button
+                      key={regime}
+                      type="button"
+                      aria-pressed={isSel}
+                      onClick={() => setSettingsData(p => ({
+                        ...p,
+                        tax_regime: regime,
+                        tax_rate: recommendedRate[regime],
+                      }))}
+                      className="chip w-full"
+                    >
+                      {regime}
+                    </button>
+                  );
+                })}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">{t('Alíquota (%)')}</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  pattern="[0-9]*[.,]?[0-9]*"
-                  value={String(settingsData.tax_rate).replace('.', ',')}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/[^0-9.,]/g, '');
-                    const normalized = raw.replace(',', '.');
-                    const parsed = parseFloat(normalized);
-                    setSettingsData(p => ({ ...p, tax_rate: isNaN(parsed) ? 0 : parsed }));
-                  }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                  placeholder="6,0"
-                />
-                <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+              {/* Ajuda do regime escolhido */}
+              <div className="notice mt-3">
+                <p className="text-[12.5px] leading-[1.55] text-slate-600">
                   {settingsData.tax_regime === 'MEI'
                     ? 'Geralmente R$ 75,60/mês fixo. Defina uma alíquota personalizada se necessário.'
                     : settingsData.tax_regime === 'Simples Nacional'
@@ -1287,66 +1344,83 @@ export default function RelatoriosScreen() {
                 </p>
               </div>
 
-              <hr className="border-slate-100 my-2" />
+              <div className="mt-5">
+                <label htmlFor="rel-tax-rate" className="input-label">{t('Alíquota (%)')}</label>
+                <input
+                  id="rel-tax-rate"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
+                  value={String(settingsData.tax_rate).replace('.', ',')}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9.,]/g, '');
+                    const normalized = raw.replace(',', '.');
+                    const parsed = parseFloat(normalized);
+                    setSettingsData(p => ({ ...p, tax_rate: isNaN(parsed) ? 0 : parsed }));
+                  }}
+                  className="input-field tabular-nums"
+                  placeholder="6,0"
+                />
+              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Dados do Documento (PDF)</label>
-                
-                <div className="space-y-3 mt-2">
-                  <div>
-                    <span className="block text-xs text-slate-500 mb-1">Razão Social</span>
-                    <input
-                      type="text"
-                      value={settingsData.company_name}
-                      onChange={(e) => setSettingsData(p => ({ ...p, company_name: e.target.value }))}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                      placeholder="Ex: Dr. João Serviços Médicos"
-                    />
-                  </div>
+              <div className="section-rule mt-6 mb-3"><span>Dados do documento (PDF)</span></div>
 
-                  {/* CNPJ ou CPF — depende do regime tributário selecionado */}
-                  {(() => {
-                    const isPF = settingsData.tax_regime === 'PF';
-                    const label = isPF ? 'CPF' : 'CNPJ';
-                    const placeholder = isPF ? '000.000.000-00' : '00.000.000/0001-00';
-                    const maxLen = isPF ? 11 : 14;
-                    return (
-                      <div>
-                        <span className="block text-xs text-slate-500 mb-1">{label}</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={settingsData.cnpj}
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/\D/g, '');
-                            if (val.length > maxLen) val = val.slice(0, maxLen);
-                            let formatted = val;
-                            if (isPF) {
-                              // CPF: 000.000.000-00
-                              if (val.length > 9) formatted = val.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2}).*/, '$1.$2.$3-$4');
-                              else if (val.length > 6) formatted = val.replace(/^(\d{3})(\d{3})(\d{0,3}).*/, '$1.$2.$3');
-                              else if (val.length > 3) formatted = val.replace(/^(\d{3})(\d{0,3}).*/, '$1.$2');
-                            } else {
-                              // CNPJ: 00.000.000/0001-00
-                              if (val.length > 12) formatted = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, '$1.$2.$3/$4-$5');
-                              else if (val.length > 8) formatted = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4}).*/, '$1.$2.$3/$4');
-                              else if (val.length > 5) formatted = val.replace(/^(\d{2})(\d{3})(\d{0,3}).*/, '$1.$2.$3');
-                              else if (val.length > 2) formatted = val.replace(/^(\d{2})(\d{0,3}).*/, '$1.$2');
-                            }
-                            setSettingsData(p => ({ ...p, cnpj: formatted }));
-                          }}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                          placeholder={placeholder}
-                        />
-                      </div>
-                    );
-                  })()}
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="rel-company-name" className="input-label">Razão Social</label>
+                  <input
+                    id="rel-company-name"
+                    type="text"
+                    value={settingsData.company_name}
+                    onChange={(e) => setSettingsData(p => ({ ...p, company_name: e.target.value }))}
+                    className="input-field"
+                    placeholder="Ex: Dr. João Serviços Médicos"
+                  />
                 </div>
+
+                {/* CNPJ ou CPF — depende do regime tributário selecionado */}
+                {(() => {
+                  const isPF = settingsData.tax_regime === 'PF';
+                  const label = isPF ? 'CPF' : 'CNPJ';
+                  const placeholder = isPF ? '000.000.000-00' : '00.000.000/0001-00';
+                  const maxLen = isPF ? 11 : 14;
+                  return (
+                    <div>
+                      <label htmlFor="rel-doc-number" className="input-label">{label}</label>
+                      <input
+                        id="rel-doc-number"
+                        type="text"
+                        inputMode="numeric"
+                        value={settingsData.cnpj}
+                        onChange={(e) => {
+                          let val = e.target.value.replace(/\D/g, '');
+                          if (val.length > maxLen) val = val.slice(0, maxLen);
+                          let formatted = val;
+                          if (isPF) {
+                            // CPF: 000.000.000-00
+                            if (val.length > 9) formatted = val.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2}).*/, '$1.$2.$3-$4');
+                            else if (val.length > 6) formatted = val.replace(/^(\d{3})(\d{3})(\d{0,3}).*/, '$1.$2.$3');
+                            else if (val.length > 3) formatted = val.replace(/^(\d{3})(\d{0,3}).*/, '$1.$2');
+                          } else {
+                            // CNPJ: 00.000.000/0001-00
+                            if (val.length > 12) formatted = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, '$1.$2.$3/$4-$5');
+                            else if (val.length > 8) formatted = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4}).*/, '$1.$2.$3/$4');
+                            else if (val.length > 5) formatted = val.replace(/^(\d{2})(\d{3})(\d{0,3}).*/, '$1.$2.$3');
+                            else if (val.length > 2) formatted = val.replace(/^(\d{2})(\d{0,3}).*/, '$1.$2');
+                          }
+                          setSettingsData(p => ({ ...p, cnpj: formatted }));
+                        }}
+                        className="input-field tabular-nums"
+                        placeholder={placeholder}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 shrink-0">
-              <button 
+            <div className="px-6 pt-4 pb-6 shrink-0">
+              <button
                 onClick={() => {
                   updateProfile({
                     tax_regime: settingsData.tax_regime as any,
@@ -1356,9 +1430,9 @@ export default function RelatoriosScreen() {
                   });
                   setShowSettingsModal(false);
                 }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl transition active:scale-95"
+                className="btn-primary"
               >
-                Salvar Configurações
+                Salvar configurações
               </button>
             </div>
           </div>
@@ -1369,65 +1443,66 @@ export default function RelatoriosScreen() {
       {/* MODAL DE COMPARTILHAMENTO (WhatsApp / Email)               */}
       {/* ========================================================= */}
       {showShareModal && (
-        <div className="fixed inset-0 z-[80] bg-slate-900/50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowShareModal(false)}>
-          <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl animate-scale-in" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t('Compartilhar')}</p>
-                <h3 className="text-lg font-bold text-slate-900 leading-tight">{t('Enviar relatório')}</h3>
+        <div className="modal-overlay z-[80] animate-fade-in" onClick={() => setShowShareModal(false)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden animate-scale-in" style={MODAL_SHADOW} onClick={e => e.stopPropagation()}>
+            <div className="p-6 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[13px] text-slate-500">{t('Compartilhar')}</p>
+                <h3 className="mt-1 text-[22px] font-light leading-tight tracking-[-0.03em] text-slate-900">{t('Enviar relatório')}</h3>
               </div>
-              <button onClick={() => setShowShareModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition active:scale-95">
-                <X size={16} />
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="icon-btn w-9 h-9 -mr-2 -mt-1 flex items-center justify-center shrink-0"
+                aria-label={t('Fechar')}
+              >
+                <X size={18} strokeWidth={1.5} />
               </button>
             </div>
 
-            <div className="p-5 space-y-2">
-              {/* WhatsApp — envio ao contador é recurso Max (compartilha o PDF como arquivo) */}
-              <button
-                onClick={() => {
-                  if (!gate('whatsapp_accountant')) { setShowShareModal(false); return; }
-                  if (!requireSignup('Compartilhar via WhatsApp', () => { handleSharePDF(); setShowShareModal(false); })) {
-                    setShowShareModal(false);
-                  }
-                }}
-                className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-[0.98] text-left"
-              >
-                <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                  <WhatsAppIcon size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-900 text-sm">WhatsApp</p>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    {t('Envia o PDF do relatório como anexo')}
-                  </p>
-                </div>
-                <ChevronDown size={16} className="text-slate-400 -rotate-90 shrink-0" />
-              </button>
+            <div className="px-6 pb-6">
+              <div className="border-t border-slate-200">
+                {/* WhatsApp — envio ao contador é recurso Max (compartilha o PDF como arquivo) */}
+                <button
+                  onClick={() => {
+                    if (!gate('whatsapp_accountant')) { setShowShareModal(false); return; }
+                    if (!requireSignup('Compartilhar via WhatsApp', () => { handleSharePDF(); setShowShareModal(false); })) {
+                      setShowShareModal(false);
+                    }
+                  }}
+                  className="list-row w-full text-left"
+                >
+                  <WhatsAppIcon size={20} className="text-blue-600 shrink-0" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[14.5px] font-medium text-slate-900">WhatsApp</span>
+                    <span className="block mt-0.5 text-[12.5px] text-slate-500 truncate">
+                      {t('Envia o PDF do relatório como anexo')}
+                    </span>
+                  </span>
+                  <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 shrink-0" />
+                </button>
 
-              {/* E-mail */}
-              <button
-                onClick={() => {
-                  if (!requireSignup('Enviar por e-mail', () => { handleEmail(); setShowShareModal(false); })) {
-                    setShowShareModal(false);
-                  }
-                }}
-                disabled={!user?.email}
-                className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition active:scale-[0.98] text-left disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                  <Mail size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-900 text-sm">E-mail</p>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    {user?.email || t('Cadastre seu e-mail no perfil')}
-                  </p>
-                </div>
-                <ChevronDown size={16} className="text-slate-400 -rotate-90 shrink-0" />
-              </button>
+                {/* E-mail */}
+                <button
+                  onClick={() => {
+                    if (!requireSignup('Enviar por e-mail', () => { handleEmail(); setShowShareModal(false); })) {
+                      setShowShareModal(false);
+                    }
+                  }}
+                  disabled={!user?.email}
+                  className="list-row w-full text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <Mail size={20} strokeWidth={1.5} className="text-blue-600 shrink-0" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[14.5px] font-medium text-slate-900">E-mail</span>
+                    <span className="block mt-0.5 text-[12.5px] text-slate-500 truncate">
+                      {user?.email || t('Cadastre seu e-mail no perfil')}
+                    </span>
+                  </span>
+                  <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 shrink-0" />
+                </button>
+              </div>
 
-              <p className="text-[10px] text-slate-400 text-center pt-2 leading-relaxed">
+              <p className="mt-4 text-[12px] leading-relaxed text-slate-500 text-center">
                 {t('O relatório será enviado para o contato cadastrado no seu perfil.')}
               </p>
             </div>
