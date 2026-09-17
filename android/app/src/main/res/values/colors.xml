@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mesma pedra escura do carregamento do app. -->
+    <color name="splashBackground">#0A5544</color>
+</resources>

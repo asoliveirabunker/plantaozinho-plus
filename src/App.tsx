@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { applyStatusBar, hideSplash, onAndroidBack } from './lib/native';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { LanguageProvider } from './hooks/useLanguage';
 import { PlanProvider } from './contexts/PlanContext';
@@ -29,6 +30,31 @@ function AppContent() {
   const prevTabRef = React.useRef<Tab>('hoje');
 
   const TAB_ORDER: Tab[] = ['hoje', 'calendario', 'ganhos', 'locais', 'relatorios'];
+
+  // ---- Aplicativo Android (na web, tudo isto não faz nada) ----
+  // A barra de status acompanha o topo da tela: pedra em Hoje, acesso e
+  // carregamento; papel nas demais. O tema escuro é observado na classe do html.
+  const tonePedra = isLoading || !user || activeTab === 'hoje';
+  useEffect(() => { hideSplash(); }, []);
+  useEffect(() => {
+    const aplicar = () => applyStatusBar(tonePedra ? 'pedra' : 'papel', document.documentElement.classList.contains('dark'));
+    aplicar();
+    const obs = new MutationObserver(aplicar);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, [tonePedra]);
+
+  // Botão voltar: fecha o lançamento, volta para Hoje e só então sai do app.
+  useEffect(() => {
+    let remover = () => {};
+    let vivo = true;
+    onAndroidBack(() => {
+      if (showAddShift) { setShowAddShift(false); return true; }
+      if (activeTab !== 'hoje') { handleTabChange('hoje'); return true; }
+      return false;
+    }).then(f => { if (vivo) remover = f; else f(); });
+    return () => { vivo = false; remover(); };
+  }, [showAddShift, activeTab]);
 
   function handleTabChange(tab: Tab) {
     if (tab === activeTab) return;

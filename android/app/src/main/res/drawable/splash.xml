@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Abertura leve: cor da pedra + o próprio ícone do app ao centro.
+     Substitui as ~40 imagens de splash que o gerador cria (21 MB no repositório). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splashBackground" />
+    <item android:width="160dp" android:height="160dp" android:gravity="center">
+        <bitmap android:src="@mipmap/ic_launcher_foreground" />
+    </item>
+</layer-list>

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Plantão Pro</string>
+    <string name="title_activity_main">Plantão Pro</string>
+    <string name="package_name">com.plantaopro.app</string>
+    <string name="custom_url_scheme">com.plantaopro.app</string>
+</resources>

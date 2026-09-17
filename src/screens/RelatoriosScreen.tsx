@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { baixarArquivo, entregarArquivo, openExternal } from '../lib/native';
 import { useApp } from '../contexts/AppContext';
 import { getMonthlyStats } from '../lib/db';
 import { format } from 'date-fns';
@@ -207,7 +208,7 @@ export default function RelatoriosScreen() {
       `_Gerado via Plantão Pro_`
     );
     const phone = user?.whatsapp?.replace(/\D/g, '') || '';
-    window.open(`https://wa.me/${phone ? '55' + phone : ''}?text=${msg}`, '_blank');
+    void openExternal(`https://wa.me/${phone ? '55' + phone : ''}?text=${msg}`);
   }
 
   function handleEmail() {
@@ -220,7 +221,7 @@ export default function RelatoriosScreen() {
       `Plantões: ${stats?.totalShifts || 0}`
     );
     const to = user?.email || '';
-    window.open(`mailto:${to}?subject=${subject}&body=${body}`);
+    void openExternal(`mailto:${to}?subject=${subject}&body=${body}`);
   }
 
   // Derived logic for the Preview Document
@@ -555,7 +556,12 @@ export default function RelatoriosScreen() {
     if (pdfLoading) return;
     setPdfLoading(true);
     try {
-      buildPdfDoc().save(pdfFileName);
+      // No aplicativo Android isto abre a folha de compartilhamento (a janela
+      // do app não tem pasta de downloads); na web, baixa o arquivo.
+      await baixarArquivo(buildPdfDoc().output('blob'), pdfFileName, {
+        title: 'Relatório Plantão Pro',
+        text: `Relatório ${format(selectedMonth, 'MMMM yyyy', { locale: ptBR })} — Plantão Pro`,
+      });
     } catch (err) {
       console.error(err);
       alert('Erro ao gerar PDF. Tente novamente.');
@@ -579,22 +585,14 @@ export default function RelatoriosScreen() {
       alert('Erro ao gerar PDF. Tente novamente.');
       return;
     }
-    const file = new File([pdfBlob], pdfFileName, { type: 'application/pdf' });
-    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          files: [file],
-          title: 'Relatório Plantão Pro',
-          text: `Relatório ${format(selectedMonth, 'MMMM yyyy', { locale: ptBR })} — Plantão Pro`,
-        });
-        return;
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') return; // usuário fechou a folha de compartilhamento
-        console.error(err);
-      }
-    }
-    // Fallback: baixa o arquivo e abre o WhatsApp com o resumo em texto.
-    buildPdfDoc().save(pdfFileName);
+    const entregue = await entregarArquivo(pdfBlob, pdfFileName, {
+      title: 'Relatório Plantão Pro',
+      text: `Relatório ${format(selectedMonth, 'MMMM yyyy', { locale: ptBR })} — Plantão Pro`,
+    });
+    if (entregue) return;
+    // Fallback (desktop sem compartilhar arquivo): baixa o PDF e abre o
+    // WhatsApp com o resumo em texto, para o usuário anexar o arquivo.
+    await baixarArquivo(pdfBlob, pdfFileName);
     handleWhatsApp();
   }
 
@@ -676,14 +674,9 @@ export default function RelatoriosScreen() {
     const bom = '﻿';
     const csv = bom + lines.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    void baixarArquivo(blob, `relatorio_${format(selectedMonth, 'yyyy-MM', { locale: ptBR })}.csv`, {
+      title: 'Planilha Plantão Pro',
+    });
   }, [selectedMonth, user, isMei, useFixedMei, taxRate, taxLabel, profileSectionTitle, userNameOrRazao, userDocLabel, isPendentes, stats, taxAmount, wpBreakdown, workplaces, shiftsToShow, docTitle, statusLabel, groupBy, groupSummary, groupSummaryTitle, detailGroups, wpById, formaOf, deducoesOf, totalDeducoes, totalLiquido]);
 
   // ---- Apresentação ----

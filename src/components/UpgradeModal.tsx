@@ -1,4 +1,5 @@
 import { usePlan } from '../contexts/PlanContext';
+import { openExternal } from '../lib/native';
 import { useApp } from '../contexts/AppContext';
 import { useLanguage } from '../hooks/useLanguage';
 import {
@@ -38,7 +39,7 @@ export default function UpgradeModal() {
   // Direciona para a página de vendas (a contratação acontece lá), levando a
   // identidade da conta para o checkout conseguir ativá-la após o pagamento.
   function handleUpgrade() {
-    window.open(buildSubscriptionUrl(requiredPlan, user), '_blank', 'noopener');
+    void openExternal(buildSubscriptionUrl(requiredPlan, user));
     closeUpgrade();
   }
 

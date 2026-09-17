@@ -1,0 +1,62 @@
+name: Aplicativo Android
+
+# Gera o APK do Plantão Pro (Capacitor) na nuvem. O APK fica anexado à execução,
+# em "Actions" → esta execução → "Artifacts".
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.ts'
+      - 'android/**'
+      - '.github/workflows/android.yml'
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # As mesmas variáveis usadas na Vercel: sem elas o app abre em modo local,
+      # sem login pelo Supabase.
+      - name: Compilar o app web
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Faltam os segredos VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no repositório."
+            exit 1
+          fi
+          npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Levar o app web para o projeto Android
+        run: npx cap sync android
+
+      - name: Gerar o APK
+        run: ./gradlew assembleDebug --no-daemon
+        working-directory: android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plantao-pro-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
